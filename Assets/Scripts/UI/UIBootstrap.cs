@@ -131,6 +131,57 @@ public class UIBootstrap : MonoBehaviour
 		return slider;
 	}
 
+	private Toggle CreateToggle(Transform parent, string name, string label, Vector2 anchorMin, Vector2 anchorMax)
+	{
+		var go = new GameObject(name);
+		go.transform.SetParent(parent, false);
+		var bg = go.AddComponent<Image>();
+		bg.color = new Color(1f, 1f, 1f, 0.2f);
+		var toggle = go.AddComponent<Toggle>();
+		var rt = go.GetComponent<RectTransform>();
+		rt.anchorMin = anchorMin;
+		rt.anchorMax = anchorMax;
+		rt.offsetMin = new Vector2(10, 10);
+		rt.offsetMax = new Vector2(-10, -10);
+
+		// Background and checkmark
+		var bgBox = new GameObject("Background");
+		bgBox.transform.SetParent(go.transform, false);
+		var bgImg = bgBox.AddComponent<Image>();
+		bgImg.color = new Color(1f, 1f, 1f, 0.8f);
+		var bgRt = bgBox.GetComponent<RectTransform>();
+		bgRt.anchorMin = new Vector2(0f, 0.25f);
+		bgRt.anchorMax = new Vector2(0f, 0.75f);
+		bgRt.sizeDelta = new Vector2(24, 0);
+
+		var check = new GameObject("Checkmark");
+		check.transform.SetParent(bgBox.transform, false);
+		var checkImg = check.AddComponent<Image>();
+		checkImg.color = new Color(0.2f, 0.9f, 0.3f, 0.9f);
+		var checkRt = check.GetComponent<RectTransform>();
+		checkRt.anchorMin = new Vector2(0.15f, 0.15f);
+		checkRt.anchorMax = new Vector2(0.85f, 0.85f);
+
+		toggle.targetGraphic = bgImg;
+		toggle.graphic = checkImg;
+		toggle.isOn = true;
+
+		// Label
+		var labelGO = new GameObject("Label");
+		labelGO.transform.SetParent(go.transform, false);
+		var tmp = labelGO.AddComponent<TextMeshProUGUI>();
+		tmp.text = label;
+		tmp.alignment = TextAlignmentOptions.Left;
+		tmp.fontSize = 28;
+		var lrt = labelGO.GetComponent<RectTransform>();
+		lrt.anchorMin = new Vector2(0f, 0f);
+		lrt.anchorMax = new Vector2(1f, 1f);
+		lrt.offsetMin = new Vector2(34, 10);
+		lrt.offsetMax = new Vector2(-10, -10);
+
+		return toggle;
+	}
+
 	private void BuildAndWireUI(Canvas canvas, UIManager ui)
 	{
 		// Main Menu Panel
@@ -141,7 +192,7 @@ public class UIBootstrap : MonoBehaviour
 
 		// Game Panel (HUD)
 		var gamePanel = CreatePanel(canvas.transform, "GamePanel");
-		gamePanel.GetComponent<Image>().color = new Color(0, 0, 0, 0); // transparent HUD
+		gamePanel.GetComponent<Image>().color = new Color(0, 0, 0, 0);
 		var scoreText = CreateText(gamePanel.transform, "ScoreText", "Score: 0", new Vector2(0f, 0.9f), new Vector2(0.4f, 1f), 28);
 		var timeText = CreateText(gamePanel.transform, "TimeText", "00:00", new Vector2(0.4f, 0.9f), new Vector2(0.7f, 1f), 28);
 		var healthSlider = CreateSlider(gamePanel.transform, "Health", new Vector2(0.75f, 0.92f), new Vector2(0.98f, 0.98f));
@@ -167,11 +218,11 @@ public class UIBootstrap : MonoBehaviour
 		var nextBtn = CreateButton(levelCompletePanel.transform, "NextLevelButton", "Next", new Vector2(0.35f, 0.25f), new Vector2(0.65f, 0.4f));
 		var lcMainMenuBtn = CreateButton(levelCompletePanel.transform, "LevelMainMenuButton", "Main Menu", new Vector2(0.35f, 0.1f), new Vector2(0.65f, 0.25f));
 
-		// Settings Panel (minimal)
+		// Settings Panel
 		var settingsPanel = CreatePanel(canvas.transform, "SettingsPanel");
 		var musicSlider = CreateSlider(settingsPanel.transform, "Music", new Vector2(0.2f, 0.6f), new Vector2(0.8f, 0.7f));
 		var sfxSlider = CreateSlider(settingsPanel.transform, "SFX", new Vector2(0.2f, 0.45f), new Vector2(0.8f, 0.55f));
-		var vibrationToggle = CreateButton(settingsPanel.transform, "VibrationToggle", "Vibration", new Vector2(0.4f, 0.25f), new Vector2(0.6f, 0.35f));
+		var vibrationToggle = CreateToggle(settingsPanel.transform, "VibrationToggle", "Vibration", new Vector2(0.4f, 0.25f), new Vector2(0.6f, 0.35f));
 
 		// Wire to UIManager
 		ui.mainMenuPanel = mainMenu;
@@ -196,8 +247,11 @@ public class UIBootstrap : MonoBehaviour
 		ui.scoreText = scoreText;
 		ui.timeText = timeText;
 		ui.healthSlider = healthSlider;
+		ui.musicSlider = musicSlider;
+		ui.sfxSlider = sfxSlider;
+		ui.vibrationToggle = vibrationToggle;
 
-		// Health icons (optional minimal two)
+		// Health icons
 		ui.healthIcons = new Image[3];
 		for (int i = 0; i < ui.healthIcons.Length; i++)
 		{
