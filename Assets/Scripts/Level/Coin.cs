@@ -99,7 +99,7 @@ public class Coin : CollectibleBase
             float distance = Vector3.Distance(transform.position, player.position);
             if (distance <= magnetRange)
             {
-                Gizmos.color = Color.orange;
+                //Gizmos.color = Color.Orange;
                 Gizmos.DrawLine(transform.position, player.position);
             }
         }

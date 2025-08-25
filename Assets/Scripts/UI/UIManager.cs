@@ -105,7 +105,7 @@ public class UIManager : MonoBehaviour
             vibrationToggle.onValueChanged.AddListener(OnVibrationToggled);
     }
     
-    void OnGameStateChanged(GameManager.GameState newState)
+    public void OnGameStateChanged(GameManager.GameState newState)
     {
         switch (newState)
         {
@@ -127,27 +127,27 @@ public class UIManager : MonoBehaviour
         }
     }
     
-    void ShowMainMenu()
+    public void ShowMainMenu()
     {
         SetAllPanelsInactive();
         if (mainMenuPanel != null)
             mainMenuPanel.SetActive(true);
     }
-    
-    void ShowGameUI()
+
+    public void ShowGameUI()
     {
         SetAllPanelsInactive();
         if (gamePanel != null)
             gamePanel.SetActive(true);
     }
-    
-    void ShowPauseMenu()
+
+    public void ShowPauseMenu()
     {
         if (pausePanel != null)
             pausePanel.SetActive(true);
     }
-    
-    void ShowGameOver()
+
+    public void ShowGameOver(int x= 0,int y = 0)
     {
         SetAllPanelsInactive();
         if (gameOverPanel != null)
@@ -156,8 +156,8 @@ public class UIManager : MonoBehaviour
             UpdateGameOverUI();
         }
     }
-    
-    void ShowLevelComplete()
+
+    public void ShowLevelComplete(int x = 0, int y = 0)
     {
         SetAllPanelsInactive();
         if (levelCompletePanel != null)

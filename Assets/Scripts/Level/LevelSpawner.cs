@@ -42,9 +42,13 @@ public class LevelSpawner : MonoBehaviour
     
     void Start()
     {
-        player = GameObject.FindGameObjectWithTag("Player");
+        var playerObj = GameObject.FindGameObjectWithTag("Player");
         mainCamera = Camera.main;
-        
+        if (playerObj != null)
+        {
+            player = playerObj.transform;
+        }
+
         if (player == null)
         {
             Debug.LogError("Player not found! Make sure player has 'Player' tag.");
