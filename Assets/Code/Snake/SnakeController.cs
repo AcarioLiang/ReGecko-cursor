@@ -11,13 +11,18 @@ namespace ReGecko.SnakeSystem
 		public int Length = 4;
 		public Vector2Int HeadCell;
 		public Vector2Int[] InitialBodyCells; // 含头在index 0，可为空
-		public float MoveSpeedCellsPerSecond = 8f;
+		public float MoveSpeedCellsPerSecond = 16f;
 		public float SnapThreshold = 0.05f;
+		public int MaxCellsPerFrame = 12;
+		[Header("Debug / Profiler")]
+		public bool ShowDebugStats = false;
+		public bool DrawDebugGizmos = false;
 
 		GridConfig _grid;
 		readonly List<Transform> _segments = new List<Transform>();
 		readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
 		readonly Queue<Vector2Int> _pathQueue = new Queue<Vector2Int>(); // 待消费路径（目标格序列）
+		readonly List<Vector2Int> _pathBuildBuffer = new List<Vector2Int>(64); // 复用的路径构建缓冲
 		Vector2Int _dragStartCell;
 		bool _dragging;
 		bool _dragOnHead;
@@ -25,6 +30,11 @@ namespace ReGecko.SnakeSystem
 		Vector2Int _currentTailCell;
 		Vector2Int _lastSampledCell; // 上次采样的手指网格
 		float _moveAccumulator; // 基于速度的逐格推进计数器
+		float _lastStatsTime;
+		int _stepsConsumedThisFrame;
+
+		enum DragAxis { None, X, Y }
+		DragAxis _dragAxis = DragAxis.None;
 
 		public void Initialize(GridConfig grid)
 		{
@@ -135,6 +145,8 @@ namespace ReGecko.SnakeSystem
 					_pathQueue.Clear();
 					_lastSampledCell = _dragOnHead ? _currentHeadCell : _currentTailCell;
 					_moveAccumulator = 0f;
+					_stepsConsumedThisFrame = 0;
+					_dragAxis = DragAxis.None;
 				}
 			}
 			else if (Input.GetMouseButtonUp(0))
@@ -143,6 +155,7 @@ namespace ReGecko.SnakeSystem
 				// 结束拖拽：清空未消费路径并吸附（可选）
 				_pathQueue.Clear();
 				SnapToGrid();
+				_dragAxis = DragAxis.None;
 			}
 		}
 
@@ -155,15 +168,19 @@ namespace ReGecko.SnakeSystem
 				var targetCell = ClampInside(_grid.WorldToCell(world));
 				if (targetCell != _lastSampledCell)
 				{
-					var append = BuildAxisAlignedPath(_lastSampledCell, targetCell, _dragOnHead);
-					for (int i = 0; i < append.Count; i++) _pathQueue.Enqueue(append[i]);
+					// 更新主方向：按更大位移轴确定
+					var delta = targetCell - (_dragOnHead ? _currentHeadCell : _currentTailCell);
+					_dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
+					EnqueueAxisAlignedPath(_lastSampledCell, targetCell);
 					_lastSampledCell = targetCell;
 				}
 			}
 
 			// 按速度逐格消费路径
+			_stepsConsumedThisFrame = 0;
 			_moveAccumulator += MoveSpeedCellsPerSecond * Time.deltaTime;
-			while (_moveAccumulator >= 1f && _pathQueue.Count > 0)
+			int stepsThisFrame = 0;
+			while (_moveAccumulator >= 1f && _pathQueue.Count > 0 && stepsThisFrame < MaxCellsPerFrame)
 			{
 				var nextCell = _pathQueue.Dequeue();
 				if (_dragOnHead)
@@ -175,16 +192,131 @@ namespace ReGecko.SnakeSystem
 					if (!AdvanceTailTo(nextCell)) break;
 				}
 				_moveAccumulator -= 1f;
+				stepsThisFrame++;
+				_stepsConsumedThisFrame++;
 			}
 
-			// 将渲染位置强制对齐到当前格中心，避免偏离网格
-			int index = 0;
-			foreach (var cell in _bodyCells)
+			// 拖动中的可视：使用折线距离定位，严格保持段间距=_grid.CellSize，避免重叠
+			if (_dragging)
 			{
-				if (index >= _segments.Count) break;
-				_segments[index].position = _grid.CellToWorld(cell);
-				index++;
+				UpdateVisualsSmoothDragging();
 			}
+			else
+			{
+				// 未拖动时：保持每段对齐到自身格中心
+				int idx = 0;
+				foreach (var cell in _bodyCells)
+				{
+					if (idx >= _segments.Count) break;
+					_segments[idx].position = _grid.CellToWorld(cell);
+					idx++;
+				}
+			}
+		}
+
+		void UpdateVisualsSmoothDragging()
+		{
+			float frac = Mathf.Clamp01(_moveAccumulator);
+			Vector3 finger = ScreenToWorld(Input.mousePosition);
+			if (_dragOnHead)
+			{
+				Vector3 headA = _grid.CellToWorld(_currentHeadCell);
+				Vector3 headVisual;
+				if (_pathQueue.Count > 0)
+				{
+					Vector3 headB = _grid.CellToWorld(_pathQueue.Peek());
+					headVisual = Vector3.Lerp(headA, headB, frac);
+				}
+				else
+				{
+					// 单格内自由拖动：限制在当前格AABB内，且仅沿主方向自由
+					headVisual = ClampWorldToCellBounds(finger, _currentHeadCell);
+					var center = _grid.CellToWorld(_currentHeadCell);
+					if (_dragAxis == DragAxis.X) headVisual.y = center.y; else if (_dragAxis == DragAxis.Y) headVisual.x = center.x;
+				}
+				// 构建折线：headVisual -> (body First.Next ... Last)
+				List<Vector3> pts = new List<Vector3>(_segments.Count + 2);
+				pts.Add(headVisual);
+				var it = _bodyCells.First;
+				if (it != null) it = it.Next; // skip head cell
+				while (it != null)
+				{
+					pts.Add(_grid.CellToWorld(it.Value));
+					it = it.Next;
+				}
+				float spacing = _grid.CellSize;
+				for (int i = 0; i < _segments.Count; i++)
+				{
+					Vector3 p = GetPointAlongPolyline(pts, i * spacing);
+					_segments[i].position = p;
+				}
+			}
+			else
+			{
+				// 拖尾：构建折线： (head ... before tail) -> tailVisual
+				Vector3 tailA = _grid.CellToWorld(_currentTailCell);
+				Vector3 tailVisual;
+				if (_pathQueue.Count > 0)
+				{
+					Vector3 tailB = _grid.CellToWorld(_pathQueue.Peek());
+					tailVisual = Vector3.Lerp(tailA, tailB, frac);
+				}
+				else
+				{
+					// 单格内自由拖动：限制在当前格AABB内，且仅沿主方向自由
+					tailVisual = ClampWorldToCellBounds(finger, _currentTailCell);
+					var center = _grid.CellToWorld(_currentTailCell);
+					if (_dragAxis == DragAxis.X) tailVisual.y = center.y; else if (_dragAxis == DragAxis.Y) tailVisual.x = center.x;
+				}
+				List<Vector3> pts = new List<Vector3>(_segments.Count + 2);
+				// head to last-1 body cells
+				var it = _bodyCells.First;
+				while (it != null)
+				{
+					// skip last, we will add tailVisual instead
+					if (it.Next == null) break;
+					pts.Add(_grid.CellToWorld(it.Value));
+					it = it.Next;
+				}
+				pts.Add(tailVisual);
+				float spacing = _grid.CellSize;
+				for (int i = 0; i < _segments.Count; i++)
+				{
+					Vector3 p = GetPointAlongPolyline(pts, i * spacing);
+					_segments[i].position = p;
+				}
+			}
+		}
+
+		Vector3 GetPointAlongPolyline(List<Vector3> pts, float distance)
+		{
+			if (pts.Count == 0) return Vector3.zero;
+			if (pts.Count == 1) return pts[0];
+			float remaining = distance;
+			for (int i = 0; i < pts.Count - 1; i++)
+			{
+				Vector3 a = pts[i];
+				Vector3 b = pts[i + 1];
+				float segLen = Vector3.Distance(a, b);
+				if (remaining <= segLen)
+				{
+					float t = segLen <= 0.0001f ? 0f : (remaining / segLen);
+					return Vector3.Lerp(a, b, t);
+				}
+				remaining -= segLen;
+			}
+			// 超出则返回最后一点
+			return pts[pts.Count - 1];
+		}
+
+		Vector3 ClampWorldToCellBounds(Vector3 world, Vector2Int cell)
+		{
+			Vector3 c = _grid.CellToWorld(cell);
+			float half = _grid.CellSize * 0.5f;
+			world.x = Mathf.Clamp(world.x, c.x - half, c.x + half);
+			world.y = Mathf.Clamp(world.y, c.y - half, c.y + half);
+			world.z = 0f;
+			return world;
 		}
 
 		void MoveSnakeToHeadCell(Vector2Int desiredHead)
@@ -222,75 +354,31 @@ namespace ReGecko.SnakeSystem
 			return true;
 		}
 
-		// 将A->B分解为轴对齐的网格路径，并在临时队列中模拟校验避免自相交
-		List<Vector2Int> BuildAxisAlignedPath(Vector2Int from, Vector2Int to, bool onHead)
+		// 将A->B分解为轴对齐的网格路径（先主轴后次轴），使用复用缓冲避免GC
+		void EnqueueAxisAlignedPath(Vector2Int from, Vector2Int to)
 		{
-			List<Vector2Int> output = new List<Vector2Int>();
-			if (from == to) return output;
-			// 拆成两段：先走主轴，再走次轴（避免对角）
+			_pathBuildBuffer.Clear();
+			if (from == to) return;
 			int dx = to.x - from.x;
 			int dy = to.y - from.y;
 			bool horizFirst = Mathf.Abs(dx) >= Mathf.Abs(dy);
-
-			var temp = new LinkedList<Vector2Int>(_bodyCells);
 			int stepx = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
 			int stepy = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
 			Vector2Int cur = from;
-
-			void SimAdvanceHead(Vector2Int next)
-			{
-				temp.AddFirst(next);
-				temp.RemoveLast();
-			}
-			void SimAdvanceTail(Vector2Int next)
-			{
-				temp.AddLast(next);
-				temp.RemoveFirst();
-			}
-
-			bool TryAppend(Vector2Int next)
-			{
-				// 校验相邻
-				if (Manhattan(cur, next) != 1) return false;
-				// 占用检查
-				var occ = new HashSet<Vector2Int>(temp);
-				var allowed = onHead ? temp.Last.Value : temp.First.Value; // 允许进入被释放的一端
-				if (occ.Contains(next) && next != allowed) return false;
-				output.Add(next);
-				if (onHead) SimAdvanceHead(next); else SimAdvanceTail(next);
-				cur = next;
-				return true;
-			}
-
-			// 先主轴
 			if (horizFirst)
 			{
-				for (int i = 0; i < Mathf.Abs(dx); i++)
-				{
-					var next = ClampInside(new Vector2Int(cur.x + stepx, cur.y));
-					if (!TryAppend(next)) break;
-				}
-				for (int i = 0; i < Mathf.Abs(dy); i++)
-				{
-					var next = ClampInside(new Vector2Int(cur.x, cur.y + stepy));
-					if (!TryAppend(next)) break;
-				}
+				for (int i = 0; i < Mathf.Abs(dx); i++) { cur = new Vector2Int(cur.x + stepx, cur.y); _pathBuildBuffer.Add(ClampInside(cur)); }
+				for (int i = 0; i < Mathf.Abs(dy); i++) { cur = new Vector2Int(cur.x, cur.y + stepy); _pathBuildBuffer.Add(ClampInside(cur)); }
 			}
 			else
 			{
-				for (int i = 0; i < Mathf.Abs(dy); i++)
-				{
-					var next = ClampInside(new Vector2Int(cur.x, cur.y + stepy));
-					if (!TryAppend(next)) break;
-				}
-				for (int i = 0; i < Mathf.Abs(dx); i++)
-				{
-					var next = ClampInside(new Vector2Int(cur.x + stepx, cur.y));
-					if (!TryAppend(next)) break;
-				}
+				for (int i = 0; i < Mathf.Abs(dy); i++) { cur = new Vector2Int(cur.x, cur.y + stepy); _pathBuildBuffer.Add(ClampInside(cur)); }
+				for (int i = 0; i < Mathf.Abs(dx); i++) { cur = new Vector2Int(cur.x + stepx, cur.y); _pathBuildBuffer.Add(ClampInside(cur)); }
 			}
-
-			return output;
+			for (int i = 0; i < _pathBuildBuffer.Count; i++)
+			{
+				_pathQueue.Enqueue(_pathBuildBuffer[i]);
+			}
 		}
 
 		bool AdvanceHeadTo(Vector2Int nextCell)
@@ -384,6 +472,39 @@ namespace ReGecko.SnakeSystem
 			var w = cam.ScreenToWorldPoint(screen);
 			w.z = 0f;
 			return w;
+		}
+
+		void OnGUI()
+		{
+			if (!ShowDebugStats) return;
+			GUI.color = Color.white;
+			var style = new GUIStyle(GUI.skin.label) { fontSize = 14 };
+			GUILayout.BeginArea(new Rect(10, 10, 400, 200), GUI.skin.box);
+			GUILayout.Label($"Queue: {_pathQueue.Count}", style);
+			GUILayout.Label($"Accumulator: {_moveAccumulator:F2}", style);
+			GUILayout.Label($"Steps/frame: {_stepsConsumedThisFrame}", style);
+			GUILayout.Label($"Head: {_currentHeadCell} Tail: {_currentTailCell}", style);
+			GUILayout.EndArea();
+		}
+
+		void OnDrawGizmosSelected()
+		{
+			if (!DrawDebugGizmos) return;
+			if (_grid.Width == 0) return;
+			Gizmos.color = new Color(0f, 1f, 0f, 0.4f);
+			foreach (var c in _bodyCells)
+			{
+				Gizmos.DrawWireCube(_grid.CellToWorld(c), new Vector3(_grid.CellSize, _grid.CellSize, 0f));
+			}
+			Gizmos.color = new Color(1f, 0.5f, 0f, 0.6f);
+			Vector3 prev = Vector3.negativeInfinity;
+			foreach (var c in _pathQueue)
+			{
+				var p = _grid.CellToWorld(c);
+				Gizmos.DrawSphere(p, 0.05f);
+				if (prev.x > -10000f) Gizmos.DrawLine(prev, p);
+				prev = p;
+			}
 		}
 	}
 }

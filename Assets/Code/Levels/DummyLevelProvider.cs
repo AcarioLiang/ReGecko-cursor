@@ -13,8 +13,8 @@ namespace ReGecko.Levels
 		{
 			var grid = new GridConfig
 			{
-				Width = 20,
-				Height = 20,
+				Width = 10,
+				Height = 10,
 				CellSize = 1f
 			};
 			var snake = new SnakeInitConfig
