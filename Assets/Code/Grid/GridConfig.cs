@@ -21,6 +21,11 @@ namespace ReGecko.GridSystem
 			return cell.x >= 0 && cell.x < Width && cell.y >= 0 && cell.y < Height;
 		}
 
+		public bool IsInside(int x, int y)
+		{
+			return x >= 0 && x < Width && y >= 0 && y < Height;
+		}
+
 		public Vector3 CellToWorld(Vector2Int cell)
 		{
 			return new Vector3(cell.x * CellSize, cell.y * CellSize, 0f);

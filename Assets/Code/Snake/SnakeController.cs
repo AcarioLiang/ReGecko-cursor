@@ -185,7 +185,16 @@ namespace ReGecko.SnakeSystem
 				var nextCell = _pathQueue.Dequeue();
 				if (_dragOnHead)
 				{
-					if (!AdvanceHeadTo(nextCell)) break;
+					// 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
+					var nextBody = _bodyCells.First.Next != null ? _bodyCells.First.Next.Value : _bodyCells.First.Value;
+					if (nextCell == nextBody)
+					{
+						if (!TryReverseOneStep()) break;
+					}
+					else
+					{
+						if (!AdvanceHeadTo(nextCell)) break;
+					}
 				}
 				else
 				{
@@ -406,6 +415,34 @@ namespace ReGecko.SnakeSystem
 			_bodyCells.RemoveFirst();
 			_currentTailCell = nextCell;
 			_currentHeadCell = _bodyCells.First.Value;
+			return true;
+		}
+
+		bool TryReverseOneStep()
+		{
+			// 以尾部为基准，朝着与尾相邻段的反方向后退；若不可行，尝试左右方向
+			if (_bodyCells.Last == null || _bodyCells.Last.Previous == null) return false;
+			var tail = _bodyCells.Last.Value;
+			var prev = _bodyCells.Last.Previous.Value; // 尾部相邻的身体
+			Vector2Int dir = tail - prev; // 远离身体方向
+			Vector2Int left = new Vector2Int(-dir.y, dir.x);
+			Vector2Int right = new Vector2Int(dir.y, -dir.x);
+			var candidates = new [] { dir, left, right };
+			for (int i = 0; i < candidates.Length; i++)
+			{
+				var next = tail + candidates[i];
+				if (!_grid.IsInside(next.x, next.y)) continue;
+				if (_grid.HasBlock(next.x, next.y)) continue;
+				if (!IsCellFree(next)) continue;
+				return AdvanceTailTo(next);
+			}
+			return false;
+		}
+
+		bool IsCellFree(Vector2Int cell)
+		{
+			// 不允许进入身体占用格；允许进入当前头（在反向时不需要，但保持一致性）
+			foreach (var c in _bodyCells) { if (c == cell) return false; }
 			return true;
 		}
 
