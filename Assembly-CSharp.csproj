@@ -60,12 +60,17 @@
     <Analyzer Include="C:\Program Files\Unity 2021.3.8f1c1\2022.3.62f1c1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Code\GameCore\Flow\GameContext.cs" />
     <Compile Include="Assets\Code\Levels\LevelConfig.cs" />
+    <Compile Include="Assets\Code\Bootstrap\LobbyBootstrap.cs" />
     <Compile Include="Assets\Code\Grid\GridRenderer.cs" />
     <Compile Include="Assets\Code\Levels\DummyLevelProvider.cs" />
+    <Compile Include="Assets\Code\GameCore\Flow\GameScenes.cs" />
+    <Compile Include="Assets\Code\Bootstrap\LoadingBootstrap.cs" />
     <Compile Include="Assets\Code\Bootstrap\GameBootstrap.cs" />
     <Compile Include="Assets\Code\Snake\SnakeController.cs" />
     <Compile Include="Assets\Code\Grid\GridConfig.cs" />
+    <Compile Include="Assets\Code\GameCore\Player\PlayerData.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

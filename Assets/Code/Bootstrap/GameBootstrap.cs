@@ -2,6 +2,7 @@ using UnityEngine;
 using ReGecko.GridSystem;
 using ReGecko.Levels;
 using ReGecko.SnakeSystem;
+using ReGecko.GameCore.Flow;
 
 namespace ReGecko.Bootstrap
 {
@@ -20,7 +21,7 @@ namespace ReGecko.Bootstrap
 
 		void Start()
 		{
-			var level = LevelProvider.GetLevel();
+			var level = GameContext.CurrentLevelConfig != null ? GameContext.CurrentLevelConfig : LevelProvider != null ? LevelProvider.GetLevel() : new LevelConfig();
 			// 构建网格
 			GridRenderer.Config = level.Grid;
 			GridRenderer.CellSprite = LevelProvider.GridCellSprite;
