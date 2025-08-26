@@ -31,6 +31,21 @@ namespace ReGecko.Bootstrap
 			var btn = btnGo.AddComponent<Button>();
 			btn.onClick.AddListener(OnClickStart);
 
+			// 文字：开始游戏
+			var textGo = new GameObject("Text");
+			textGo.transform.SetParent(btnGo.transform, false);
+			var text = textGo.AddComponent<Text>();
+			text.text = "开始游戏";
+			text.alignment = TextAnchor.MiddleCenter;
+			text.color = Color.black;
+			text.fontSize = 32;
+			text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+			var textRt = textGo.GetComponent<RectTransform>();
+			textRt.anchorMin = Vector2.zero;
+			textRt.anchorMax = Vector2.one;
+			textRt.offsetMin = Vector2.zero;
+			textRt.offsetMax = Vector2.zero;
+
 			var rt = btnGo.GetComponent<RectTransform>();
 			rt.sizeDelta = new Vector2(200, 80);
 			rt.anchorMin = new Vector2(0.5f, 0.5f);

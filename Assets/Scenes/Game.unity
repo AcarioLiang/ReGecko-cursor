@@ -152,7 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   GridCellSprite: {fileID: 21300000, guid: 902edc250c9c0d8438cb0be685f5a5e9, type: 3}
-  SnakeBodySprite: {fileID: 21300000, guid: 29a029304b9a75f449a8dfc5417b0518, type: 3}
+  SnakeBodySprite: {fileID: 21300000, guid: b27299c992ee1e0458ad07110f721460, type: 3}
 --- !u!4 &1062129360
 Transform:
   m_ObjectHideFlags: 0
@@ -201,7 +201,7 @@ MonoBehaviour:
     Width: 10
     Height: 10
     CellSize: 1
-  CellSprite: {fileID: 21300000, guid: 902edc250c9c0d8438cb0be685f5a5e9, type: 3}
+  CellSprite: {fileID: 0}
   GridRoot: {fileID: 0}
   CellZ: 1
 --- !u!4 &1065985040
