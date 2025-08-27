@@ -16,10 +16,21 @@ namespace ReGecko.Levels
 	}
 
 	[Serializable]
+	public class GridEntityConfig
+	{
+		public enum EntityType { Wall, Hole, Item }
+		public EntityType Type = EntityType.Wall;
+		public Vector2Int Cell = new Vector2Int(0, 0);
+		public Sprite Sprite;
+		public Color Color = Color.white;
+	}
+
+	[Serializable]
 	public class LevelConfig
 	{
 		public GridConfig Grid;
 		public SnakeInitConfig[] Snakes;
+		public GridEntityConfig[] Entities;
 	}
 }
 

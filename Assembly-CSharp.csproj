@@ -63,7 +63,11 @@
     <Compile Include="Assets\Code\GameCore\Flow\GameContext.cs" />
     <Compile Include="Assets\Code\Levels\LevelConfig.cs" />
     <Compile Include="Assets\Code\Bootstrap\LobbyBootstrap.cs" />
+    <Compile Include="Assets\Code\Grid\Entities\HoleEntity.cs" />
+    <Compile Include="Assets\Code\Grid\Entities\WallEntity.cs" />
     <Compile Include="Assets\Code\Grid\GridRenderer.cs" />
+    <Compile Include="Assets\Code\Grid\Entities\GridEntityManager.cs" />
+    <Compile Include="Assets\Code\Grid\Entities\ItemEntity.cs" />
     <Compile Include="Assets\Code\Levels\DummyLevelProvider.cs" />
     <Compile Include="Assets\Code\GameCore\Flow\GameScenes.cs" />
     <Compile Include="Assets\Code\Bootstrap\LoadingBootstrap.cs" />
@@ -71,6 +75,7 @@
     <Compile Include="Assets\Code\Snake\SnakeController.cs" />
     <Compile Include="Assets\Code\Grid\GridConfig.cs" />
     <Compile Include="Assets\Code\GameCore\Player\PlayerData.cs" />
+    <Compile Include="Assets\Code\Grid\Entities\GridEntity.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

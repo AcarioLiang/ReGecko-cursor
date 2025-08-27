@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ReGecko.GridSystem;
+using ReGecko.Grid.Entities;
+using System.Collections;
 
 namespace ReGecko.SnakeSystem
 {
@@ -19,6 +21,7 @@ namespace ReGecko.SnakeSystem
 		public bool DrawDebugGizmos = false;
 
 		GridConfig _grid;
+		GridEntityManager _entityManager;
 		readonly List<Transform> _segments = new List<Transform>();
 		readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
 		readonly Queue<Vector2Int> _pathQueue = new Queue<Vector2Int>(); // 待消费路径（目标格序列）
@@ -36,12 +39,19 @@ namespace ReGecko.SnakeSystem
 		enum DragAxis { None, X, Y }
 		DragAxis _dragAxis = DragAxis.None;
 
-		public void Initialize(GridConfig grid)
-		{
-			_grid = grid;
-			BuildSegments();
-			PlaceInitial();
-		}
+		bool _consuming; // 洞吞噬中
+
+		// 公共访问方法
+		public Vector2Int GetHeadCell() => _bodyCells.Count > 0 ? _currentHeadCell : Vector2Int.zero;
+		public Vector2Int GetTailCell() => _bodyCells.Count > 0 ? _currentTailCell : Vector2Int.zero;
+
+	public void Initialize(GridConfig grid)
+	{
+		_grid = grid;
+		_entityManager = FindObjectOfType<GridEntityManager>();
+		BuildSegments();
+		PlaceInitial();
+	}
 
 		void BuildSegments()
 		{
@@ -161,7 +171,10 @@ namespace ReGecko.SnakeSystem
 
 		void UpdateMovement()
 		{
-			if (_dragging)
+			// 如果蛇已被完全消除，停止所有移动更新
+			if (_bodyCells.Count == 0) return;
+			
+			if (_dragging && !_consuming)
 			{
 				// 采样当前手指所在格，扩充路径队列（仅四向路径）
 				var world = ScreenToWorld(Input.mousePosition);
@@ -173,6 +186,13 @@ namespace ReGecko.SnakeSystem
 					_dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
 					EnqueueAxisAlignedPath(_lastSampledCell, targetCell);
 					_lastSampledCell = targetCell;
+				}
+
+				// 洞检测：若拖动端临近洞，触发吞噬
+				var hole = FindAdjacentHole(_dragOnHead ? _currentHeadCell : _currentTailCell);
+				if (hole != null)
+				{
+					_consumeCoroutine ??= StartCoroutine(CoConsume(hole, _dragOnHead));
 				}
 			}
 
@@ -206,7 +226,7 @@ namespace ReGecko.SnakeSystem
 			}
 
 			// 拖动中的可视：使用折线距离定位，严格保持段间距=_grid.CellSize，避免重叠
-			if (_dragging)
+			if (_dragging && !_consuming)
 			{
 				UpdateVisualsSmoothDragging();
 			}
@@ -220,6 +240,56 @@ namespace ReGecko.SnakeSystem
 					_segments[idx].position = _grid.CellToWorld(cell);
 					idx++;
 				}
+			}
+		}
+
+		Coroutine _consumeCoroutine;
+		HoleEntity FindAdjacentHole(Vector2Int from)
+		{
+			// 简化：全局搜寻场景中的洞实体，找到与from相邻的第一个
+			var holes = Object.FindObjectsOfType<HoleEntity>();
+			for (int i = 0; i < holes.Length; i++)
+			{
+				if (holes[i].IsAdjacent(from)) return holes[i];
+			}
+			return null;
+		}
+
+		public IEnumerator CoConsume(HoleEntity hole, bool fromHead)
+		{
+			_consuming = true;
+			_dragging = false; // 脱离手指控制
+			_pathQueue.Clear();
+			_moveAccumulator = 0f;
+			// 逐段进入洞并消失
+			while (_bodyCells.Count > 0)
+			{
+				if (fromHead)
+				{
+					_bodyCells.RemoveFirst();
+					if (_segments.Count > 0) { Destroy(_segments[0].gameObject); _segments.RemoveAt(0); }
+				}
+				else
+				{
+					_bodyCells.RemoveLast();
+					int last = _segments.Count - 1;
+					if (last >= 0) { Destroy(_segments[last].gameObject); _segments.RemoveAt(last); }
+				}
+				// 更新当前头尾缓存，防止空引用
+				if (_bodyCells.Count > 0)
+				{
+					_currentHeadCell = _bodyCells.First.Value;
+					_currentTailCell = _bodyCells.Last.Value;
+				}
+				// 可在此添加进入洞的动画：将段位置插值到洞中心
+				yield return new WaitForSeconds(hole.ConsumeInterval);
+			}
+			_consuming = false;
+			_consumeCoroutine = null;
+			// 全部消失后，销毁蛇对象或重生；此处直接销毁
+			if (_bodyCells.Count == 0)
+			{
+				Destroy(gameObject);
 			}
 		}
 
@@ -394,6 +464,10 @@ namespace ReGecko.SnakeSystem
 		{
 			// 必须相邻
 			if (Manhattan(_currentHeadCell, nextCell) != 1) return false;
+			// 检查网格边界
+			if (!_grid.IsInside(nextCell)) return false;
+			// 检查实体阻挡
+			if (_entityManager != null && _entityManager.IsBlocked(nextCell)) return false;
 			// 占用校验：允许进入原尾
 			var tailCell = _bodyCells.Last.Value;
 			if (_bodyCells.Contains(nextCell) && nextCell != tailCell) return false;
@@ -408,6 +482,10 @@ namespace ReGecko.SnakeSystem
 		{
 			// 必须相邻
 			if (Manhattan(_currentTailCell, nextCell) != 1) return false;
+			// 检查网格边界
+			if (!_grid.IsInside(nextCell)) return false;
+			// 检查实体阻挡
+			if (_entityManager != null && _entityManager.IsBlocked(nextCell)) return false;
 			// 占用校验：允许进入原头
 			var headCell = _bodyCells.First.Value;
 			if (_bodyCells.Contains(nextCell) && nextCell != headCell) return false;
@@ -433,6 +511,7 @@ namespace ReGecko.SnakeSystem
 				var next = tail + candidates[i];
 				if (!_grid.IsInside(next.x, next.y)) continue;
 				if (_grid.HasBlock(next.x, next.y)) continue;
+				if (_entityManager != null && _entityManager.IsBlocked(next)) continue;
 				if (!IsCellFree(next)) continue;
 				return AdvanceTailTo(next);
 			}

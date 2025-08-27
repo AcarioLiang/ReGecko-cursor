@@ -8,6 +8,8 @@ namespace ReGecko.Levels
 	{
 		public Sprite GridCellSprite;
 		public Sprite SnakeBodySprite;
+		public Sprite WallSprite;
+		public Sprite HoleSprite;
 
 		public LevelConfig GetLevel()
 		{
@@ -32,10 +34,45 @@ namespace ReGecko.Levels
 					new Vector2Int(0, 4)
 				}
 			};
+
+			// 创建一些实体：墙体和洞
+			var entities = new[]
+			{
+				new GridEntityConfig
+				{
+					Type = GridEntityConfig.EntityType.Wall,
+					Cell = new Vector2Int(5, 5),
+					Sprite = WallSprite,
+					Color = Color.gray
+				},
+				new GridEntityConfig
+				{
+					Type = GridEntityConfig.EntityType.Wall,
+					Cell = new Vector2Int(6, 5),
+					Sprite = WallSprite,
+					Color = Color.gray
+				},
+				new GridEntityConfig
+				{
+					Type = GridEntityConfig.EntityType.Wall,
+					Cell = new Vector2Int(7, 5),
+					Sprite = WallSprite,
+					Color = Color.gray
+				},
+				new GridEntityConfig
+				{
+					Type = GridEntityConfig.EntityType.Hole,
+					Cell = new Vector2Int(Random.Range(2, 8), Random.Range(2, 8)),
+					Sprite = HoleSprite,
+					Color = Color.black
+				}
+			};
+
 			return new LevelConfig
 			{
 				Grid = grid,
-				Snakes = new[] { snake }
+				Snakes = new[] { snake },
+				Entities = entities
 			};
 		}
 	}

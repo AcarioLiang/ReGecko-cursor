@@ -3,6 +3,7 @@ using ReGecko.GridSystem;
 using ReGecko.Levels;
 using ReGecko.SnakeSystem;
 using ReGecko.GameCore.Flow;
+using ReGecko.Grid.Entities;
 
 namespace ReGecko.Bootstrap
 {
@@ -11,6 +12,8 @@ namespace ReGecko.Bootstrap
 		public DummyLevelProvider LevelProvider;
 		public GridRenderer GridRenderer;
 		public Camera SceneCamera;
+		
+		GridEntityManager _entityManager;
 
 		void Awake()
 		{
@@ -22,6 +25,12 @@ namespace ReGecko.Bootstrap
 		void Start()
 		{
 			var level = GameContext.CurrentLevelConfig != null ? GameContext.CurrentLevelConfig : LevelProvider != null ? LevelProvider.GetLevel() : new LevelConfig();
+			
+			// 初始化实体管理器
+			var entityManagerGo = new GameObject("EntityManager");
+			_entityManager = entityManagerGo.AddComponent<GridEntityManager>();
+			_entityManager.Grid = level.Grid;
+			
 			// 构建网格
 			GridRenderer.Config = level.Grid;
 			GridRenderer.CellSprite = LevelProvider.GridCellSprite;
@@ -42,7 +51,43 @@ namespace ReGecko.Bootstrap
 					snake.BodyColor = snakeCfg.Color;
 					snake.Length = Mathf.Max(1, snakeCfg.Length);
 					snake.HeadCell = snakeCfg.HeadCell;
+					snake.InitialBodyCells = snakeCfg.BodyCells;
 					snake.Initialize(level.Grid);
+				}
+			}
+
+			// 初始化网格实体
+			if (level.Entities != null)
+			{
+				for (int i = 0; i < level.Entities.Length; i++)
+				{
+					var entityCfg = level.Entities[i];
+					var go = new GameObject($"{entityCfg.Type}_{i}");
+					
+					GridEntity entity = null;
+					switch (entityCfg.Type)
+					{
+						case GridEntityConfig.EntityType.Wall:
+							entity = go.AddComponent<WallEntity>();
+							break;
+						case GridEntityConfig.EntityType.Hole:
+							entity = go.AddComponent<HoleEntity>();
+							break;
+						case GridEntityConfig.EntityType.Item:
+							entity = go.AddComponent<ItemEntity>();
+							break;
+					}
+					
+					if (entity != null)
+					{
+						entity.Cell = entityCfg.Cell;
+						entity.Sprite = entityCfg.Sprite;
+						var sr = entity.GetComponent<SpriteRenderer>();
+						if (sr != null) sr.color = entityCfg.Color;
+						
+						// 注册到管理器
+						_entityManager.Register(entity);
+					}
 				}
 			}
 		}
