@@ -1,0 +1,64 @@
+# Unity Project Settings for Gecko Out Game
+
+## Project Configuration
+
+### Build Settings
+- Platform: Android, iOS, PC
+- Scripting Backend: IL2CPP
+- Target Architectures: ARM64, x86_64
+- Minimum API Level: Android 6.0 (API level 23)
+- Target API Level: Android 13 (API level 33)
+
+### Quality Settings
+- Anti Aliasing: 4x MSAA
+- Texture Quality: Full Res
+- Anisotropic Textures: Per Texture
+- Soft Particles: Enabled
+- Realtime Reflection Probes: Disabled
+
+### Physics Settings
+- Default Solver Iterations: 6
+- Default Solver Velocity Iterations: 1
+- Sleep Threshold: 0.005
+- Default Contact Offset: 0.01
+- Default Max Angular Speed: 7
+
+### Input System
+- Active Input Handling: Both
+- Update Mode: Fixed Update
+- Fixed Timestep: 0.02
+
+### Audio Settings
+- Sample Rate: 48000 Hz
+- DSP Buffer Size: Best Performance
+- Virtual Voices: 32
+- Real Voices: 24
+
+### Graphics Settings
+- Color Space: Linear
+- Auto Graphics API: Enabled
+- Graphics APIs: OpenGLES3, Vulkan (Android)
+- Multithreaded Rendering: Enabled
+
+### Player Settings
+- Company Name: Your Company
+- Product Name: Gecko Out
+- Bundle Identifier: com.yourcompany.geckoout
+- Version: 1.0.0
+- Scripting Define Symbols: UNITY_2D;GECKO_OUT
+
+### Layer Collision Matrix
+- Player: 8
+- Obstacle: 9
+- Collectible: 10
+- PowerUp: 11
+- Background: 12
+
+### Tags
+- Player
+- Obstacle
+- Collectible
+- PowerUp
+- GameManager
+- UI
+- Background
