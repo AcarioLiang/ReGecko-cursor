@@ -218,7 +218,16 @@ namespace ReGecko.SnakeSystem
 				}
 				else
 				{
-					if (!AdvanceTailTo(nextCell)) break;
+					// 尾部倒车：若下一步将进入紧邻身体，则改为让头部前进一步
+					var prevBody = _bodyCells.Last.Previous != null ? _bodyCells.Last.Previous.Value : _bodyCells.Last.Value;
+					if (nextCell == prevBody)
+					{
+						if (!TryReverseFromTail()) break;
+					}
+					else
+					{
+						if (!AdvanceTailTo(nextCell)) break;
+					}
 				}
 				_moveAccumulator -= 1f;
 				stepsThisFrame++;
@@ -261,27 +270,45 @@ namespace ReGecko.SnakeSystem
 			_dragging = false; // 脱离手指控制
 			_pathQueue.Clear();
 			_moveAccumulator = 0f;
+			Vector3 holeCenter = _grid.CellToWorld(hole.Cell);
+			
 			// 逐段进入洞并消失
 			while (_bodyCells.Count > 0)
 			{
+				Transform segmentToConsume = null;
 				if (fromHead)
 				{
 					_bodyCells.RemoveFirst();
-					if (_segments.Count > 0) { Destroy(_segments[0].gameObject); _segments.RemoveAt(0); }
+					if (_segments.Count > 0) 
+					{
+						segmentToConsume = _segments[0];
+						_segments.RemoveAt(0);
+					}
 				}
 				else
 				{
 					_bodyCells.RemoveLast();
 					int last = _segments.Count - 1;
-					if (last >= 0) { Destroy(_segments[last].gameObject); _segments.RemoveAt(last); }
+					if (last >= 0) 
+					{
+						segmentToConsume = _segments[last];
+						_segments.RemoveAt(last);
+					}
 				}
+				
 				// 更新当前头尾缓存，防止空引用
 				if (_bodyCells.Count > 0)
 				{
 					_currentHeadCell = _bodyCells.First.Value;
 					_currentTailCell = _bodyCells.Last.Value;
 				}
-				// 可在此添加进入洞的动画：将段位置插值到洞中心
+				
+				// 动画：将段移动到洞中心再消失
+				if (segmentToConsume != null)
+				{
+					StartCoroutine(MoveToHoleAndDestroy(segmentToConsume, holeCenter, hole.ConsumeInterval * 0.5f));
+				}
+				
 				yield return new WaitForSeconds(hole.ConsumeInterval);
 			}
 			_consuming = false;
@@ -291,6 +318,167 @@ namespace ReGecko.SnakeSystem
 			{
 				Destroy(gameObject);
 			}
+		}
+		
+		IEnumerator MoveToHoleAndDestroy(Transform segment, Vector3 holeCenter, float duration)
+		{
+			Vector3 startPos = segment.position;
+			
+			// 计算沿身体路径到洞的移动路径
+			List<Vector3> pathToHole = CalculatePathToHole(startPos, holeCenter);
+			
+			// 沿路径移动
+			float totalDistance = 0f;
+			for (int i = 0; i < pathToHole.Count - 1; i++)
+			{
+				totalDistance += Vector3.Distance(pathToHole[i], pathToHole[i + 1]);
+			}
+			
+			float moveSpeed = totalDistance / duration;
+			float currentDistance = 0f;
+			int currentSegment = 0;
+			
+			while (currentSegment < pathToHole.Count - 1)
+			{
+				Vector3 segmentStart = pathToHole[currentSegment];
+				Vector3 segmentEnd = pathToHole[currentSegment + 1];
+				float segmentLength = Vector3.Distance(segmentStart, segmentEnd);
+				
+				float segmentTime = segmentLength / moveSpeed;
+				float elapsed = 0f;
+				
+				while (elapsed < segmentTime)
+				{
+					elapsed += Time.deltaTime;
+					float t = elapsed / segmentTime;
+					segment.position = Vector3.Lerp(segmentStart, segmentEnd, t);
+					yield return null;
+				}
+				
+				currentSegment++;
+			}
+			
+			// 确保到达洞中心
+			segment.position = holeCenter;
+			
+			// 消失效果（缩小并淡出）
+			var sr = segment.GetComponent<SpriteRenderer>();
+			if (sr != null)
+			{
+				float fadeTime = duration * 0.3f;
+				float fadeElapsed = 0f;
+				Color originalColor = sr.color;
+				
+				while (fadeElapsed < fadeTime)
+				{
+					fadeElapsed += Time.deltaTime;
+					float fadeT = fadeElapsed / fadeTime;
+					sr.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
+					segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
+					yield return null;
+				}
+			}
+			
+			Destroy(segment.gameObject);
+		}
+
+		List<Vector3> CalculatePathToHole(Vector3 startPos, Vector3 holeCenter)
+		{
+			List<Vector3> path = new List<Vector3>();
+			path.Add(startPos);
+			
+			Vector2Int startCell = _grid.WorldToCell(startPos);
+			Vector2Int holeCell = _grid.WorldToCell(holeCenter);
+			
+			// 简单的A*路径寻找，沿着网格路径到洞
+			List<Vector2Int> cellPath = FindPathToHole(startCell, holeCell);
+			
+			// 转换为世界坐标
+			for (int i = 1; i < cellPath.Count; i++)
+			{
+				path.Add(_grid.CellToWorld(cellPath[i]));
+			}
+			
+			// 确保最后一点是洞中心
+			if (path[path.Count - 1] != holeCenter)
+			{
+				path.Add(holeCenter);
+			}
+			
+			return path;
+		}
+
+		List<Vector2Int> FindPathToHole(Vector2Int start, Vector2Int target)
+		{
+			List<Vector2Int> path = new List<Vector2Int>();
+			Vector2Int current = start;
+			path.Add(current);
+			
+			// 简单的曼哈顿距离路径寻找
+			while (current != target)
+			{
+				Vector2Int next = current;
+				
+				// 优先朝目标方向移动
+				if (current.x != target.x)
+				{
+					next.x += current.x < target.x ? 1 : -1;
+				}
+				else if (current.y != target.y)
+				{
+					next.y += current.y < target.y ? 1 : -1;
+				}
+				
+				// 检查是否可以移动到该位置
+				if (_grid.IsInside(next) && !IsPathBlocked(next))
+				{
+					current = next;
+					path.Add(current);
+				}
+				else
+				{
+					// 如果被阻挡，尝试其他方向
+					var directions = new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+					bool found = false;
+					
+					foreach (var dir in directions)
+					{
+						Vector2Int alternative = current + dir;
+						if (_grid.IsInside(alternative) && !IsPathBlocked(alternative) && !path.Contains(alternative))
+						{
+							current = alternative;
+							path.Add(current);
+							found = true;
+							break;
+						}
+					}
+					
+					if (!found) break; // 无法找到路径，直接跳出
+				}
+				
+				// 防止无限循环
+				if (path.Count > 50) break;
+			}
+			
+			return path;
+		}
+
+		bool IsPathBlocked(Vector2Int cell)
+		{
+			// 检查是否被墙体阻挡（洞本身不算阻挡）
+			if (_entityManager != null)
+			{
+				var entities = _entityManager.GetAt(cell);
+				if (entities != null)
+				{
+					foreach (var entity in entities)
+					{
+						if (entity is WallEntity) return true;
+						// 洞不算阻挡，可以通过
+					}
+				}
+			}
+			return false;
 		}
 
 		void UpdateVisualsSmoothDragging()
@@ -514,6 +702,28 @@ namespace ReGecko.SnakeSystem
 				if (_entityManager != null && _entityManager.IsBlocked(next)) continue;
 				if (!IsCellFree(next)) continue;
 				return AdvanceTailTo(next);
+			}
+			return false;
+		}
+
+		bool TryReverseFromTail()
+		{
+			// 从尾部倒车：以头部为基准，朝着与头相邻段的反方向前进
+			if (_bodyCells.First == null || _bodyCells.First.Next == null) return false;
+			var head = _bodyCells.First.Value;
+			var next = _bodyCells.First.Next.Value; // 头部相邻的身体
+			Vector2Int dir = head - next; // 远离身体方向
+			Vector2Int left = new Vector2Int(-dir.y, dir.x);
+			Vector2Int right = new Vector2Int(dir.y, -dir.x);
+			var candidates = new [] { dir, left, right };
+			for (int i = 0; i < candidates.Length; i++)
+			{
+				var nextHead = head + candidates[i];
+				if (!_grid.IsInside(nextHead.x, nextHead.y)) continue;
+				if (_grid.HasBlock(nextHead.x, nextHead.y)) continue;
+				if (_entityManager != null && _entityManager.IsBlocked(nextHead)) continue;
+				if (!IsCellFree(nextHead)) continue;
+				return AdvanceHeadTo(nextHead);
 			}
 			return false;
 		}
