@@ -87,7 +87,8 @@ namespace ReGecko.Bootstrap
 		{
 			var canvasGo = new GameObject("Canvas");
 			var canvas = canvasGo.AddComponent<Canvas>();
-			canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+			canvas.renderMode = RenderMode.ScreenSpaceCamera;
+			canvas.worldCamera = Camera.main;
 			var scaler = canvasGo.AddComponent<CanvasScaler>();
 			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
 			scaler.referenceResolution = new Vector2(1080, 1920);

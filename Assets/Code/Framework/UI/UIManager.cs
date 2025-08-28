@@ -26,13 +26,19 @@ namespace ReGecko.Framework.UI
 		GraphicRaycaster _raycaster;
 		readonly Dictionary<string, GameObject> _spawned = new Dictionary<string, GameObject>();
 
-		void Init()
-		{
-			_canvas = gameObject.AddComponent<Canvas>();
-			_canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-			gameObject.AddComponent<CanvasScaler>();
-			_raycaster = gameObject.AddComponent<GraphicRaycaster>();
-		}
+	void Init()
+	{
+		_canvas = gameObject.AddComponent<Canvas>();
+		_canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+		
+		var scaler = gameObject.AddComponent<CanvasScaler>();
+		scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+		scaler.referenceResolution = new Vector2(1080, 1920);
+		scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+		scaler.matchWidthOrHeight = 0.5f;
+		
+		_raycaster = gameObject.AddComponent<GraphicRaycaster>();
+	}
 
 		public GameObject Show(string key, GameObject prefabOrInstance)
 		{
