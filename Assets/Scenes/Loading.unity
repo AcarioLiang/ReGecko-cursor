@@ -153,6 +153,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   GridCellSprite: {fileID: 21300000, guid: 902edc250c9c0d8438cb0be685f5a5e9, type: 3}
   SnakeBodySprite: {fileID: 21300000, guid: b27299c992ee1e0458ad07110f721460, type: 3}
+  WallSprite: {fileID: 0}
+  HoleSprite: {fileID: 0}
 --- !u!4 &1786732307
 Transform:
   m_ObjectHideFlags: 0
@@ -200,7 +202,8 @@ MonoBehaviour:
   BackgroundSprite: {fileID: 21300000, guid: f589b8bb878ee504886cf93db1ee9acf, type: 3}
   ProgressBackgroundSprite: {fileID: 21300000, guid: 396452fa1599e3c47b0dc17d848811be, type: 3}
   ProgressFillSprite: {fileID: 21300000, guid: 894584c97c64e0542981ce9c99a5ef0b, type: 3}
-  FakeDuration: 3
+  FakeDuration: 1
+  UIPrefabPath: 
 --- !u!4 &1808285241
 Transform:
   m_ObjectHideFlags: 0

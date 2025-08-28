@@ -5,6 +5,8 @@ using UnityEngine.UI;
 using ReGecko.GameCore.Flow;
 using ReGecko.GameCore.Player;
 using ReGecko.Levels;
+using ReGecko.Framework.Resources;
+using ReGecko.Framework.UI;
 
 namespace ReGecko.Bootstrap
 {
@@ -16,27 +18,70 @@ namespace ReGecko.Bootstrap
 		public float FakeDuration = 3f;
 
 		Slider _progress;
+		public string UIPrefabPath = "";//"UI/GameplayHUD"; // Resources 下路径
 
 		IEnumerator Start()
 		{
-			BuildUI();
-			yield return StartCoroutine(RunFakeProgress());
-			// 完成后再执行原逻辑
-			if (GameContext.NextLoadIsPlayer)
-			{
-				var data = PlayerService.Get();
-				GameContext.NextLoadIsPlayer = false;
-				SceneManager.LoadScene(GameScenes.Lobby);
-			}
-			else
-			{
-				var provider = FindObjectOfType<ReGecko.Levels.DummyLevelProvider>();
-				LevelConfig level;
-				if (provider != null) level = provider.GetLevel(); else level = new LevelConfig();
-				GameContext.CurrentLevelConfig = level;
-				SceneManager.LoadScene(GameScenes.Game);
-			}
+		BuildUI();
+		
+		// 加载玩家数据
+		if (GameContext.NextLoadIsPlayer)
+		{
+			var data = PlayerService.Get();
+			GameContext.NextLoadIsPlayer = false;
 		}
+		else
+		{
+			var provider = FindObjectOfType<ReGecko.Levels.DummyLevelProvider>();
+			LevelConfig level;
+			if (provider != null) level = provider.GetLevel(); else level = new LevelConfig();
+			GameContext.CurrentLevelConfig = level;
+		}
+
+		// 并行加载资源
+		GameObject loadedUIPrefab = null;
+		bool uiLoaded = false;
+		bool otherResourcesLoaded = false;
+		
+		// 启动UI加载
+		if (!string.IsNullOrEmpty(UIPrefabPath))
+		{
+			StartCoroutine(ResourceManager.LoadPrefabAsync(UIPrefabPath, prefab => { 
+				loadedUIPrefab = prefab; 
+				uiLoaded = true; 
+			}));
+		}
+		else
+		{
+			// 用代码生成的是实例，不需要再Instantiate
+			loadedUIPrefab = ReGecko.Framework.UI.GameplayHUDBuilder.BuildPrefabTemplate();
+			loadedUIPrefab.SetActive(false); // 先隐藏，等到Game场景再显示
+			uiLoaded = true;
+		}
+		
+		// 启动其他资源加载（预留）
+		StartCoroutine(LoadOtherResources(() => otherResourcesLoaded = true));
+		
+		// 运行进度条，等待所有资源加载完成
+		yield return StartCoroutine(RunFakeProgress(() => uiLoaded && otherResourcesLoaded));
+		
+		// 将加载的UI保存到GameContext，并确保不会被场景切换销毁
+		if (loadedUIPrefab != null)
+		{
+			DontDestroyOnLoad(loadedUIPrefab);
+		}
+		GameContext.PreloadedUIPrefab = loadedUIPrefab;
+		
+		// 场景切换
+		if (GameContext.NextLoadIsPlayer)
+		{
+			SceneManager.LoadScene(GameScenes.Lobby);
+		}
+		else
+		{
+			SceneManager.LoadScene(GameScenes.Game);
+		}
+	}
 
 		void BuildUI()
 		{
@@ -105,13 +150,25 @@ namespace ReGecko.Bootstrap
 			_progress = slider;
 		}
 
-		IEnumerator RunFakeProgress()
+		IEnumerator LoadOtherResources(System.Action onComplete)
+		{
+			// 预留其他资源加载时间（例如音效、特效等）
+			yield return new WaitForSeconds(0.5f);
+			onComplete?.Invoke();
+		}
+
+		IEnumerator RunFakeProgress(System.Func<bool> extraDone = null)
 		{
 			float t = 0f;
-			while (t < FakeDuration)
+			while (t < FakeDuration || (extraDone != null && !extraDone()))
 			{
 				t += Time.deltaTime;
-				if (_progress != null) _progress.value = Mathf.Clamp01(t / FakeDuration);
+				// 进度条结合时间和资源加载状态
+				float timeProgress = Mathf.Clamp01(t / FakeDuration);
+				float resourceProgress = (extraDone != null && extraDone()) ? 1f : 0f;
+				float finalProgress = Mathf.Max(timeProgress, resourceProgress);
+				
+				if (_progress != null) _progress.value = finalProgress;
 				yield return null;
 			}
 			if (_progress != null) _progress.value = 1f;

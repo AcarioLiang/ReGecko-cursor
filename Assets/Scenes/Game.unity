@@ -153,7 +153,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   GridCellSprite: {fileID: 21300000, guid: 902edc250c9c0d8438cb0be685f5a5e9, type: 3}
   SnakeBodySprite: {fileID: 21300000, guid: b27299c992ee1e0458ad07110f721460, type: 3}
-  WallBodySprite: {fileID: 21300000, guid: a7914a2fe0b61bb44b5458ee60252e72, type: 3}
+  WallSprite: {fileID: 21300000, guid: dfe100649670541419d77411b2506c65, type: 3}
+  HoleSprite: {fileID: 21300000, guid: a7914a2fe0b61bb44b5458ee60252e72, type: 3}
 --- !u!4 &1062129360
 Transform:
   m_ObjectHideFlags: 0

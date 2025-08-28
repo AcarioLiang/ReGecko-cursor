@@ -4,6 +4,7 @@ using ReGecko.Levels;
 using ReGecko.SnakeSystem;
 using ReGecko.GameCore.Flow;
 using ReGecko.Grid.Entities;
+using ReGecko.Framework.UI;
 
 namespace ReGecko.Bootstrap
 {
@@ -89,6 +90,12 @@ namespace ReGecko.Bootstrap
 						_entityManager.Register(entity);
 					}
 				}
+			}
+			
+			// 显示预加载的UI
+			if (GameContext.PreloadedUIPrefab != null)
+			{
+				UIManager.Instance.Show("GameplayHUD", GameContext.PreloadedUIPrefab);
 			}
 		}
 
