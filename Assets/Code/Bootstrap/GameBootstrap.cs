@@ -3,6 +3,7 @@ using ReGecko.Levels;
 using ReGecko.GameCore.Flow;
 using ReGecko.Grid.Entities;
 using ReGecko.Framework.UI;
+using UnityEngine.EventSystems;
 
 namespace ReGecko.Bootstrap
 {
@@ -20,6 +21,14 @@ namespace ReGecko.Bootstrap
         void Start()
         {
             var level = GameContext.CurrentLevelConfig != null ? GameContext.CurrentLevelConfig : LevelProvider != null ? LevelProvider.GetLevel() : new LevelConfig();
+
+            // 确保有EventSystem来处理UI事件
+            if (FindObjectOfType<EventSystem>() == null)
+            {
+                var eventSystemGo = new GameObject("EventSystem");
+                eventSystemGo.AddComponent<EventSystem>();
+                eventSystemGo.AddComponent<StandaloneInputModule>();
+            }
 
             // 初始化实体管理器
             var entityManagerGo = new GameObject("EntityManager");

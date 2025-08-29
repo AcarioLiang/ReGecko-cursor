@@ -66,6 +66,7 @@
     <Compile Include="Assets\Code\Bootstrap\LobbyBootstrap.cs" />
     <Compile Include="Assets\Code\Grid\Entities\HoleEntity.cs" />
     <Compile Include="Assets\Code\Framework\Resources\ResourceManager.cs" />
+    <Compile Include="Assets\Code\Framework\Resources\ResourceDefine.cs" />
     <Compile Include="Assets\Code\Grid\Entities\WallEntity.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntityManager.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIManager.cs" />

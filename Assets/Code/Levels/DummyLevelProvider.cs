@@ -15,7 +15,7 @@ namespace ReGecko.Levels
 		{
 			var grid = new GridConfig
 			{
-				Width = 10,
+				Width = 6,
 				Height = 10,
 				CellSize = 1f
 			};

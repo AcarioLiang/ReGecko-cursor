@@ -1,3 +1,4 @@
+using ReGecko.Framework.Resources;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,7 +19,7 @@ namespace ReGecko.Framework.UI
             var bg = new GameObject("Background");
             bg.transform.SetParent(root.transform, false);
             var bgImg = bg.AddComponent<Image>();
-            bgImg.color = new Color(0.08f, 0.09f, 0.1f, 1f); // 深色背景
+            bgImg.sprite = ResourceManager.LoadPNG(ResourceDefine.Game_BG);
             var bgRt = bg.GetComponent<RectTransform>();
             bgRt.anchorMin = new Vector2(0f, 0f);
             bgRt.anchorMax = new Vector2(1f, 1f);
@@ -32,54 +33,132 @@ namespace ReGecko.Framework.UI
             topRt.anchorMin = new Vector2(0f, 1f);
             topRt.anchorMax = new Vector2(1f, 1f);
             topRt.pivot = new Vector2(0.5f, 1f);
-            topRt.sizeDelta = new Vector2(0f, 120f);
+            topRt.sizeDelta = new Vector2(0f, 250);
             topRt.anchoredPosition = new Vector2(0f, 0f);
-            var topLayout = top.AddComponent<HorizontalLayoutGroup>();
-            topLayout.childForceExpandWidth = true;
-            topLayout.childForceExpandHeight = true;
-            topLayout.childAlignment = TextAnchor.MiddleCenter;
-            topLayout.padding = new RectOffset(24, 24, 12, 12);
-            topLayout.spacing = 16f;
 
-            // 左组（暂停/重置）
+            // 左组（暂停/重置按钮）
             var left = new GameObject("LeftGroup");
             left.transform.SetParent(top.transform, false);
             var leftRt = left.AddComponent<RectTransform>();
-            var leftLayout = left.AddComponent<HorizontalLayoutGroup>();
-            leftLayout.childForceExpandWidth = false;
-            leftLayout.childForceExpandHeight = true;
-            leftLayout.spacing = 12f;
-            var leftLE = left.AddComponent<LayoutElement>();
-            leftLE.minWidth = 280f;
+            leftRt.anchorMin = new Vector2(0f, 0f);
+            leftRt.anchorMax = new Vector2(0f, 1f);
+            leftRt.pivot = new Vector2(0f, 0.5f);
+            leftRt.anchoredPosition = new Vector2(20f, 0f);
+            leftRt.sizeDelta = new Vector2(201f, 0f); // 98*2 + 5 = 201
 
-            CreateButton(left.transform, "PauseButton", "暂停");
-            CreateButton(left.transform, "ResetButton", "重置");
+            // 暂停按钮
+            var pauseBtn = CreateButton(left.transform, "PauseButton", "", 98f, 98f, ResourceDefine.Game_Btn_Pause);
+            var pauseRt = pauseBtn.GetComponent<RectTransform>();
+            pauseRt.anchorMin = new Vector2(0f, 0.5f);
+            pauseRt.anchorMax = new Vector2(0f, 0.5f);
+            pauseRt.pivot = new Vector2(0f, 0.5f);
+            pauseRt.anchoredPosition = new Vector2(0f, 0f);
 
-            // 中间（关卡信息）
-            var center = new GameObject("CenterInfo");
-            center.transform.SetParent(top.transform, false);
-            var centerRt = center.AddComponent<RectTransform>();
-            var centerLE = center.AddComponent<LayoutElement>();
-            centerLE.flexibleWidth = 1f;
-            var centerText = center.AddComponent<Text>();
-            centerText.text = "关卡 1-1";
-            centerText.alignment = TextAnchor.MiddleCenter;
-            centerText.fontSize = 36;
-            centerText.color = Color.white;
-            centerText.font = UnityEngine.Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // 重置按钮
+            var resetBtn = CreateButton(left.transform, "ResetButton", "", 98f, 98f, ResourceDefine.Game_Btn_Restat);
+            var resetRt = resetBtn.GetComponent<RectTransform>();
+            resetRt.anchorMin = new Vector2(0f, 0.5f);
+            resetRt.anchorMax = new Vector2(0f, 0.5f);
+            resetRt.pivot = new Vector2(0f, 0.5f);
+            resetRt.anchoredPosition = new Vector2(103f, 0f); // 98 + 5 = 103
 
-            // 右组（金币）
+
+            // 中间组（文体）
+            var middle = new GameObject("MiddleGroup");
+
+            middle.transform.SetParent(top.transform, false);
+            var middleRt = middle.AddComponent<RectTransform>();
+            middleRt.anchorMin = new Vector2(0.5f, 0f);
+            middleRt.anchorMax = new Vector2(0.5f, 1f);
+            middleRt.pivot = new Vector2(0.5f, 0.5f);
+            middleRt.anchoredPosition = new Vector2(0f, 0f);
+            middleRt.sizeDelta = new Vector2(201f, 0f); // 98*2 + 5 = 201
+
+            // 中间区域的三张图片（居中对齐）
+            var centerImages = new GameObject("CenterImages");
+            centerImages.transform.SetParent(middle.transform, false);
+            var centerImagesRt = centerImages.AddComponent<RectTransform>();
+            centerImagesRt.anchorMin = new Vector2(0.5f, 0.5f);
+            centerImagesRt.anchorMax = new Vector2(0.5f, 0.5f);
+            centerImagesRt.pivot = new Vector2(0.5f, 0.5f);
+            centerImagesRt.anchoredPosition = Vector2.zero;
+
+            // 第一张图片 (261*87)
+            var centerImg1 = CreateImage(centerImages.transform, "CenterImage1", 261f, 87f);
+            var centerImg1Rt = centerImg1.GetComponent<RectTransform>();
+            centerImg1Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            centerImg1Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            centerImg1Rt.pivot = new Vector2(0.5f, 0.5f);
+            centerImg1Rt.anchoredPosition = new Vector2(0f, 60f); // 居中，稍微向上
+
+            // 第二张图片 (57*34)
+            var centerImg2 = CreateImage(centerImages.transform, "CenterImage2", 57f, 34f);
+            var centerImg2Rt = centerImg2.GetComponent<RectTransform>();
+            centerImg2Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            centerImg2Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            centerImg2Rt.pivot = new Vector2(0.5f, 0.5f);
+            centerImg2Rt.anchoredPosition = new Vector2(0f, 0f); // 居中
+
+            // 第三张图片 (261*87)
+            var centerImg3 = CreateImage(centerImages.transform, "CenterImage3", 261f, 87f);
+            var centerImg3Rt = centerImg3.GetComponent<RectTransform>();
+            centerImg3Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            centerImg3Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            centerImg3Rt.pivot = new Vector2(0.5f, 0.5f);
+            centerImg3Rt.anchoredPosition = new Vector2(0f, -60f); // 居中，稍微向下
+
+
+            // 右组（图片和按钮）
             var right = new GameObject("RightGroup");
             right.transform.SetParent(top.transform, false);
             var rightRt = right.AddComponent<RectTransform>();
-            var rightLE = right.AddComponent<LayoutElement>();
-            rightLE.minWidth = 240f;
-            var rightLayout = right.AddComponent<HorizontalLayoutGroup>();
-            rightLayout.childForceExpandWidth = false;
-            rightLayout.childForceExpandHeight = true;
-            rightLayout.childAlignment = TextAnchor.MiddleRight;
-            rightLayout.spacing = 8f;
-            var coinText = CreateText(right.transform, "CoinsText", "金币: 0", 32, TextAnchor.MiddleRight);
+            rightRt.anchorMin = new Vector2(1f, 0f);
+            rightRt.anchorMax = new Vector2(1f, 1f);
+            rightRt.pivot = new Vector2(1f, 0.5f);
+            rightRt.anchoredPosition = new Vector2(-20f, 0f);
+            rightRt.sizeDelta = new Vector2(320f, 0f);
+
+            // 第一个图片 (108*103)
+            var img1 = CreateImage(right.transform, "Image1", 108f, 103f);
+            var img1Rt = img1.GetComponent<RectTransform>();
+            img1Rt.anchorMin = new Vector2(0f, 0.5f);
+            img1Rt.anchorMax = new Vector2(0f, 0.5f);
+            img1Rt.pivot = new Vector2(0f, 0.5f);
+            img1Rt.anchoredPosition = new Vector2(0f, 0f);
+
+            // 按钮 (69*68)
+            var rightBtn = CreateButton(right.transform, "RightButton", "按钮", 69f, 68f);
+            var rightBtnRt = rightBtn.GetComponent<RectTransform>();
+            rightBtnRt.anchorMin = new Vector2(0f, 0.5f);
+            rightBtnRt.anchorMax = new Vector2(0f, 0.5f);
+            rightBtnRt.pivot = new Vector2(0f, 0.5f);
+            rightBtnRt.anchoredPosition = new Vector2(118f, 0f); // 108 + 10 = 118
+
+            // 第二个图片 (109*83) 带文本框
+            var img2Container = new GameObject("Image2Container");
+            img2Container.transform.SetParent(right.transform, false);
+            var img2ContainerRt = img2Container.AddComponent<RectTransform>();
+            img2ContainerRt.anchorMin = new Vector2(0f, 0.5f);
+            img2ContainerRt.anchorMax = new Vector2(0f, 0.5f);
+            img2ContainerRt.pivot = new Vector2(0f, 0.5f);
+            img2ContainerRt.anchoredPosition = new Vector2(197f, 0f); // 118 + 69 + 10 = 197
+            img2ContainerRt.sizeDelta = new Vector2(109f, 83f);
+
+            // 图片
+            var img2 = CreateImage(img2Container.transform, "Image2", 109f, 83f);
+            var img2Rt = img2.GetComponent<RectTransform>();
+            img2Rt.anchorMin = new Vector2(0f, 0f);
+            img2Rt.anchorMax = new Vector2(1f, 1f);
+            img2Rt.offsetMin = Vector2.zero;
+            img2Rt.offsetMax = Vector2.zero;
+
+            // 文本框
+            var img2Text = CreateText(img2Container.transform, "Image2Text", "文本", 24, TextAnchor.MiddleCenter);
+            var img2TextRt = img2Text.GetComponent<RectTransform>();
+            img2TextRt.anchorMin = new Vector2(0f, 0f);
+            img2TextRt.anchorMax = new Vector2(1f, 1f);
+            img2TextRt.offsetMin = Vector2.zero;
+            img2TextRt.offsetMax = Vector2.zero;
 
             // 底部栏（道具）
             var bottom = new GameObject("BottomBar");
@@ -88,45 +167,60 @@ namespace ReGecko.Framework.UI
             bottomRt.anchorMin = new Vector2(0f, 0f);
             bottomRt.anchorMax = new Vector2(1f, 0f);
             bottomRt.pivot = new Vector2(0.5f, 0f);
-            bottomRt.sizeDelta = new Vector2(0f, 160f);
+            bottomRt.sizeDelta = new Vector2(0f, 410f);
             bottomRt.anchoredPosition = new Vector2(0f, 0f);
-            var bottomLayout = bottom.AddComponent<HorizontalLayoutGroup>();
-            bottomLayout.childAlignment = TextAnchor.MiddleCenter;
-            bottomLayout.childForceExpandWidth = false;
-            bottomLayout.childForceExpandHeight = false;
-            bottomLayout.padding = new RectOffset(0, 0, 24, 24);
-            bottomLayout.spacing = 24f;
 
-            CreateButton(bottom.transform, "ItemBtn1", "道具1", 220, 80);
-            CreateButton(bottom.transform, "ItemBtn2", "道具2", 220, 80);
-            CreateButton(bottom.transform, "ItemBtn3", "道具3", 220, 80);
+            // 三个道具按钮（居中对齐，大小204*204）
+            var itemBtn1 = CreateButton(bottom.transform, "ItemBtn1", "道具1", 204f, 204f);
+            var itemBtn1Rt = itemBtn1.GetComponent<RectTransform>();
+            itemBtn1Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            itemBtn1Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            itemBtn1Rt.pivot = new Vector2(0.5f, 0.5f);
+            itemBtn1Rt.anchoredPosition = new Vector2(-274f, 0f); // 左侧
+
+            var itemBtn2 = CreateButton(bottom.transform, "ItemBtn2", "道具2", 204f, 204f);
+            var itemBtn2Rt = itemBtn2.GetComponent<RectTransform>();
+            itemBtn2Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            itemBtn2Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            itemBtn2Rt.pivot = new Vector2(0.5f, 0.5f);
+            itemBtn2Rt.anchoredPosition = new Vector2(0f, 0f); // 中间
+
+            var itemBtn3 = CreateButton(bottom.transform, "ItemBtn3", "道具3", 204f, 204f);
+            var itemBtn3Rt = itemBtn3.GetComponent<RectTransform>();
+            itemBtn3Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            itemBtn3Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            itemBtn3Rt.pivot = new Vector2(0.5f, 0.5f);
+            itemBtn3Rt.anchoredPosition = new Vector2(274f, 0f); // 右侧
 
             // 中间区域（游戏渲染区域）
-            var middle = new GameObject("GameRenderArea");
-            middle.transform.SetParent(root.transform, false);
-            var middleRt = middle.AddComponent<RectTransform>();
-            middleRt.anchorMin = new Vector2(0f, 0f);
-            middleRt.anchorMax = new Vector2(1f, 1f);
-            middleRt.offsetMin = new Vector2(0f, 160f);
-            middleRt.offsetMax = new Vector2(0f, -120f);
+            var gamemiddle = new GameObject("GameRenderArea");
+            gamemiddle.transform.SetParent(root.transform, false);
+            var gamemmiddleRt = gamemiddle.AddComponent<RectTransform>();
+            gamemmiddleRt.anchorMin = new Vector2(0f, 0f);
+            gamemmiddleRt.anchorMax = new Vector2(1f, 1f);
+            gamemmiddleRt.offsetMin = new Vector2(0f, 410f); // BottomBar高度
+            gamemmiddleRt.offsetMax = new Vector2(0f, -250f); // TopBar高度
 
+            
             // UI游戏管理器
-            var gameManager = middle.AddComponent<UIGameManager>();
-
-            // 渲染背景（深色，让游戏内容更突出）
-            //var renderBg = middle.AddComponent<Image>();
-            //renderBg.color = new Color(0.05f, 0.05f, 0.08f, 1f);
-            //renderBg.raycastTarget = false;
+            var gameManager = gamemiddle.AddComponent<UIGameManager>();
 
             return root;
         }
 
-        static GameObject CreateButton(Transform parent, string name, string label, float w = 140f, float h = 80f)
+        static GameObject CreateButton(Transform parent, string name, string label, float w = 140f, float h = 80f, string sprite = "")
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var img = go.AddComponent<Image>();
-            img.color = new Color(1f, 1f, 1f, 0.15f);
+            if(!string.IsNullOrEmpty(sprite))
+            {
+                img.sprite = ResourceManager.LoadPNG(sprite);
+            }
+            else
+            {
+                img.color = new Color(1f, 1f, 1f, 0.15f);
+            }
             var btn = go.AddComponent<Button>();
             var rt = go.GetComponent<RectTransform>();
             rt.sizeDelta = new Vector2(w, h);
@@ -150,6 +244,17 @@ namespace ReGecko.Framework.UI
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
             return txt;
+        }
+
+        static GameObject CreateImage(Transform parent, string name, float width, float height)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var img = go.AddComponent<Image>();
+            img.color = new Color(1f, 1f, 1f, 0.8f); // 半透明白色
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(width, height);
+            return go;
         }
     }
 }
