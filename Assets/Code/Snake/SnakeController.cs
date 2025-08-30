@@ -331,12 +331,15 @@ namespace ReGecko.SnakeSystem
             _moveAccumulator = 0f;
             Vector3 holeCenter = _grid.CellToWorld(hole.Cell);
 
-            // 逐段进入洞并消失
+            // 逐段进入洞并消失，保持身体连续性
             while (_bodyCells.Count > 0)
             {
                 Transform segmentToConsume = null;
+                Vector2Int consumedCell;
+                
                 if (fromHead)
                 {
+                    consumedCell = _bodyCells.First.Value;
                     _bodyCells.RemoveFirst();
                     if (_segments.Count > 0)
                     {
@@ -346,6 +349,7 @@ namespace ReGecko.SnakeSystem
                 }
                 else
                 {
+                    consumedCell = _bodyCells.Last.Value;
                     _bodyCells.RemoveLast();
                     int last = _segments.Count - 1;
                     if (last >= 0)
@@ -362,16 +366,24 @@ namespace ReGecko.SnakeSystem
                     _currentTailCell = _bodyCells.Last.Value;
                 }
 
-                // 动画：将段移动到洞中心再消失
+                // 启动消费动画和身体跟随移动
                 if (segmentToConsume != null)
                 {
-                    StartCoroutine(MoveToHoleAndDestroy(segmentToConsume, holeCenter, hole.ConsumeInterval * 0.5f));
+                    var consumeCoroutine = StartCoroutine(MoveToHoleAndDestroy(segmentToConsume, holeCenter, hole.ConsumeInterval * 0.8f));
+                    var followCoroutine = StartCoroutine(MoveRemainingBodyTowardHole(consumedCell, hole.Cell, hole.ConsumeInterval * 0.8f, fromHead));
+                    
+                    // 等待消费完成
+                    yield return consumeCoroutine;
                 }
-
-                yield return new WaitForSeconds(hole.ConsumeInterval);
+                else
+                {
+                    yield return new WaitForSeconds(hole.ConsumeInterval);
+                }
             }
+            
             _consuming = false;
             _consumeCoroutine = null;
+            
             // 全部消失后，销毁蛇对象或重生；此处直接销毁
             if (_bodyCells.Count == 0)
             {
@@ -381,7 +393,28 @@ namespace ReGecko.SnakeSystem
 
         IEnumerator MoveToHoleAndDestroy(Transform segment, Vector3 holeCenter, float duration)
         {
-            Vector3 startPos = segment.position;
+            Vector3 startPos;
+            RectTransform segmentRT = null;
+            
+            // 根据渲染模式获取正确的起始位置
+            if (UseUIRendering)
+            {
+                segmentRT = segment.GetComponent<RectTransform>();
+                if (segmentRT != null)
+                {
+                    startPos = new Vector3(segmentRT.anchoredPosition.x, segmentRT.anchoredPosition.y, 0);
+                }
+                else
+                {
+                    startPos = segment.position;
+                }
+                // 洞中心也需要转换为UI坐标
+                holeCenter = new Vector3(holeCenter.x, holeCenter.y, 0);
+            }
+            else
+            {
+                startPos = segment.position;
+            }
 
             // 计算沿身体路径到洞的移动路径
             List<Vector3> pathToHole = CalculatePathToHole(startPos, holeCenter);
@@ -394,7 +427,6 @@ namespace ReGecko.SnakeSystem
             }
 
             float moveSpeed = totalDistance / duration;
-            float currentDistance = 0f;
             int currentSegment = 0;
 
             while (currentSegment < pathToHole.Count - 1)
@@ -410,7 +442,17 @@ namespace ReGecko.SnakeSystem
                 {
                     elapsed += Time.deltaTime;
                     float t = elapsed / segmentTime;
-                    segment.position = Vector3.Lerp(segmentStart, segmentEnd, t);
+                    Vector3 currentPos = Vector3.Lerp(segmentStart, segmentEnd, t);
+                    
+                    // 根据渲染模式设置位置
+                    if (UseUIRendering && segmentRT != null)
+                    {
+                        segmentRT.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
+                    }
+                    else
+                    {
+                        segment.position = currentPos;
+                    }
                     yield return null;
                 }
 
@@ -418,27 +460,230 @@ namespace ReGecko.SnakeSystem
             }
 
             // 确保到达洞中心
-            segment.position = holeCenter;
+            if (UseUIRendering && segmentRT != null)
+            {
+                segmentRT.anchoredPosition = new Vector2(holeCenter.x, holeCenter.y);
+            }
+            else
+            {
+                segment.position = holeCenter;
+            }
 
             // 消失效果（缩小并淡出）
-            var sr = segment.GetComponent<SpriteRenderer>();
-            if (sr != null)
+            if (UseUIRendering)
             {
-                float fadeTime = duration * 0.3f;
-                float fadeElapsed = 0f;
-                Color originalColor = sr.color;
-
-                while (fadeElapsed < fadeTime)
+                var img = segment.GetComponent<UnityEngine.UI.Image>();
+                if (img != null)
                 {
-                    fadeElapsed += Time.deltaTime;
-                    float fadeT = fadeElapsed / fadeTime;
-                    sr.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
-                    segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
-                    yield return null;
+                    float fadeTime = duration * 0.3f;
+                    float fadeElapsed = 0f;
+                    Color originalColor = img.color;
+
+                    while (fadeElapsed < fadeTime)
+                    {
+                        fadeElapsed += Time.deltaTime;
+                        float fadeT = fadeElapsed / fadeTime;
+                        img.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
+                        segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
+                        yield return null;
+                    }
+                }
+            }
+            else
+            {
+                var sr = segment.GetComponent<SpriteRenderer>();
+                if (sr != null)
+                {
+                    float fadeTime = duration * 0.3f;
+                    float fadeElapsed = 0f;
+                    Color originalColor = sr.color;
+
+                    while (fadeElapsed < fadeTime)
+                    {
+                        fadeElapsed += Time.deltaTime;
+                        float fadeT = fadeElapsed / fadeTime;
+                        sr.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
+                        segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
+                        yield return null;
+                    }
                 }
             }
 
             Destroy(segment.gameObject);
+        }
+
+        /// <summary>
+        /// 让剩余的蛇身朝洞方向移动一格，保持身体连续性
+        /// </summary>
+        IEnumerator MoveRemainingBodyTowardHole(Vector2Int consumedCell, Vector2Int holeCell, float duration, bool fromHead)
+        {
+            if (_bodyCells.Count == 0) yield break;
+
+            Vector2Int direction = Vector2Int.zero;
+            
+            if (fromHead)
+            {
+                // 从头部消费：剩余身体朝被消费的头部位置移动
+                Vector2Int currentHeadCell = _bodyCells.First.Value;
+                Vector2Int delta = consumedCell - currentHeadCell;
+                
+                if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                {
+                    direction = new Vector2Int(delta.x > 0 ? 1 : -1, 0);
+                }
+                else if (delta.y != 0)
+                {
+                    direction = new Vector2Int(0, delta.y > 0 ? 1 : -1);
+                }
+
+                // 如果有有效方向，让整个蛇身朝那个方向移动一格
+                if (direction != Vector2Int.zero)
+                {
+                    Vector2Int newHeadCell = currentHeadCell + direction;
+                    
+                    // 检查目标位置是否有效且不被阻挡（除了洞）
+                    if (_grid.IsInside(newHeadCell) && (newHeadCell == holeCell || !IsPathBlocked(newHeadCell)))
+                    {
+                        // 将新位置添加到身体前端
+                        _bodyCells.AddFirst(newHeadCell);
+                        
+                        // 更新头尾缓存
+                        _currentHeadCell = _bodyCells.First.Value;
+                        _currentTailCell = _bodyCells.Last.Value;
+                        
+                        // 平滑移动所有身体段到新位置
+                        yield return StartCoroutine(SmoothMoveAllSegments(duration));
+                    }
+                }
+            }
+            else
+            {
+                // 从尾部消费：整条蛇朝被消费的尾部位置移动（类似倒车）
+                Vector2Int currentTailCell = _bodyCells.Last.Value;
+                Vector2Int delta = consumedCell - currentTailCell;
+                
+                if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                {
+                    direction = new Vector2Int(delta.x > 0 ? 1 : -1, 0);
+                }
+                else if (delta.y != 0)
+                {
+                    direction = new Vector2Int(0, delta.y > 0 ? 1 : -1);
+                }
+
+                // 如果有有效方向，让整个蛇身朝那个方向移动一格
+                if (direction != Vector2Int.zero)
+                {
+                    Vector2Int newTailCell = currentTailCell + direction;
+                    
+                    // 检查目标位置是否有效且不被阻挡（除了洞）
+                    if (_grid.IsInside(newTailCell) && (newTailCell == holeCell || !IsPathBlocked(newTailCell)))
+                    {
+                        // 整条蛇朝尾部方向移动：在尾部添加新位置，移除头部
+                        _bodyCells.AddLast(newTailCell);
+                        _bodyCells.RemoveFirst();
+                        
+                        // 更新头尾缓存
+                        _currentHeadCell = _bodyCells.First.Value;
+                        _currentTailCell = _bodyCells.Last.Value;
+                        
+                        // 平滑移动所有身体段到新位置
+                        yield return StartCoroutine(SmoothMoveAllSegments(duration));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 平滑移动所有身体段到对应的新格子位置
+        /// </summary>
+        IEnumerator SmoothMoveAllSegments(float duration)
+        {
+            if (_segments.Count == 0 || _bodyCells.Count == 0) yield break;
+
+            List<Vector3> startPositions = new List<Vector3>();
+            List<Vector3> targetPositions = new List<Vector3>();
+
+            // 收集所有段的起始和目标位置
+            int segmentIndex = 0;
+            foreach (var cell in _bodyCells)
+            {
+                if (segmentIndex >= _segments.Count) break;
+
+                Vector3 startPos;
+                Vector3 targetPos = _grid.CellToWorld(cell);
+
+                if (UseUIRendering)
+                {
+                    var rt = _segments[segmentIndex].GetComponent<RectTransform>();
+                    if (rt != null)
+                    {
+                        startPos = new Vector3(rt.anchoredPosition.x, rt.anchoredPosition.y, 0);
+                    }
+                    else
+                    {
+                        startPos = _segments[segmentIndex].position;
+                    }
+                }
+                else
+                {
+                    startPos = _segments[segmentIndex].position;
+                }
+
+                startPositions.Add(startPos);
+                targetPositions.Add(targetPos);
+                segmentIndex++;
+            }
+
+            // 平滑移动所有段
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+
+                for (int i = 0; i < startPositions.Count && i < _segments.Count; i++)
+                {
+                    Vector3 currentPos = Vector3.Lerp(startPositions[i], targetPositions[i], t);
+
+                    if (UseUIRendering)
+                    {
+                        var rt = _segments[i].GetComponent<RectTransform>();
+                        if (rt != null)
+                        {
+                            rt.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
+                        }
+                    }
+                    else
+                    {
+                        _segments[i].position = currentPos;
+                    }
+                }
+
+                yield return null;
+            }
+
+            // 确保所有段都到达目标位置
+            segmentIndex = 0;
+            foreach (var cell in _bodyCells)
+            {
+                if (segmentIndex >= _segments.Count) break;
+
+                Vector3 finalPos = _grid.CellToWorld(cell);
+                if (UseUIRendering)
+                {
+                    var rt = _segments[segmentIndex].GetComponent<RectTransform>();
+                    if (rt != null)
+                    {
+                        rt.anchoredPosition = new Vector2(finalPos.x, finalPos.y);
+                    }
+                }
+                else
+                {
+                    _segments[segmentIndex].position = finalPos;
+                }
+                segmentIndex++;
+            }
         }
 
         List<Vector3> CalculatePathToHole(Vector3 startPos, Vector3 holeCenter)

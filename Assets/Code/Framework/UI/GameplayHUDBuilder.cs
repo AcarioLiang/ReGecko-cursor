@@ -68,6 +68,7 @@ namespace ReGecko.Framework.UI
             resetBtnCom.onClick.AddListener(() =>
             {
                 SceneManager.LoadScene(GameCore.Flow.GameScenes.Loading);
+                UIManager.Instance.Destroy("GameplayHUD");
             });
 
             // 中间组（文体）

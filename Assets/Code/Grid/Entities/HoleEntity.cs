@@ -6,7 +6,7 @@ namespace ReGecko.Grid.Entities
 {
 	public class HoleEntity : GridEntity
 	{
-		public float ConsumeInterval = 0.5f; // 每段吞噬间隔
+		public float ConsumeInterval = 0.05f; // 每段吞噬间隔
 
 		protected override void Awake()
 		{

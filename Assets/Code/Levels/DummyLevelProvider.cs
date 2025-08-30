@@ -62,7 +62,7 @@ namespace ReGecko.Levels
 				new GridEntityConfig
 				{
 					Type = GridEntityConfig.EntityType.Hole,
-					Cell = new Vector2Int(Random.Range(2, 8), Random.Range(2, 8)),
+					Cell = new Vector2Int(Random.Range(2, 4), Random.Range(2, 8)),
 					Sprite = HoleSprite,
 					Color = Color.white
 				}

@@ -76,7 +76,16 @@ namespace ReGecko.Framework.UI
 				go.SetActive(false);
 			}
 		}
-	}
+
+        public void Destroy(string key)
+		{
+			if (_spawned.TryGetValue(key, out var go) && go != null)
+			{
+				go.SetActive(false);
+				DestroyImmediate(go);
+			}
+		}
+    }
 }
 
 
