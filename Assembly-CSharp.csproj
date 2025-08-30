@@ -62,6 +62,7 @@
   <ItemGroup>
     <Compile Include="Assets\Code\GameCore\Flow\GameContext.cs" />
     <Compile Include="Assets\Code\Framework\UI\GameRenderer.cs" />
+    <Compile Include="Assets\Code\Snake\SnakeBodySpriteManager.cs" />
     <Compile Include="Assets\Code\Levels\LevelConfig.cs" />
     <Compile Include="Assets\Code\Bootstrap\LobbyBootstrap.cs" />
     <Compile Include="Assets\Code\Grid\Entities\HoleEntity.cs" />
@@ -76,6 +77,7 @@
     <Compile Include="Assets\Code\Levels\DummyLevelProvider.cs" />
     <Compile Include="Assets\Code\GameCore\Flow\GameScenes.cs" />
     <Compile Include="Assets\Code\Bootstrap\LoadingBootstrap.cs" />
+    <Compile Include="Assets\Code\Snake\SnakeBodySpriteConfig.cs" />
     <Compile Include="Assets\Code\Bootstrap\GameBootstrap.cs" />
     <Compile Include="Assets\Code\Snake\SnakeController.cs" />
     <Compile Include="Assets\Code\Framework\Scene\SceneManager.cs" />

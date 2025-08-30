@@ -8,6 +8,7 @@ using ReGecko.GameCore.Player;
 using ReGecko.Levels;
 using ReGecko.Framework.Resources;
 using ReGecko.Framework.UI;
+using ReGecko.SnakeSystem;
 
 namespace ReGecko.Bootstrap
 {
@@ -38,8 +39,20 @@ namespace ReGecko.Bootstrap
             {
                 var provider = FindObjectOfType<ReGecko.Levels.DummyLevelProvider>();
                 LevelConfig level;
-                if (provider != null) level = provider.GetLevel(); else level = new LevelConfig();
+                SnakeBodySpriteConfig bodysprite;
+                if (provider != null)
+                {
+                    level = provider.GetLevel();
+                    bodysprite = provider.SnakeBodyConfig;
+                }
+                else
+                {
+                    level = new LevelConfig();
+                    bodysprite = new SnakeBodySpriteConfig();
+                }
+
                 GameContext.CurrentLevelConfig = level;
+                GameContext.SnakeBodyConfig = bodysprite;
             }
 
             // 并行加载资源

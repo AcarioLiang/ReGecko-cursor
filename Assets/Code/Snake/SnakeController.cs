@@ -4,13 +4,14 @@ using UnityEngine.UI;
 using ReGecko.GridSystem;
 using ReGecko.Grid.Entities;
 using System.Collections;
+using ReGecko.GameCore.Flow;
 
 namespace ReGecko.SnakeSystem
 {
     public class SnakeController : MonoBehaviour
     {
         public Sprite BodySprite;
-        public Color BodyColor = Color.green;
+        public Color BodyColor = Color.white;
         public int Length = 4;
         public Vector2Int HeadCell;
         public Vector2Int[] InitialBodyCells; // 含头在index 0，可为空
@@ -22,6 +23,9 @@ namespace ReGecko.SnakeSystem
         [Header("Debug / Profiler")]
         public bool ShowDebugStats = false;
         public bool DrawDebugGizmos = false;
+
+        [Header("Body Sprite Management")]
+        public bool EnableBodySpriteManagement = true;
 
         GridConfig _grid;
         GridEntityManager _entityManager;
@@ -44,16 +48,31 @@ namespace ReGecko.SnakeSystem
 
         bool _consuming; // 洞吞噬中
 
+        SnakeBodySpriteManager _bodySpriteManager;
+
         // 公共访问方法
         public Vector2Int GetHeadCell() => _bodyCells.Count > 0 ? _currentHeadCell : Vector2Int.zero;
         public Vector2Int GetTailCell() => _bodyCells.Count > 0 ? _currentTailCell : Vector2Int.zero;
+        
+        /// <summary>
+        /// 获取身体格子列表（用于图片管理器）
+        /// </summary>
+        public LinkedList<Vector2Int> GetBodyCells() => _bodyCells;
 
         public void Initialize(GridConfig grid, GridEntityManager entityManager = null)
         {
             _grid = grid;
             _entityManager = entityManager ?? FindObjectOfType<GridEntityManager>();
+
+            // 初始化身体图片管理器
+            if (EnableBodySpriteManagement)
+            {
+                InitializeBodySpriteManager();
+            }
+
             BuildSegments();
             PlaceInitial();
+           
         }
 
         public void UpdateGridConfig(GridConfig newGrid)
@@ -116,6 +135,17 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        void InitializeBodySpriteManager()
+        {
+            // 检查是否已经有身体图片管理器
+            _bodySpriteManager = GetComponent<SnakeBodySpriteManager>();
+            if (_bodySpriteManager == null)
+            {
+                _bodySpriteManager = gameObject.AddComponent<SnakeBodySpriteManager>();
+            }
+            _bodySpriteManager.Config = GameContext.SnakeBodyConfig;
+        }
+
         void PlaceInitial()
         {
             // 构建初始身体格（优先使用配置）
@@ -172,6 +202,12 @@ namespace ReGecko.SnakeSystem
             }
             _currentHeadCell = _bodyCells.First.Value;
             _currentTailCell = _bodyCells.Last.Value;
+            
+            // 初始放置完成后，更新身体图片
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            {
+                _bodySpriteManager.UpdateAllSegmentSprites();
+            }
         }
 
         Vector2Int ClampInside(Vector2Int cell)
@@ -308,6 +344,12 @@ namespace ReGecko.SnakeSystem
                     }
                     idx++;
                 }
+            }
+            
+            // 移动完成后，更新身体图片
+            if (EnableBodySpriteManagement && _bodySpriteManager != null && stepsThisFrame > 0)
+            {
+                _bodySpriteManager.OnSnakeMoved();
             }
         }
 
@@ -589,6 +631,12 @@ namespace ReGecko.SnakeSystem
 
                         // 平滑移动所有身体段到新位置
                         yield return StartCoroutine(SmoothMoveAllSegments(duration));
+                        
+                        // 长度改变后，更新身体图片
+                        if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                        {
+                            _bodySpriteManager.OnSnakeLengthChanged();
+                        }
                     }
                 }
             }
@@ -995,6 +1043,13 @@ namespace ReGecko.SnakeSystem
             _bodyCells.RemoveLast();
             _currentHeadCell = nextCell;
             _currentTailCell = _bodyCells.Last.Value;
+            
+            // 移动完成后，更新身体图片
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            {
+                _bodySpriteManager.OnSnakeMoved();
+            }
+            
             return true;
         }
 
@@ -1013,6 +1068,13 @@ namespace ReGecko.SnakeSystem
             _bodyCells.RemoveFirst();
             _currentTailCell = nextCell;
             _currentHeadCell = _bodyCells.First.Value;
+            
+            // 移动完成后，更新身体图片
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            {
+                _bodySpriteManager.OnSnakeMoved();
+            }
+            
             return true;
         }
 

@@ -1,5 +1,6 @@
 using UnityEngine;
 using ReGecko.GridSystem;
+using ReGecko.SnakeSystem;
 
 namespace ReGecko.Levels
 {
@@ -10,6 +11,8 @@ namespace ReGecko.Levels
 		public Sprite SnakeBodySprite;
 		public Sprite WallSprite;
 		public Sprite HoleSprite;
+
+		public SnakeBodySpriteConfig SnakeBodyConfig;
 
 		public LevelConfig GetLevel()
 		{
@@ -23,7 +26,7 @@ namespace ReGecko.Levels
 			{
 				Length = 5,
 				HeadCell = new Vector2Int(0, 0),
-				Color = Color.green,
+				Color = Color.white,
 				BodySprite = SnakeBodySprite,
 				BodyCells = new []
 				{

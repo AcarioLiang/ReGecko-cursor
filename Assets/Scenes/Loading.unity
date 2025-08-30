@@ -155,6 +155,7 @@ MonoBehaviour:
   SnakeBodySprite: {fileID: 21300000, guid: b27299c992ee1e0458ad07110f721460, type: 3}
   WallSprite: {fileID: 21300000, guid: 31d7a84be4509c54ba13ffd52ddd4542, type: 3}
   HoleSprite: {fileID: 21300000, guid: a8b5ea5df24816d4a9ce44093ef36108, type: 3}
+  SnakeBodyConfig: {fileID: 11400000, guid: d0e271393f2a1ae49926203ffdf53b6e, type: 2}
 --- !u!4 &1786732307
 Transform:
   m_ObjectHideFlags: 0

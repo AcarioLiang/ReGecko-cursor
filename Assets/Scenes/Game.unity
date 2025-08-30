@@ -122,54 +122,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1062129358
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1062129360}
-  - component: {fileID: 1062129359}
-  m_Layer: 0
-  m_Name: DummyLevelProvider
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!114 &1062129359
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1062129358}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a0787270c778c6d42903dfebed46adcd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  GridCellSprite: {fileID: 21300000, guid: 902edc250c9c0d8438cb0be685f5a5e9, type: 3}
-  SnakeBodySprite: {fileID: 21300000, guid: b27299c992ee1e0458ad07110f721460, type: 3}
-  WallSprite: {fileID: 21300000, guid: dfe100649670541419d77411b2506c65, type: 3}
-  HoleSprite: {fileID: 21300000, guid: a7914a2fe0b61bb44b5458ee60252e72, type: 3}
---- !u!4 &1062129360
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1062129358}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.6345849, y: 0.9120105, z: -9.984357}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1243554682
 GameObject:
   m_ObjectHideFlags: 0
@@ -336,7 +288,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d7f96fa04835e564984d3fe4346104ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LevelProvider: {fileID: 1062129359}
+  LevelProvider: {fileID: 0}
 --- !u!4 &2042062334
 Transform:
   m_ObjectHideFlags: 0
@@ -358,4 +310,3 @@ SceneRoots:
   m_Roots:
   - {fileID: 1243554685}
   - {fileID: 2042062334}
-  - {fileID: 1062129360}
