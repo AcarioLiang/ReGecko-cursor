@@ -24,6 +24,12 @@ namespace ReGecko.Framework.Resources
         public static string Game_Img_Coin_bg = "UI/Game_coin_bg";
         public static string Game_Btn_buy = "UI/Game_btn_buy";
 
+
+        public static string Game_Item_bg = "UI/Game_item_bg";
+        public static string Game_Item_icon1 = "UI/Game_item_break";
+        public static string Game_Item_icon2 = "UI/Game_item_stop";
+        public static string Game_Item_icon3 = "UI/Game_item_move";
+
     }
 
 }

@@ -122,7 +122,7 @@ namespace ReGecko.Framework.UI
             textGo2.transform.SetParent(centerImg2.transform, false);
             var text2 = textGo2.AddComponent<Text>();
             text2.text = "VERY HARD";
-            text2.fontSize = 36;
+            text2.fontSize = 23;
             text2.alignment = TextAnchor.MiddleCenter;
             text2.color = Color.white;
             text2.font = UnityEngine.Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -200,12 +200,14 @@ namespace ReGecko.Framework.UI
             img2Rt.sizeDelta = new Vector2(259f, 83f);
 
             // 文本框
-            var img2Text = CreateText(img2.transform, "Image2Text", "8888", 24, TextAnchor.MiddleCenter);
-            var img2TextRt = img2Text.GetComponent<RectTransform>();
+            var img2TextObj = CreateText(img2.transform, "Image2Text", "8888", 24, TextAnchor.MiddleCenter);
+            var img2TextRt = img2TextObj.GetComponent<RectTransform>();
             img2TextRt.anchorMin = Vector2.zero;
             img2TextRt.anchorMax = Vector2.one;
             img2TextRt.offsetMin = Vector2.zero;
             img2TextRt.offsetMax = Vector2.zero;
+            var img2Text = img2TextObj.GetComponent<Text>();
+            img2Text.color = Color.gray;
 
             // 第一个图片 (108*103)
             var img1 = CreateImage(right.transform, "Image1", 102f, 102f, ResourceDefine.Game_Img_Coin_icon);
@@ -235,26 +237,68 @@ namespace ReGecko.Framework.UI
             bottomRt.anchoredPosition = new Vector2(0f, 0f);
 
             // 三个道具按钮（居中对齐，大小204*204）
-            var itemBtn1 = CreateButton(bottom.transform, "ItemBtn1", "道具1", 204f, 204f);
+            var itemBtnBg1 = CreateImage(bottom.transform, "ImageItem1", 206f, 206f, ResourceDefine.Game_Item_bg);
+            var imgBtnbg1Rt = itemBtnBg1.GetComponent<RectTransform>();
+            imgBtnbg1Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            imgBtnbg1Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            imgBtnbg1Rt.pivot = new Vector2(0.5f, 0.5f);
+            imgBtnbg1Rt.anchoredPosition = new Vector2(-274f, 0f); // 左侧
+
+            var itemBtn1 = CreateButton(itemBtnBg1.transform, "ItemBtn1", "", 204f, 204f, ResourceDefine.Game_Item_icon1);
             var itemBtn1Rt = itemBtn1.GetComponent<RectTransform>();
             itemBtn1Rt.anchorMin = new Vector2(0.5f, 0.5f);
             itemBtn1Rt.anchorMax = new Vector2(0.5f, 0.5f);
             itemBtn1Rt.pivot = new Vector2(0.5f, 0.5f);
-            itemBtn1Rt.anchoredPosition = new Vector2(-274f, 0f); // 左侧
 
-            var itemBtn2 = CreateButton(bottom.transform, "ItemBtn2", "道具2", 204f, 204f);
+            var itemBuyBtn1 = CreateButton(itemBtn1.transform, "ItemButBtn1", "", 55f, 55f, ResourceDefine.Game_Btn_buy);
+            var itemBuyBtn1Rt = itemBuyBtn1.GetComponent<RectTransform>();
+            itemBuyBtn1Rt.anchorMin = new Vector2(1f, 0f);
+            itemBuyBtn1Rt.anchorMax = new Vector2(1f, 0f);
+            itemBuyBtn1Rt.pivot = new Vector2(1f, 0f);
+            itemBuyBtn1Rt.anchoredPosition = new Vector2(0f, 0f);
+
+
+            var itemBtnBg2 = CreateImage(bottom.transform, "ImageItem2", 206f, 206f, ResourceDefine.Game_Item_bg);
+            var imgBtnbg2Rt = itemBtnBg2.GetComponent<RectTransform>();
+            imgBtnbg2Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            imgBtnbg2Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            imgBtnbg2Rt.pivot = new Vector2(0.5f, 0.5f);
+            imgBtnbg2Rt.anchoredPosition = new Vector2(0f, 0f);
+
+            var itemBtn2 = CreateButton(itemBtnBg2.transform, "ItemBtn2", "", 204f, 204f, ResourceDefine.Game_Item_icon2);
             var itemBtn2Rt = itemBtn2.GetComponent<RectTransform>();
             itemBtn2Rt.anchorMin = new Vector2(0.5f, 0.5f);
             itemBtn2Rt.anchorMax = new Vector2(0.5f, 0.5f);
             itemBtn2Rt.pivot = new Vector2(0.5f, 0.5f);
-            itemBtn2Rt.anchoredPosition = new Vector2(0f, 0f); // 中间
 
-            var itemBtn3 = CreateButton(bottom.transform, "ItemBtn3", "道具3", 204f, 204f);
+            var itemBuyBtn2 = CreateButton(itemBtn2.transform, "ItemButBtn2", "", 55f, 55f, ResourceDefine.Game_Btn_buy);
+            var itemBuyBtn2Rt = itemBuyBtn2.GetComponent<RectTransform>();
+            itemBuyBtn2Rt.anchorMin = new Vector2(1f, 0f);
+            itemBuyBtn2Rt.anchorMax = new Vector2(1f, 0f);
+            itemBuyBtn2Rt.pivot = new Vector2(1f, 0f);
+            itemBuyBtn2Rt.anchoredPosition = new Vector2(0f, 0f);
+
+
+            var itemBtnBg3 = CreateImage(bottom.transform, "ImageItem3", 206f, 206f, ResourceDefine.Game_Item_bg);
+            var imgBtnbg3Rt = itemBtnBg3.GetComponent<RectTransform>();
+            imgBtnbg3Rt.anchorMin = new Vector2(0.5f, 0.5f);
+            imgBtnbg3Rt.anchorMax = new Vector2(0.5f, 0.5f);
+            imgBtnbg3Rt.pivot = new Vector2(0.5f, 0.5f);
+            imgBtnbg3Rt.anchoredPosition = new Vector2(274f, 0f);
+
+            var itemBtn3 = CreateButton(itemBtnBg3.transform, "ItemBtn3", "", 204f, 204f, ResourceDefine.Game_Item_icon3);
             var itemBtn3Rt = itemBtn3.GetComponent<RectTransform>();
             itemBtn3Rt.anchorMin = new Vector2(0.5f, 0.5f);
             itemBtn3Rt.anchorMax = new Vector2(0.5f, 0.5f);
             itemBtn3Rt.pivot = new Vector2(0.5f, 0.5f);
-            itemBtn3Rt.anchoredPosition = new Vector2(274f, 0f); // 右侧
+            itemBtn3Rt.anchoredPosition = new Vector2(0f, 0f); // 右侧
+
+            var itemBuyBtn3 = CreateButton(itemBtn3.transform, "ItemButBtn3", "", 55f, 55f, ResourceDefine.Game_Btn_buy);
+            var itemBuyBtn3Rt = itemBuyBtn3.GetComponent<RectTransform>();
+            itemBuyBtn3Rt.anchorMin = new Vector2(1f, 0f);
+            itemBuyBtn3Rt.anchorMax = new Vector2(1f, 0f);
+            itemBuyBtn3Rt.pivot = new Vector2(1f, 0f);
+            itemBuyBtn3Rt.anchoredPosition = new Vector2(0f, 0f);
 
             // 中间区域（游戏渲染区域）
             var gamemiddle = new GameObject("GameRenderArea");
