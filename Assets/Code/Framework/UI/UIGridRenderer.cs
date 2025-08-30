@@ -210,7 +210,7 @@ namespace ReGecko.Framework.UI
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(_adaptiveCellSize, _adaptiveCellSize);
+            rt.sizeDelta = new Vector2(_adaptiveCellSize - 5, _adaptiveCellSize - 5);
 
             var image = cellGo.AddComponent<Image>();
             

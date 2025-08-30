@@ -78,6 +78,7 @@
     <Compile Include="Assets\Code\Bootstrap\LoadingBootstrap.cs" />
     <Compile Include="Assets\Code\Bootstrap\GameBootstrap.cs" />
     <Compile Include="Assets\Code\Snake\SnakeController.cs" />
+    <Compile Include="Assets\Code\Framework\Scene\SceneManager.cs" />
     <Compile Include="Assets\Code\Grid\GridConfig.cs" />
     <Compile Include="Assets\Code\GameCore\Player\PlayerData.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntity.cs" />

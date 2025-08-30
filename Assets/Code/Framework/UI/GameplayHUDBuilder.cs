@@ -1,4 +1,5 @@
 using ReGecko.Framework.Resources;
+using ReGecko.GameCore.Flow;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -67,8 +68,9 @@ namespace ReGecko.Framework.UI
             // 添加按钮点击事件
             resetBtnCom.onClick.AddListener(() =>
             {
-                SceneManager.LoadScene(GameCore.Flow.GameScenes.Loading);
-                UIManager.Instance.Destroy("GameplayHUD");
+                ReGecko.Framework.Scene.SceneManager.Instance.LoadSceneAsync(GameScenes.Loading,()=> {
+                    UIManager.Instance.Destroy("GameplayHUD");
+                });
             });
 
             // 中间组（文体）

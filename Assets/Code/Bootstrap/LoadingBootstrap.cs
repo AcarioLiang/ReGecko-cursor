@@ -205,7 +205,7 @@ namespace ReGecko.Bootstrap
             // 添加按钮点击事件
             button.onClick.AddListener(() =>
             {
-                SceneManager.LoadScene(GameScenes.Lobby);
+                ReGecko.Framework.Scene.SceneManager.Instance.LoadLobbyScene();
             });
 
             _startButton = buttonGo;
@@ -248,7 +248,7 @@ namespace ReGecko.Bootstrap
             }
             else
             {
-                SceneManager.LoadScene(GameScenes.Game);
+                ReGecko.Framework.Scene.SceneManager.Instance.LoadGameScene();
             }
 
                 

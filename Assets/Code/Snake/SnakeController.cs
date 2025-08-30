@@ -336,7 +336,7 @@ namespace ReGecko.SnakeSystem
             {
                 Transform segmentToConsume = null;
                 Vector2Int consumedCell;
-                
+
                 if (fromHead)
                 {
                     consumedCell = _bodyCells.First.Value;
@@ -371,7 +371,7 @@ namespace ReGecko.SnakeSystem
                 {
                     var consumeCoroutine = StartCoroutine(MoveToHoleAndDestroy(segmentToConsume, holeCenter, hole.ConsumeInterval * 0.8f));
                     var followCoroutine = StartCoroutine(MoveRemainingBodyTowardHole(consumedCell, hole.Cell, hole.ConsumeInterval * 0.8f, fromHead));
-                    
+
                     // 等待消费完成
                     yield return consumeCoroutine;
                 }
@@ -380,10 +380,10 @@ namespace ReGecko.SnakeSystem
                     yield return new WaitForSeconds(hole.ConsumeInterval);
                 }
             }
-            
+
             _consuming = false;
             _consumeCoroutine = null;
-            
+
             // 全部消失后，销毁蛇对象或重生；此处直接销毁
             if (_bodyCells.Count == 0)
             {
@@ -395,7 +395,7 @@ namespace ReGecko.SnakeSystem
         {
             Vector3 startPos;
             RectTransform segmentRT = null;
-            
+
             // 根据渲染模式获取正确的起始位置
             if (UseUIRendering)
             {
@@ -443,7 +443,7 @@ namespace ReGecko.SnakeSystem
                     elapsed += Time.deltaTime;
                     float t = elapsed / segmentTime;
                     Vector3 currentPos = Vector3.Lerp(segmentStart, segmentEnd, t);
-                    
+
                     // 根据渲染模式设置位置
                     if (UseUIRendering && segmentRT != null)
                     {
@@ -520,13 +520,13 @@ namespace ReGecko.SnakeSystem
             if (_bodyCells.Count == 0) yield break;
 
             Vector2Int direction = Vector2Int.zero;
-            
+
             if (fromHead)
             {
                 // 从头部消费：剩余身体朝被消费的头部位置移动
                 Vector2Int currentHeadCell = _bodyCells.First.Value;
                 Vector2Int delta = consumedCell - currentHeadCell;
-                
+
                 if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
                 {
                     direction = new Vector2Int(delta.x > 0 ? 1 : -1, 0);
@@ -540,17 +540,17 @@ namespace ReGecko.SnakeSystem
                 if (direction != Vector2Int.zero)
                 {
                     Vector2Int newHeadCell = currentHeadCell + direction;
-                    
+
                     // 检查目标位置是否有效且不被阻挡（除了洞）
                     if (_grid.IsInside(newHeadCell) && (newHeadCell == holeCell || !IsPathBlocked(newHeadCell)))
                     {
                         // 将新位置添加到身体前端
                         _bodyCells.AddFirst(newHeadCell);
-                        
+
                         // 更新头尾缓存
                         _currentHeadCell = _bodyCells.First.Value;
                         _currentTailCell = _bodyCells.Last.Value;
-                        
+
                         // 平滑移动所有身体段到新位置
                         yield return StartCoroutine(SmoothMoveAllSegments(duration));
                     }
@@ -561,7 +561,7 @@ namespace ReGecko.SnakeSystem
                 // 从尾部消费：整条蛇朝被消费的尾部位置移动（类似倒车）
                 Vector2Int currentTailCell = _bodyCells.Last.Value;
                 Vector2Int delta = consumedCell - currentTailCell;
-                
+
                 if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
                 {
                     direction = new Vector2Int(delta.x > 0 ? 1 : -1, 0);
@@ -575,18 +575,18 @@ namespace ReGecko.SnakeSystem
                 if (direction != Vector2Int.zero)
                 {
                     Vector2Int newTailCell = currentTailCell + direction;
-                    
+
                     // 检查目标位置是否有效且不被阻挡（除了洞）
                     if (_grid.IsInside(newTailCell) && (newTailCell == holeCell || !IsPathBlocked(newTailCell)))
                     {
                         // 整条蛇朝尾部方向移动：在尾部添加新位置，移除头部
                         _bodyCells.AddLast(newTailCell);
                         _bodyCells.RemoveFirst();
-                        
+
                         // 更新头尾缓存
                         _currentHeadCell = _bodyCells.First.Value;
                         _currentTailCell = _bodyCells.Last.Value;
-                        
+
                         // 平滑移动所有身体段到新位置
                         yield return StartCoroutine(SmoothMoveAllSegments(duration));
                     }
@@ -1069,6 +1069,12 @@ namespace ReGecko.SnakeSystem
 
         void SnapToGrid()
         {
+            if (_bodyCells == null)
+                return;
+            if (_bodyCells.Count == 0)
+                return;
+
+
             // 基于离散cells统一吸附
             int index = 0;
             foreach (var cell in _bodyCells)

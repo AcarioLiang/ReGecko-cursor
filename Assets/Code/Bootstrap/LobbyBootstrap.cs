@@ -65,7 +65,7 @@ namespace ReGecko.Bootstrap
 		void OnClickStart()
 		{
 			GameContext.NextLoadIsPlayer = false; // 进入关卡加载
-			SceneManager.LoadScene(GameScenes.Loading);
+			ReGecko.Framework.Scene.SceneManager.Instance.LoadLoadingScene();
 		}
 	}
 }
