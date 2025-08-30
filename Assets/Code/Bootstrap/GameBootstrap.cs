@@ -45,7 +45,7 @@ namespace ReGecko.Bootstrap
                 if (uiGameManager != null)
                 {
                     uiGameManager.Initialize(level);
-                    uiGameManager.SetCellSprite(LevelProvider.GridCellSprite);
+                    //uiGameManager.SetCellSprite(LevelProvider.GridCellSprite);
                     uiGameManager.BuildGame();
                 }
             }

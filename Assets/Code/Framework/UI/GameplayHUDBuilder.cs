@@ -1,5 +1,6 @@
 using ReGecko.Framework.Resources;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace ReGecko.Framework.UI
@@ -62,6 +63,12 @@ namespace ReGecko.Framework.UI
             resetRt.pivot = new Vector2(0f, 0.5f);
             resetRt.anchoredPosition = new Vector2(103f, 61f); // 98 + 5 = 103
 
+            var resetBtnCom = resetBtn.GetComponent<Button>();
+            // 添加按钮点击事件
+            resetBtnCom.onClick.AddListener(() =>
+            {
+                SceneManager.LoadScene(GameCore.Flow.GameScenes.Loading);
+            });
 
             // 中间组（文体）
             var middle = new GameObject("MiddleGroup");
@@ -309,7 +316,9 @@ namespace ReGecko.Framework.UI
             gamemmiddleRt.offsetMin = new Vector2(0f, 410f); // BottomBar高度
             gamemmiddleRt.offsetMax = new Vector2(0f, -250f); // TopBar高度
 
-            
+
+
+
             // UI游戏管理器
             var gameManager = gamemiddle.AddComponent<UIGameManager>();
 

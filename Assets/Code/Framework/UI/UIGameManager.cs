@@ -258,16 +258,6 @@ namespace ReGecko.Framework.UI
                 Vector3 worldPos = GridRenderer.Config.CellToWorld(entityConfig.Cell);
                 rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                 rt.sizeDelta = new Vector2(adaptiveCellSize, adaptiveCellSize);
-                
-
-
-
-
-                //var gridContainer = GridRenderer?.GetGridContainer();
-                //if (gridContainer != null)
-                //{
-                //    Debug.Log($"GridContainer name: {gridContainer.name}, children count: {gridContainer.childCount}");
-                //}
 
                 _entityManager.Register(entity);
                 _entities.Add(entity);
@@ -373,13 +363,13 @@ namespace ReGecko.Framework.UI
             }
         }
 
-        public void SetCellSprite(Sprite cellSprite)
-        {
-            if (GridRenderer != null)
-            {
-                GridRenderer.CellSprite = cellSprite;
-            }
-        }
+        //public void SetCellSprite(Sprite cellSprite)
+        //{
+        //    if (GridRenderer != null)
+        //    {
+        //        GridRenderer.CellSprite = cellSprite;
+        //    }
+        //}
 
         public GridEntityManager GetEntityManager() => _entityManager;
         public List<SnakeController> GetSnakes() => _snakes;

@@ -41,30 +41,30 @@ namespace ReGecko.Levels
 				new GridEntityConfig
 				{
 					Type = GridEntityConfig.EntityType.Wall,
-					Cell = new Vector2Int(5, 5),
+					Cell = new Vector2Int(2, 5),
 					Sprite = WallSprite,
-					Color = Color.gray
+					Color = Color.white
 				},
 				new GridEntityConfig
 				{
 					Type = GridEntityConfig.EntityType.Wall,
-					Cell = new Vector2Int(6, 5),
+					Cell = new Vector2Int(3, 5),
 					Sprite = WallSprite,
-					Color = Color.gray
+					Color = Color.white
 				},
 				new GridEntityConfig
 				{
 					Type = GridEntityConfig.EntityType.Wall,
-					Cell = new Vector2Int(7, 5),
+					Cell = new Vector2Int(4, 5),
 					Sprite = WallSprite,
-					Color = Color.gray
+					Color = Color.white
 				},
 				new GridEntityConfig
 				{
 					Type = GridEntityConfig.EntityType.Hole,
 					Cell = new Vector2Int(Random.Range(2, 8), Random.Range(2, 8)),
 					Sprite = HoleSprite,
-					Color = Color.black
+					Color = Color.white
 				}
 			};
 

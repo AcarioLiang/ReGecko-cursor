@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using ReGecko.GridSystem;
 using System.Collections;
 using System.Collections.Generic;
+using ReGecko.Framework.Resources;
 
 namespace ReGecko.Framework.UI
 {
@@ -13,7 +14,18 @@ namespace ReGecko.Framework.UI
     {
         [Header("配置")]
         public GridConfig Config;
-        public Sprite CellSprite;
+        
+        [Header("格子图片资源")]
+        [Tooltip("左上角格子图片")]
+        public Sprite TopLeftCornerSprite;
+        [Tooltip("右上角格子图片")]
+        public Sprite TopRightCornerSprite;
+        [Tooltip("左下角格子图片")]
+        public Sprite BottomLeftCornerSprite;
+        [Tooltip("右下角格子图片")]
+        public Sprite BottomRightCornerSprite;
+        [Tooltip("中间格子图片")]
+        public Sprite CenterCellSprite;
 
         [Header("样式")]
         public Color DefaultCellColor = Color.white;
@@ -26,7 +38,37 @@ namespace ReGecko.Framework.UI
         public void BuildGrid()
         {
             ClearGrid();
-            if (!Config.IsValid() || CellSprite == null) return;
+            if (!Config.IsValid()) return;
+
+            if(TopLeftCornerSprite == null)
+            {
+                TopLeftCornerSprite = ResourceManager.LoadPNG(ResourceDefine.Game_Grid_tile_lt);
+            }
+            if (TopRightCornerSprite == null)
+            {
+                TopRightCornerSprite = ResourceManager.LoadPNG(ResourceDefine.Game_Grid_tile_rt);
+            }
+            if (BottomLeftCornerSprite == null)
+            {
+                BottomLeftCornerSprite = ResourceManager.LoadPNG(ResourceDefine.Game_Grid_tile_lb);
+            }
+            if (BottomRightCornerSprite == null)
+            {
+                BottomRightCornerSprite = ResourceManager.LoadPNG(ResourceDefine.Game_Grid_tile_rb);
+            }
+            if (CenterCellSprite == null)
+            {
+                CenterCellSprite = ResourceManager.LoadPNG(ResourceDefine.Game_Grid_tile_m);
+            }
+
+            // 检查必要的图片资源
+            if (TopLeftCornerSprite == null || TopRightCornerSprite == null || 
+                BottomLeftCornerSprite == null || BottomRightCornerSprite == null || 
+                CenterCellSprite == null)
+            {
+                Debug.LogError("GridRenderer: 缺少必要的格子图片资源，请检查Inspector中的设置");
+                return;
+            }
 
             // 延迟到下一帧构建，确保UI布局完成
             StartCoroutine(BuildGridDelayed());
@@ -117,9 +159,39 @@ namespace ReGecko.Framework.UI
                 float gridWidth = Config.Width * _adaptiveCellSize;
                 float gridHeight = Config.Height * _adaptiveCellSize;
                 containerRt.sizeDelta = new Vector2(gridWidth, gridHeight);
-                
+
+                var gamemiddleBg = CreateImage(_gridContainerGO.transform, "ImageRenderArea", 360f, 257f, ResourceDefine.Game_Grid_bg, true);
+                var gamemiddleBgRt = gamemiddleBg.GetComponent<RectTransform>();
+                gamemiddleBgRt.anchorMin = new Vector2(0f, 0f);
+                gamemiddleBgRt.anchorMax = new Vector2(1f, 1f);
+                gamemiddleBgRt.pivot = new Vector2(0.5f, 0.5f);
+                gamemiddleBgRt.anchoredPosition = new Vector2(0f, 0f);
+                gamemiddleBgRt.sizeDelta = new Vector2(40, 50);
 
             }
+        }
+
+        static GameObject CreateImage(Transform parent, string name, float width, float height, string sprite = "", bool isTiled = false)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var img = go.AddComponent<Image>();
+            if (!string.IsNullOrEmpty(sprite))
+            {
+                img.sprite = ResourceManager.LoadPNG(sprite);
+            }
+            else
+            {
+                img.color = new Color(1f, 1f, 1f, 0.8f); // 半透明白色
+            }
+            if (isTiled)
+            {
+                img.type = Image.Type.Tiled;
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(width, height);
+            return go;
         }
 
         void CreateCell(int x, int y)
@@ -141,7 +213,9 @@ namespace ReGecko.Framework.UI
             rt.sizeDelta = new Vector2(_adaptiveCellSize, _adaptiveCellSize);
 
             var image = cellGo.AddComponent<Image>();
-            image.sprite = CellSprite;
+            
+            // 根据格子位置选择对应的图片
+            image.sprite = GetCellSprite(x, y);
             image.color = new Color(DefaultCellColor.r, DefaultCellColor.g, DefaultCellColor.b, CellAlpha);
             image.raycastTarget = false;
 
@@ -184,6 +258,36 @@ namespace ReGecko.Framework.UI
         }
         
         public float GetAdaptiveCellSize() => _adaptiveCellSize;
+
+        /// <summary>
+        /// 根据格子坐标返回对应的图片
+        /// </summary>
+        /// <param name="x">X坐标</param>
+        /// <param name="y">Y坐标</param>
+        /// <returns>对应的Sprite</returns>
+        Sprite GetCellSprite(int x, int y)
+        {
+            int maxX = Config.Width - 1;
+            int maxY = Config.Height - 1;
+
+            // 四个角落
+            if (x == 0 && y == maxY) return TopLeftCornerSprite;      // 左上角
+            if (x == maxX && y == maxY) return TopRightCornerSprite;  // 右上角
+            if (x == 0 && y == 0) return BottomLeftCornerSprite;      // 左下角
+            if (x == maxX && y == 0) return BottomRightCornerSprite;  // 右下角
+
+            //// 上边缘（除了角落）
+            //if (y == maxY) return TopRightCornerSprite;  // 上边缘使用右上角图片
+            //// 下边缘（除了角落）
+            //if (y == 0) return BottomRightCornerSprite;  // 下边缘使用右下角图片
+            //// 左边缘（除了角落）
+            //if (x == 0) return TopLeftCornerSprite;      // 左边缘使用左上角图片
+            //// 右边缘（除了角落）
+            //if (x == maxX) return TopRightCornerSprite;  // 右边缘使用右上角图片
+
+            // 中间格子
+            return CenterCellSprite;
+        }
 
         void OnDestroy()
         {

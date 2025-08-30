@@ -30,6 +30,14 @@ namespace ReGecko.Framework.Resources
         public static string Game_Item_icon2 = "UI/Game_item_stop";
         public static string Game_Item_icon3 = "UI/Game_item_move";
 
+        public static string Game_Grid_bg = "UI/Game_Grid_bg";
+        public static string Game_Grid_tile_lt = "UI/Game_Grid_tile_left_top";
+        public static string Game_Grid_tile_lb = "UI/Game_Grid_tile_left_bottom";
+        public static string Game_Grid_tile_rt = "UI/Game_Grid_tile_right_top";
+        public static string Game_Grid_tile_rb = "UI/Game_Grid_tile_right_bottom";
+        public static string Game_Grid_tile_m = "UI/Game_Grid_tile_midlle";
+
+
     }
 
 }

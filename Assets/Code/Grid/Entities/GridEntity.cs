@@ -22,7 +22,6 @@ namespace ReGecko.Grid.Entities
 		public virtual void OnRegistered(GridConfig grid)
 		{
 			if (_renderer != null && Sprite != null) _renderer.sprite = Sprite;
-			//transform.position = grid.CellToWorld(Cell);
 		}
 
 		public virtual void OnUnregistered() { }
