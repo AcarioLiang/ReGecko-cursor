@@ -302,7 +302,6 @@ namespace ReGecko.Framework.UI
             snake.Length = Mathf.Max(1, snakeConfig.Length);
             snake.HeadCell = snakeConfig.HeadCell;
             snake.InitialBodyCells = snakeConfig.BodyCells;
-            snake.UseUIRendering = true; // 启用UI渲染模式
 
 
 

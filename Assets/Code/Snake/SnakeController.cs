@@ -18,8 +18,6 @@ namespace ReGecko.SnakeSystem
         public float MoveSpeedCellsPerSecond = 16f;
         public float SnapThreshold = 0.05f;
         public int MaxCellsPerFrame = 12;
-        [Header("Rendering")]
-        public bool UseUIRendering = true; // 是否使用UI渲染
         [Header("Debug / Profiler")]
         public bool ShowDebugStats = false;
         public bool DrawDebugGizmos = false;
@@ -78,16 +76,12 @@ namespace ReGecko.SnakeSystem
         public void UpdateGridConfig(GridConfig newGrid)
         {
             _grid = newGrid;
-            // 重新设置所有段的尺寸
-            if (UseUIRendering)
+            for (int i = 0; i < _segments.Count; i++)
             {
-                for (int i = 0; i < _segments.Count; i++)
+                var rt = _segments[i].GetComponent<RectTransform>();
+                if (rt != null)
                 {
-                    var rt = _segments[i].GetComponent<RectTransform>();
-                    if (rt != null)
-                    {
-                        rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
-                    }
+                    rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
                 }
             }
         }
@@ -105,31 +99,18 @@ namespace ReGecko.SnakeSystem
                 // 蛇的段应该直接在蛇对象下，因为蛇对象已经在GridContainer中
                 go.transform.SetParent(transform, false);
 
-                if (UseUIRendering)
-                {
-                    // UI渲染：使用Image组件
-                    var image = go.AddComponent<Image>();
-                    image.sprite = BodySprite;
-                    image.color = BodyColor;
-                    image.raycastTarget = false;
+                // UI渲染：使用Image组件
+                var image = go.AddComponent<Image>();
+                image.sprite = BodySprite;
+                image.color = BodyColor;
+                image.raycastTarget = false;
 
-                    // 设置RectTransform（正确的锚点和轴心）
-                    var rt = go.GetComponent<RectTransform>();
-                    rt.anchorMin = new Vector2(0.5f, 0.5f);
-                    rt.anchorMax = new Vector2(0.5f, 0.5f);
-                    rt.pivot = new Vector2(0.5f, 0.5f);
-                    rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
-
-
-                }
-                else
-                {
-                    // 传统渲染：使用SpriteRenderer
-                    var sr = go.AddComponent<SpriteRenderer>();
-                    sr.sprite = BodySprite;
-                    sr.color = BodyColor;
-                    sr.sortingOrder = 0 + (i == 0 ? 1 : 0);
-                }
+                // 设置RectTransform（正确的锚点和轴心）
+                var rt = go.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
 
                 _segments.Add(go.transform);
             }
@@ -327,20 +308,12 @@ namespace ReGecko.SnakeSystem
                 {
                     if (idx >= _segments.Count) break;
 
-                    if (UseUIRendering)
+                    // UI渲染：使用RectTransform的anchoredPosition
+                    var rt = _segments[idx].GetComponent<RectTransform>();
+                    if (rt != null)
                     {
-                        // UI渲染：使用RectTransform的anchoredPosition
-                        var rt = _segments[idx].GetComponent<RectTransform>();
-                        if (rt != null)
-                        {
-                            var worldPos = _grid.CellToWorld(cell);
-                            rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
-                        }
-                    }
-                    else
-                    {
-                        // 传统渲染：使用Transform的position
-                        _segments[idx].position = _grid.CellToWorld(cell);
+                        var worldPos = _grid.CellToWorld(cell);
+                        rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                     }
                     idx++;
                 }
@@ -438,25 +411,17 @@ namespace ReGecko.SnakeSystem
             Vector3 startPos;
             RectTransform segmentRT = null;
 
-            // 根据渲染模式获取正确的起始位置
-            if (UseUIRendering)
+            segmentRT = segment.GetComponent<RectTransform>();
+            if (segmentRT != null)
             {
-                segmentRT = segment.GetComponent<RectTransform>();
-                if (segmentRT != null)
-                {
-                    startPos = new Vector3(segmentRT.anchoredPosition.x, segmentRT.anchoredPosition.y, 0);
-                }
-                else
-                {
-                    startPos = segment.position;
-                }
-                // 洞中心也需要转换为UI坐标
-                holeCenter = new Vector3(holeCenter.x, holeCenter.y, 0);
+                startPos = new Vector3(segmentRT.anchoredPosition.x, segmentRT.anchoredPosition.y, 0);
             }
             else
             {
                 startPos = segment.position;
             }
+            // 洞中心也需要转换为UI坐标
+            holeCenter = new Vector3(holeCenter.x, holeCenter.y, 0);
 
             // 计算沿身体路径到洞的移动路径
             List<Vector3> pathToHole = CalculatePathToHole(startPos, holeCenter);
@@ -486,15 +451,7 @@ namespace ReGecko.SnakeSystem
                     float t = elapsed / segmentTime;
                     Vector3 currentPos = Vector3.Lerp(segmentStart, segmentEnd, t);
 
-                    // 根据渲染模式设置位置
-                    if (UseUIRendering && segmentRT != null)
-                    {
-                        segmentRT.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
-                    }
-                    else
-                    {
-                        segment.position = currentPos;
-                    }
+                    segmentRT.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
                     yield return null;
                 }
 
@@ -502,52 +459,23 @@ namespace ReGecko.SnakeSystem
             }
 
             // 确保到达洞中心
-            if (UseUIRendering && segmentRT != null)
-            {
-                segmentRT.anchoredPosition = new Vector2(holeCenter.x, holeCenter.y);
-            }
-            else
-            {
-                segment.position = holeCenter;
-            }
+            segmentRT.anchoredPosition = new Vector2(holeCenter.x, holeCenter.y);
 
             // 消失效果（缩小并淡出）
-            if (UseUIRendering)
+            var img = segment.GetComponent<UnityEngine.UI.Image>();
+            if (img != null)
             {
-                var img = segment.GetComponent<UnityEngine.UI.Image>();
-                if (img != null)
-                {
-                    float fadeTime = duration * 0.3f;
-                    float fadeElapsed = 0f;
-                    Color originalColor = img.color;
+                float fadeTime = duration * 0.3f;
+                float fadeElapsed = 0f;
+                Color originalColor = img.color;
 
-                    while (fadeElapsed < fadeTime)
-                    {
-                        fadeElapsed += Time.deltaTime;
-                        float fadeT = fadeElapsed / fadeTime;
-                        img.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
-                        segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
-                        yield return null;
-                    }
-                }
-            }
-            else
-            {
-                var sr = segment.GetComponent<SpriteRenderer>();
-                if (sr != null)
+                while (fadeElapsed < fadeTime)
                 {
-                    float fadeTime = duration * 0.3f;
-                    float fadeElapsed = 0f;
-                    Color originalColor = sr.color;
-
-                    while (fadeElapsed < fadeTime)
-                    {
-                        fadeElapsed += Time.deltaTime;
-                        float fadeT = fadeElapsed / fadeTime;
-                        sr.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
-                        segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
-                        yield return null;
-                    }
+                    fadeElapsed += Time.deltaTime;
+                    float fadeT = fadeElapsed / fadeTime;
+                    img.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
+                    segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
+                    yield return null;
                 }
             }
 
@@ -661,17 +589,10 @@ namespace ReGecko.SnakeSystem
                 Vector3 startPos;
                 Vector3 targetPos = _grid.CellToWorld(cell);
 
-                if (UseUIRendering)
+                var rt = _segments[segmentIndex].GetComponent<RectTransform>();
+                if (rt != null)
                 {
-                    var rt = _segments[segmentIndex].GetComponent<RectTransform>();
-                    if (rt != null)
-                    {
-                        startPos = new Vector3(rt.anchoredPosition.x, rt.anchoredPosition.y, 0);
-                    }
-                    else
-                    {
-                        startPos = _segments[segmentIndex].position;
-                    }
+                    startPos = new Vector3(rt.anchoredPosition.x, rt.anchoredPosition.y, 0);
                 }
                 else
                 {
@@ -694,17 +615,10 @@ namespace ReGecko.SnakeSystem
                 {
                     Vector3 currentPos = Vector3.Lerp(startPositions[i], targetPositions[i], t);
 
-                    if (UseUIRendering)
+                    var rt = _segments[i].GetComponent<RectTransform>();
+                    if (rt != null)
                     {
-                        var rt = _segments[i].GetComponent<RectTransform>();
-                        if (rt != null)
-                        {
-                            rt.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
-                        }
-                    }
-                    else
-                    {
-                        _segments[i].position = currentPos;
+                        rt.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
                     }
                 }
 
@@ -718,17 +632,10 @@ namespace ReGecko.SnakeSystem
                 if (segmentIndex >= _segments.Count) break;
 
                 Vector3 finalPos = _grid.CellToWorld(cell);
-                if (UseUIRendering)
+                var rt = _segments[segmentIndex].GetComponent<RectTransform>();
+                if (rt != null)
                 {
-                    var rt = _segments[segmentIndex].GetComponent<RectTransform>();
-                    if (rt != null)
-                    {
-                        rt.anchoredPosition = new Vector2(finalPos.x, finalPos.y);
-                    }
-                }
-                else
-                {
-                    _segments[segmentIndex].position = finalPos;
+                    rt.anchoredPosition = new Vector2(finalPos.x, finalPos.y);
                 }
                 segmentIndex++;
             }
@@ -868,19 +775,10 @@ namespace ReGecko.SnakeSystem
                 {
                     Vector3 p = GetPointAlongPolyline(pts, i * spacing);
 
-                    if (UseUIRendering)
+                    var rt = _segments[i].GetComponent<RectTransform>();
+                    if (rt != null)
                     {
-                        // UI渲染：使用RectTransform的anchoredPosition
-                        var rt = _segments[i].GetComponent<RectTransform>();
-                        if (rt != null)
-                        {
-                            rt.anchoredPosition = new Vector2(p.x, p.y);
-                        }
-                    }
-                    else
-                    {
-                        // 传统渲染：使用Transform的position
-                        _segments[i].position = p;
+                        rt.anchoredPosition = new Vector2(p.x, p.y);
                     }
                 }
             }
@@ -917,19 +815,10 @@ namespace ReGecko.SnakeSystem
                 {
                     Vector3 p = GetPointAlongPolyline(pts, i * spacing);
 
-                    if (UseUIRendering)
+                    var rt = _segments[i].GetComponent<RectTransform>();
+                    if (rt != null)
                     {
-                        // UI渲染：使用RectTransform的anchoredPosition
-                        var rt = _segments[i].GetComponent<RectTransform>();
-                        if (rt != null)
-                        {
-                            rt.anchoredPosition = new Vector2(p.x, p.y);
-                        }
-                    }
-                    else
-                    {
-                        // 传统渲染：使用Transform的position
-                        _segments[i].position = p;
+                        rt.anchoredPosition = new Vector2(p.x, p.y);
                     }
                 }
             }
@@ -1184,20 +1073,11 @@ namespace ReGecko.SnakeSystem
             if (_segments.Count == 0) return false;
 
             Vector3 head, tail;
-            if (UseUIRendering)
-            {
-                // UI渲染模式：使用RectTransform的anchoredPosition
-                var headRT = _segments[0].GetComponent<RectTransform>();
-                var tailRT = _segments[_segments.Count - 1].GetComponent<RectTransform>();
-                head = new Vector3(headRT.anchoredPosition.x, headRT.anchoredPosition.y, 0f);
-                tail = new Vector3(tailRT.anchoredPosition.x, tailRT.anchoredPosition.y, 0f);
-            }
-            else
-            {
-                // 传统渲染模式：使用Transform的position
-                head = _segments[0].position;
-                tail = _segments[_segments.Count - 1].position;
-            }
+
+            var headRT = _segments[0].GetComponent<RectTransform>();
+            var tailRT = _segments[_segments.Count - 1].GetComponent<RectTransform>();
+            head = new Vector3(headRT.anchoredPosition.x, headRT.anchoredPosition.y, 0f);
+            tail = new Vector3(tailRT.anchoredPosition.x, tailRT.anchoredPosition.y, 0f);
 
             float headDist = Vector3.Distance(world, head);
             float tailDist = Vector3.Distance(world, tail);
@@ -1208,58 +1088,46 @@ namespace ReGecko.SnakeSystem
 
         Vector3 ScreenToWorld(Vector3 screen)
         {
-            if (UseUIRendering)
+            // UI渲染模式：使用UI坐标转换
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
             {
-                // UI渲染模式：使用UI坐标转换
-                var canvas = GetComponentInParent<Canvas>();
-                if (canvas != null)
+                var rect = transform.parent as RectTransform; // GridContainer
+                if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, canvas.worldCamera, out Vector2 localPoint))
                 {
-                    var rect = transform.parent as RectTransform; // GridContainer
-                    if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, canvas.worldCamera, out Vector2 localPoint))
+                    return new Vector3(localPoint.x, localPoint.y, 0f);
+                }
+            }
+
+            // Fallback: 改进的屏幕到UI坐标转换
+            var gridContainer = transform.parent as RectTransform;
+            if (gridContainer != null)
+            {
+                var canvasRT = gridContainer.GetComponentInParent<Canvas>().GetComponent<RectTransform>();
+                if (canvasRT != null)
+                {
+                    // 将屏幕坐标转换为Canvas坐标
+                    if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRT, screen, null, out Vector2 canvasPoint))
                     {
+                        // 再转换为GridContainer内的本地坐标
+                        Vector2 localPoint = canvasPoint - (Vector2)gridContainer.anchoredPosition;
                         return new Vector3(localPoint.x, localPoint.y, 0f);
                     }
                 }
-
-                // Fallback: 改进的屏幕到UI坐标转换
-                var gridContainer = transform.parent as RectTransform;
-                if (gridContainer != null)
-                {
-                    var canvasRT = gridContainer.GetComponentInParent<Canvas>().GetComponent<RectTransform>();
-                    if (canvasRT != null)
-                    {
-                        // 将屏幕坐标转换为Canvas坐标
-                        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRT, screen, null, out Vector2 canvasPoint))
-                        {
-                            // 再转换为GridContainer内的本地坐标
-                            Vector2 localPoint = canvasPoint - (Vector2)gridContainer.anchoredPosition;
-                            return new Vector3(localPoint.x, localPoint.y, 0f);
-                        }
-                    }
-                }
-
-                // 最后的fallback：简单的比例转换
-                Vector2 screenSize = new Vector2(Screen.width, Screen.height);
-                Vector2 normalizedScreen = new Vector2(screen.x / screenSize.x, screen.y / screenSize.y);
-
-                // 假设网格居中在屏幕中，计算相对位置
-                float gridWidth = _grid.Width * _grid.CellSize;
-                float gridHeight = _grid.Height * _grid.CellSize;
-
-                float worldX = (normalizedScreen.x - 0.5f) * gridWidth;
-                float worldY = (normalizedScreen.y - 0.5f) * gridHeight;
-
-                return new Vector3(worldX, worldY, 0f);
             }
-            else
-            {
-                // 传统渲染模式：使用Camera转换
-                var cam = Camera.main;
-                if (cam == null) return Vector3.zero;
-                var w = cam.ScreenToWorldPoint(screen);
-                w.z = 0f;
-                return w;
-            }
+
+            // 最后的fallback：简单的比例转换
+            Vector2 screenSize = new Vector2(Screen.width, Screen.height);
+            Vector2 normalizedScreen = new Vector2(screen.x / screenSize.x, screen.y / screenSize.y);
+
+            // 假设网格居中在屏幕中，计算相对位置
+            float gridWidth = _grid.Width * _grid.CellSize;
+            float gridHeight = _grid.Height * _grid.CellSize;
+
+            float worldX = (normalizedScreen.x - 0.5f) * gridWidth;
+            float worldY = (normalizedScreen.y - 0.5f) * gridHeight;
+
+            return new Vector3(worldX, worldY, 0f);
         }
 
         void OnGUI()
