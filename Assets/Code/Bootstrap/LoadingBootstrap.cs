@@ -142,11 +142,12 @@ namespace ReGecko.Bootstrap
             barGo.transform.SetParent(canvasGo.transform, false);
             var barBg = barGo.AddComponent<Image>();
             barBg.sprite = ProgressBackgroundSprite;
+            barBg.type = Image.Type.Tiled;
             var barRt = barGo.GetComponent<RectTransform>();
             barRt.anchorMin = new Vector2(0.5f, 0f);
             barRt.anchorMax = new Vector2(0.5f, 0f);
             barRt.pivot = new Vector2(0.5f, 0.5f);
-            barRt.sizeDelta = new Vector2(600, 40);
+            barRt.sizeDelta = new Vector2(750, 90);
             barRt.anchoredPosition = new Vector2(0, 480);
 
             // Slider
@@ -160,10 +161,10 @@ namespace ReGecko.Bootstrap
             var fillArea = new GameObject("FillArea");
             fillArea.transform.SetParent(barGo.transform, false);
             var fillAreaRt = fillArea.AddComponent<RectTransform>();
-            fillAreaRt.anchorMin = new Vector2(0f, 0f);
-            fillAreaRt.anchorMax = new Vector2(1f, 1f);
-            fillAreaRt.offsetMin = new Vector2(5, 5);
-            fillAreaRt.offsetMax = new Vector2(-5, -5);
+            fillAreaRt.anchorMin = new Vector2(0f, 1f);
+            fillAreaRt.anchorMax = new Vector2(0f, 1f);
+            fillAreaRt.sizeDelta = new Vector2(701f, 49f);
+            fillAreaRt.anchoredPosition = new Vector2(373f, -35f);
 
             var fill = new GameObject("Fill");
             fill.transform.SetParent(fillArea.transform, false);

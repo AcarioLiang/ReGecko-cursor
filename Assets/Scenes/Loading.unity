@@ -205,7 +205,7 @@ MonoBehaviour:
   BtnSprite: {fileID: 21300000, guid: f858a7e53cda1c8418ffaef29678d7ab, type: 3}
   ProgressBackgroundSprite: {fileID: 21300000, guid: f871119ecc47f014a99c6c3f9b4937f4, type: 3}
   ProgressFillSprite: {fileID: 21300000, guid: 34ac48e6bbd72bc4bacfebf3235a5deb, type: 3}
-  FakeDuration: 1
+  FakeDuration: 5
   UIPrefabPath: 
 --- !u!4 &1808285241
 Transform:
