@@ -841,6 +841,7 @@ namespace ReGecko.SnakeSystem
         {
             if (pts.Count == 0) return Vector3.zero;
             if (pts.Count == 1) return pts[0];
+            
             float remaining = distance;
             for (int i = 0; i < pts.Count - 1; i++)
             {
@@ -854,7 +855,19 @@ namespace ReGecko.SnakeSystem
                 }
                 remaining -= segLen;
             }
-            // 超出则返回最后一点
+            
+            // 超出折线长度时，沿着最后一段的方向继续延伸
+            if (pts.Count >= 2)
+            {
+                Vector3 lastA = pts[pts.Count - 2];
+                Vector3 lastB = pts[pts.Count - 1];
+                Vector3 direction = (lastB - lastA).normalized;
+                
+                // remaining 现在是超出的距离
+                return lastB + direction * remaining;
+            }
+            
+            // Fallback: 返回最后一点
             return pts[pts.Count - 1];
         }
 
