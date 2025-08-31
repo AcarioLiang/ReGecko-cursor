@@ -24,10 +24,15 @@ namespace ReGecko.SnakeSystem
 
         [Header("Body Sprite Management")]
         public bool EnableBodySpriteManagement = true;
+        
+        [Header("Sub-segment Settings")]
+        public bool EnableSubSegments = true;
+        const int SUB_SEGMENTS_PER_SEGMENT = 5;
 
         GridConfig _grid;
         GridEntityManager _entityManager;
         readonly List<Transform> _segments = new List<Transform>();
+        readonly List<List<Transform>> _subSegments = new List<List<Transform>>(); // 每段的5个小段
         readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
         readonly Queue<Vector2Int> _pathQueue = new Queue<Vector2Int>(); // 待消费路径（目标格序列）
         readonly List<Vector2Int> _pathBuildBuffer = new List<Vector2Int>(64); // 复用的路径构建缓冲
@@ -84,15 +89,44 @@ namespace ReGecko.SnakeSystem
                     rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
                 }
             }
+            
+            // 更新小段的大小
+            if (EnableSubSegments)
+            {
+                float subSegmentSize = _grid.CellSize / SUB_SEGMENTS_PER_SEGMENT;
+                for (int i = 0; i < _subSegments.Count; i++)
+                {
+                    for (int j = 0; j < _subSegments[i].Count; j++)
+                    {
+                        var rt = _subSegments[i][j].GetComponent<RectTransform>();
+                        if (rt != null)
+                        {
+                            rt.sizeDelta = new Vector2(_grid.CellSize, subSegmentSize);
+                        }
+                    }
+                }
+            }
         }
 
         void BuildSegments()
         {
+            // 清理现有段
             for (int i = 0; i < _segments.Count; i++)
             {
                 if (_segments[i] != null) Destroy(_segments[i].gameObject);
             }
             _segments.Clear();
+            
+            // 清理现有小段
+            for (int i = 0; i < _subSegments.Count; i++)
+            {
+                for (int j = 0; j < _subSegments[i].Count; j++)
+                {
+                    if (_subSegments[i][j] != null) Destroy(_subSegments[i][j].gameObject);
+                }
+            }
+            _subSegments.Clear();
+            
             for (int i = 0; i < Mathf.Max(1, Length); i++)
             {
                 var go = new GameObject(i == 0 ? "Head" : $"Body_{i}");
@@ -113,6 +147,219 @@ namespace ReGecko.SnakeSystem
                 rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
 
                 _segments.Add(go.transform);
+                
+                // 创建小段
+                if (EnableSubSegments)
+                {
+                    CreateSubSegments(i, go.transform);
+                }
+            }
+        }
+        
+        void CreateSubSegments(int segmentIndex, Transform parentSegment)
+        {
+            List<Transform> subSegmentList = new List<Transform>();
+            float subSegmentSize = _grid.CellSize / SUB_SEGMENTS_PER_SEGMENT;
+            
+            for (int i = 0; i < SUB_SEGMENTS_PER_SEGMENT; i++)
+            {
+                var subGO = new GameObject($"SubSegment_{segmentIndex}_{i}");
+                // 小段直接作为蛇的子对象，而不是主段的子对象
+                subGO.transform.SetParent(transform, false);
+                
+                // UI渲染：使用Image组件
+                var image = subGO.AddComponent<Image>();
+                image.sprite = BodySprite;
+                image.color = BodyColor;
+                image.raycastTarget = false;
+                // 设置图片类型为填充
+                image.type = Image.Type.Filled;
+                
+                // 设置RectTransform
+                var rt = subGO.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(_grid.CellSize, subSegmentSize);
+                
+                subSegmentList.Add(subGO.transform);
+            }
+            
+            _subSegments.Add(subSegmentList);
+            
+            // 隐藏主段，显示小段
+            parentSegment.GetComponent<Image>().enabled = false;
+        }
+        
+        void UpdateSubSegmentPositions()
+        {
+            if (!EnableSubSegments || _subSegments.Count != _segments.Count)
+                return;
+                
+            for (int segmentIndex = 0; segmentIndex < _segments.Count; segmentIndex++)
+            {
+                UpdateSubSegmentForSegment(segmentIndex);
+            }
+        }
+        
+        void UpdateSubSegmentForSegment(int segmentIndex)
+        {
+            if (segmentIndex >= _subSegments.Count || segmentIndex >= _segments.Count)
+                return;
+                
+            var subSegmentList = _subSegments[segmentIndex];
+            var mainSegment = _segments[segmentIndex];
+            
+            // 获取主段的位置
+            var rt = mainSegment.GetComponent<RectTransform>();
+            if (rt == null) return;
+            
+            Vector3 mainPos = new Vector3(rt.anchoredPosition.x, rt.anchoredPosition.y, 0f);
+            
+            // 计算转弯角度
+            Vector3 inDirection = Vector3.zero;
+            Vector3 outDirection = Vector3.zero;
+            bool isTurn = false;
+            
+            if (segmentIndex > 0 && segmentIndex < _segments.Count - 1)
+            {
+                // 中间段，计算进入和离开方向
+                var prevRT = _segments[segmentIndex - 1].GetComponent<RectTransform>();
+                var nextRT = _segments[segmentIndex + 1].GetComponent<RectTransform>();
+                
+                if (prevRT != null && nextRT != null)
+                {
+                    Vector3 prevPos = new Vector3(prevRT.anchoredPosition.x, prevRT.anchoredPosition.y, 0f);
+                    Vector3 nextPos = new Vector3(nextRT.anchoredPosition.x, nextRT.anchoredPosition.y, 0f);
+                    
+                    inDirection = (mainPos - prevPos).normalized;
+                    outDirection = (nextPos - mainPos).normalized;
+                    
+                    // 检测是否转弯（角度变化超过45度）
+                    float angle = Vector3.Angle(inDirection, outDirection);
+                    isTurn = angle > 45f;
+                }
+            }
+            
+            if (isTurn)
+            {
+                // 转弯：排列成L形
+                ArrangeSubSegmentsInLShape(subSegmentList, mainPos, inDirection, outDirection);
+            }
+            else
+            {
+                // 直线：沿着方向排列
+                Vector3 direction = Vector3.right; // 默认方向
+                
+                if (segmentIndex == 0) // 头部
+                {
+                    if (_segments.Count > 1)
+                    {
+                        var nextRT = _segments[1].GetComponent<RectTransform>();
+                        if (nextRT != null)
+                        {
+                            Vector3 nextPos = new Vector3(nextRT.anchoredPosition.x, nextRT.anchoredPosition.y, 0f);
+                            Vector3 diff = mainPos - nextPos;
+                            if (diff.magnitude > 0.1f)
+                            {
+                                direction = diff.normalized;
+                            }
+                        }
+                    }
+                }
+                else if (segmentIndex == _segments.Count - 1) // 尾部
+                {
+                    var prevRT = _segments[segmentIndex - 1].GetComponent<RectTransform>();
+                    if (prevRT != null)
+                    {
+                        Vector3 prevPos = new Vector3(prevRT.anchoredPosition.x, prevRT.anchoredPosition.y, 0f);
+                        Vector3 diff = mainPos - prevPos;
+                        if (diff.magnitude > 0.1f)
+                        {
+                            direction = diff.normalized;
+                        }
+                    }
+                }
+                else
+                {
+                    // 中间段但不转弯，使用与前一段的方向
+                    var prevRT = _segments[segmentIndex - 1].GetComponent<RectTransform>();
+                    if (prevRT != null)
+                    {
+                        Vector3 prevPos = new Vector3(prevRT.anchoredPosition.x, prevRT.anchoredPosition.y, 0f);
+                        Vector3 diff = mainPos - prevPos;
+                        if (diff.magnitude > 0.1f)
+                        {
+                            direction = diff.normalized;
+                        }
+                    }
+                }
+                
+                ArrangeSubSegmentsInLine(subSegmentList, mainPos, direction);
+            }
+        }
+        
+        void ArrangeSubSegmentsInLine(List<Transform> subSegments, Vector3 centerPos, Vector3 direction)
+        {
+            float subSegmentSize = _grid.CellSize / SUB_SEGMENTS_PER_SEGMENT;
+            
+            // 5个小段均分主段的空间，每个小段占据1/5的空间
+            for (int i = 0; i < subSegments.Count; i++)
+            {
+                // 计算每个小段在主段中的相对位置
+                // i=0时在最前面，i=4时在最后面
+                float t = (float)i / (SUB_SEGMENTS_PER_SEGMENT - 1); // 0, 0.25, 0.5, 0.75, 1
+                float offset = (t - 0.5f) * _grid.CellSize; // -0.5, -0.25, 0, 0.25, 0.5 * CellSize
+                
+                Vector3 pos = centerPos + direction * offset;
+                
+                var rt = subSegments[i].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    rt.anchoredPosition = new Vector2(pos.x, pos.y);
+                    // 移除旋转，保持原始方向
+                    rt.rotation = Quaternion.identity;
+                }
+            }
+        }
+        
+        void ArrangeSubSegmentsInLShape(List<Transform> subSegments, Vector3 centerPos, Vector3 inDirection, Vector3 outDirection)
+        {
+            float subSegmentSize = _grid.CellSize / SUB_SEGMENTS_PER_SEGMENT;
+            
+            // 计算L形的转弯点（使用主段中心）
+            Vector3 turnPoint = centerPos;
+            
+            // 分配小段：前2个沿进入方向，中间1个在转弯点，后2个沿离开方向
+            for (int i = 0; i < subSegments.Count; i++)
+            {
+                Vector3 pos;
+                
+                if (i < 2)
+                {
+                    // 前两个小段沿进入方向
+                    float offset = (2 - i) * subSegmentSize; // 第0个段在最远处，第1个段靠近转弯点
+                    pos = turnPoint - inDirection * offset;
+                }
+                else if (i == 2)
+                {
+                    // 中间小段在转弯点
+                    pos = turnPoint;
+                }
+                else
+                {
+                    // 后两个小段沿离开方向
+                    float offset = (i - 2) * subSegmentSize; // 第3个段靠近转弯点，第4个段在最远处
+                    pos = turnPoint + outDirection * offset;
+                }
+                
+                var rt = subSegments[i].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    rt.anchoredPosition = new Vector2(pos.x, pos.y);
+                    // 移除旋转，保持原始方向
+                    rt.rotation = Quaternion.identity;
+                }
             }
         }
 
@@ -196,6 +443,12 @@ namespace ReGecko.SnakeSystem
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
                 _bodySpriteManager.UpdateAllSegmentSprites();
+            }
+            
+            // 更新小段位置
+            if (EnableSubSegments)
+            {
+                UpdateSubSegmentPositions();
             }
         }
 
@@ -325,6 +578,12 @@ namespace ReGecko.SnakeSystem
                     }
                     idx++;
                 }
+                
+                // 更新小段位置
+                if (EnableSubSegments)
+                {
+                    UpdateSubSegmentPositions();
+                }
             }
             
             // 移动完成后，更新身体图片
@@ -368,6 +627,12 @@ namespace ReGecko.SnakeSystem
                     {
                         segmentToConsume = _segments[0];
                         _segments.RemoveAt(0);
+                        
+                        // 同时移除对应的小段
+                        if (EnableSubSegments && _subSegments.Count > 0)
+                        {
+                            _subSegments.RemoveAt(0);
+                        }
                     }
                 }
                 else
@@ -379,6 +644,12 @@ namespace ReGecko.SnakeSystem
                     {
                         segmentToConsume = _segments[last];
                         _segments.RemoveAt(last);
+                        
+                        // 同时移除对应的小段
+                        if (EnableSubSegments && _subSegments.Count > last)
+                        {
+                            _subSegments.RemoveAt(last);
+                        }
                     }
                 }
 
@@ -416,10 +687,108 @@ namespace ReGecko.SnakeSystem
 
         IEnumerator MoveToHoleAndDestroy(Transform segment, Vector3 holeCenter, float duration)
         {
-            Vector3 startPos;
-            RectTransform segmentRT = null;
+            // 找到对应的小段列表
+            List<Transform> subSegmentsToMove = null;
+            int segmentIndex = _segments.IndexOf(segment);
+            
+            if (EnableSubSegments && segmentIndex >= 0 && segmentIndex < _subSegments.Count)
+            {
+                subSegmentsToMove = _subSegments[segmentIndex];
+            }
 
-            segmentRT = segment.GetComponent<RectTransform>();
+            if (subSegmentsToMove != null && subSegmentsToMove.Count > 0)
+            {
+                // 小段系统：逐个消费小段
+                yield return StartCoroutine(ConsumeSubSegmentsSequentially(subSegmentsToMove, holeCenter, duration));
+            }
+            else
+            {
+                // 主段系统：消费主段（向后兼容）
+                yield return StartCoroutine(ConsumeMainSegment(segment, holeCenter, duration));
+            }
+
+            // 销毁主段对象
+            Destroy(segment.gameObject);
+        }
+        
+        IEnumerator ConsumeSubSegmentsSequentially(List<Transform> subSegments, Vector3 holeCenter, float totalDuration)
+        {
+            // 计算每个小段的消费时间
+            float timePerSubSegment = totalDuration / SUB_SEGMENTS_PER_SEGMENT;
+            
+            for (int i = 0; i < subSegments.Count; i++)
+            {
+                if (subSegments[i] != null)
+                {
+                    // 启动单个小段的消费动画（并行执行）
+                    StartCoroutine(ConsumeSingleSubSegment(subSegments[i], holeCenter, timePerSubSegment * 1.5f, i));
+                    
+                    // 等待一小段时间再开始下一个小段，创造流动效果
+                    yield return new WaitForSeconds(timePerSubSegment * 0.6f);
+                }
+            }
+            
+            // 等待最后一个小段完成消费
+            yield return new WaitForSeconds(timePerSubSegment * 1.5f);
+        }
+        
+        IEnumerator ConsumeSingleSubSegment(Transform subSegment, Vector3 holeCenter, float duration, int subSegmentIndex)
+        {
+            var subRT = subSegment.GetComponent<RectTransform>();
+            if (subRT == null) yield break;
+            
+            Vector3 startPos = new Vector3(subRT.anchoredPosition.x, subRT.anchoredPosition.y, 0);
+            holeCenter = new Vector3(holeCenter.x, holeCenter.y, 0);
+            
+            // 移动阶段（70%时间）
+            float moveTime = duration * 0.7f;
+            float elapsed = 0f;
+            
+            while (elapsed < moveTime)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / moveTime;
+                
+                // 使用缓动函数让移动更自然
+                float easedT = Mathf.SmoothStep(0f, 1f, t);
+                Vector3 currentPos = Vector3.Lerp(startPos, holeCenter, easedT);
+                
+                subRT.anchoredPosition = new Vector2(currentPos.x, currentPos.y);
+                yield return null;
+            }
+            
+            // 确保到达洞中心
+            subRT.anchoredPosition = new Vector2(holeCenter.x, holeCenter.y);
+            
+            // 消失阶段（30%时间）
+            float fadeTime = duration * 0.3f;
+            var img = subSegment.GetComponent<Image>();
+            Color originalColor = img != null ? img.color : Color.white;
+            
+            elapsed = 0f;
+            while (elapsed < fadeTime)
+            {
+                elapsed += Time.deltaTime;
+                float fadeT = elapsed / fadeTime;
+                
+                // 缩放和淡出
+                subSegment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
+                if (img != null)
+                {
+                    img.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
+                }
+                
+                yield return null;
+            }
+            
+            // 销毁小段
+            Destroy(subSegment.gameObject);
+        }
+        
+        IEnumerator ConsumeMainSegment(Transform segment, Vector3 holeCenter, float duration)
+        {
+            Vector3 startPos;
+            RectTransform segmentRT = segment.GetComponent<RectTransform>();
             if (segmentRT != null)
             {
                 startPos = new Vector3(segmentRT.anchoredPosition.x, segmentRT.anchoredPosition.y, 0);
@@ -428,6 +797,7 @@ namespace ReGecko.SnakeSystem
             {
                 startPos = segment.position;
             }
+            
             // 洞中心也需要转换为UI坐标
             holeCenter = new Vector3(holeCenter.x, holeCenter.y, 0);
 
@@ -470,24 +840,24 @@ namespace ReGecko.SnakeSystem
             segmentRT.anchoredPosition = new Vector2(holeCenter.x, holeCenter.y);
 
             // 消失效果（缩小并淡出）
-            var img = segment.GetComponent<UnityEngine.UI.Image>();
-            if (img != null)
+            float fadeTime = duration * 0.3f;
+            float fadeElapsed = 0f;
+            var img = segment.GetComponent<Image>();
+            Color originalColor = img != null ? img.color : Color.white;
+
+            while (fadeElapsed < fadeTime)
             {
-                float fadeTime = duration * 0.3f;
-                float fadeElapsed = 0f;
-                Color originalColor = img.color;
+                fadeElapsed += Time.deltaTime;
+                float fadeT = fadeElapsed / fadeTime;
 
-                while (fadeElapsed < fadeTime)
+                if (img != null)
                 {
-                    fadeElapsed += Time.deltaTime;
-                    float fadeT = fadeElapsed / fadeTime;
                     img.color = new Color(originalColor.r, originalColor.g, originalColor.b, 1f - fadeT);
-                    segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
-                    yield return null;
                 }
-            }
+                segment.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, fadeT);
 
-            Destroy(segment.gameObject);
+                yield return null;
+            }
         }
 
         /// <summary>
@@ -646,6 +1016,12 @@ namespace ReGecko.SnakeSystem
                     rt.anchoredPosition = new Vector2(finalPos.x, finalPos.y);
                 }
                 segmentIndex++;
+            }
+            
+            // 更新小段位置
+            if (EnableSubSegments)
+            {
+                UpdateSubSegmentPositions();
             }
         }
 
@@ -834,6 +1210,12 @@ namespace ReGecko.SnakeSystem
                         rt.anchoredPosition = new Vector2(p.x, p.y);
                     }
                 }
+            }
+            
+            // 更新小段位置
+            if (EnableSubSegments)
+            {
+                UpdateSubSegmentPositions();
             }
         }
 
