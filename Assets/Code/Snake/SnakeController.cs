@@ -179,7 +179,15 @@ namespace ReGecko.SnakeSystem
             for (int i = 0; i < Mathf.Min(cells.Count, _segments.Count); i++)
             {
                 _bodyCells.AddLast(cells[i]);
-                _segments[i].position = _grid.CellToWorld(cells[i]);
+                
+                var rt = _segments[i].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    var worldPos = _grid.CellToWorld(cells[i]);
+                    rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                }
+
+
             }
             _currentHeadCell = _bodyCells.First.Value;
             _currentTailCell = _bodyCells.Last.Value;
@@ -784,7 +792,7 @@ namespace ReGecko.SnakeSystem
             }
             else
             {
-                // 拖尾：构建折线： (head ... before tail) -> tailVisual
+                // 拖尾：构建折线： tailVisual -> (body Last.Previous ... First)
                 Vector3 tailA = _grid.CellToWorld(_currentTailCell);
                 Vector3 tailVisual;
                 if (_pathQueue.Count > 0)
@@ -799,23 +807,28 @@ namespace ReGecko.SnakeSystem
                     var center = _grid.CellToWorld(_currentTailCell);
                     if (_dragAxis == DragAxis.X) tailVisual.y = center.y; else if (_dragAxis == DragAxis.Y) tailVisual.x = center.x;
                 }
-                List<Vector3> pts = new List<Vector3>(_segments.Count + 2);
-                // head to last-1 body cells
-                var it = _bodyCells.First;
+                
+                // 构建折线：从尾部拖动位置开始，向头部方向延伸
+                List<Vector3> pts = new List<Vector3>(_segments.Count);
+                pts.Add(tailVisual); // 尾部拖动位置
+                
+                // 添加身体段位置（从尾部向头部）
+                var it = _bodyCells.Last;
+                if (it != null) it = it.Previous; // 跳过尾部cell（已经用tailVisual代替）
                 while (it != null)
                 {
-                    // skip last, we will add tailVisual instead
-                    if (it.Next == null) break;
                     pts.Add(_grid.CellToWorld(it.Value));
-                    it = it.Next;
+                    it = it.Previous;
                 }
-                pts.Add(tailVisual);
+                
                 float spacing = _grid.CellSize;
+                // 从尾部开始分布，索引0对应尾部段
                 for (int i = 0; i < _segments.Count; i++)
                 {
+                    int segmentIndex = _segments.Count - 1 - i; // 倒序：尾部段在前
                     Vector3 p = GetPointAlongPolyline(pts, i * spacing);
 
-                    var rt = _segments[i].GetComponent<RectTransform>();
+                    var rt = _segments[segmentIndex].GetComponent<RectTransform>();
                     if (rt != null)
                     {
                         rt.anchoredPosition = new Vector2(p.x, p.y);
@@ -1031,7 +1044,14 @@ namespace ReGecko.SnakeSystem
             foreach (var cell in _bodyCells)
             {
                 if (index >= _segments.Count) break;
-                _segments[index].position = _grid.CellToWorld(cell);
+                
+                var rt = _segments[index].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    var worldPos = _grid.CellToWorld(cell);
+                    rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                }
+
                 index++;
             }
             _currentHeadCell = _bodyCells.First.Value;
