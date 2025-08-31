@@ -60,6 +60,8 @@ namespace ReGecko.Bootstrap
             bool uiLoaded = false;
             bool otherResourcesLoaded = false;
 
+            yield return new WaitForSeconds(0.5f);
+
             // 启动UI加载
             if (!string.IsNullOrEmpty(UIPrefabPath))
             {
