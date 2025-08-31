@@ -191,6 +191,25 @@ namespace ReGecko.SnakeSystem
             parentSegment.GetComponent<Image>().enabled = false;
         }
         
+        Vector3 GetGridDirection(Vector3 direction)
+        {
+            // 将方向标准化为网格的四个基本方向
+            if (direction.magnitude < 0.1f)
+                return Vector3.zero;
+                
+            // 确定主要方向轴
+            if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+            {
+                // 水平方向
+                return direction.x > 0 ? Vector3.right : Vector3.left;
+            }
+            else
+            {
+                // 垂直方向
+                return direction.y > 0 ? Vector3.up : Vector3.down;
+            }
+        }
+        
         void UpdateSubSegmentPositions()
         {
             if (!EnableSubSegments || _subSegments.Count != _segments.Count)
@@ -216,7 +235,7 @@ namespace ReGecko.SnakeSystem
             
             Vector3 mainPos = new Vector3(rt.anchoredPosition.x, rt.anchoredPosition.y, 0f);
             
-            // 计算转弯角度
+            // 计算90度转弯
             Vector3 inDirection = Vector3.zero;
             Vector3 outDirection = Vector3.zero;
             bool isTurn = false;
@@ -232,12 +251,17 @@ namespace ReGecko.SnakeSystem
                     Vector3 prevPos = new Vector3(prevRT.anchoredPosition.x, prevRT.anchoredPosition.y, 0f);
                     Vector3 nextPos = new Vector3(nextRT.anchoredPosition.x, nextRT.anchoredPosition.y, 0f);
                     
-                    inDirection = (mainPos - prevPos).normalized;
-                    outDirection = (nextPos - mainPos).normalized;
+                    // 计算方向差值（网格对齐）
+                    Vector3 inDiff = mainPos - prevPos;
+                    Vector3 outDiff = nextPos - mainPos;
                     
-                    // 检测是否转弯（角度变化超过45度）
-                    float angle = Vector3.Angle(inDirection, outDirection);
-                    isTurn = angle > 45f;
+                    // 标准化为网格方向（上下左右）
+                    inDirection = GetGridDirection(inDiff);
+                    outDirection = GetGridDirection(outDiff);
+                    
+                    // 检测是否为90度转弯（两个方向垂直）
+                    float dot = Vector3.Dot(inDirection, outDirection);
+                    isTurn = Mathf.Abs(dot) < 0.1f; // 垂直时点积接近0
                 }
             }
             
@@ -248,7 +272,7 @@ namespace ReGecko.SnakeSystem
             }
             else
             {
-                // 直线：沿着方向排列
+                // 直线：沿着网格对齐的方向排列
                 Vector3 direction = Vector3.right; // 默认方向
                 
                 if (segmentIndex == 0) // 头部
@@ -260,10 +284,7 @@ namespace ReGecko.SnakeSystem
                         {
                             Vector3 nextPos = new Vector3(nextRT.anchoredPosition.x, nextRT.anchoredPosition.y, 0f);
                             Vector3 diff = mainPos - nextPos;
-                            if (diff.magnitude > 0.1f)
-                            {
-                                direction = diff.normalized;
-                            }
+                            direction = GetGridDirection(diff);
                         }
                     }
                 }
@@ -274,10 +295,7 @@ namespace ReGecko.SnakeSystem
                     {
                         Vector3 prevPos = new Vector3(prevRT.anchoredPosition.x, prevRT.anchoredPosition.y, 0f);
                         Vector3 diff = mainPos - prevPos;
-                        if (diff.magnitude > 0.1f)
-                        {
-                            direction = diff.normalized;
-                        }
+                        direction = GetGridDirection(diff);
                     }
                 }
                 else
@@ -288,10 +306,7 @@ namespace ReGecko.SnakeSystem
                     {
                         Vector3 prevPos = new Vector3(prevRT.anchoredPosition.x, prevRT.anchoredPosition.y, 0f);
                         Vector3 diff = mainPos - prevPos;
-                        if (diff.magnitude > 0.1f)
-                        {
-                            direction = diff.normalized;
-                        }
+                        direction = GetGridDirection(diff);
                     }
                 }
                 
@@ -327,30 +342,41 @@ namespace ReGecko.SnakeSystem
         {
             float subSegmentSize = _grid.CellSize / SUB_SEGMENTS_PER_SEGMENT;
             
-            // 计算L形的转弯点（使用主段中心）
-            Vector3 turnPoint = centerPos;
+            // 计算90度L形转弯的关键点
+            // 使用网格单元的1/4作为转弯半径，创造更贴合网格的效果
+            float turnOffset = _grid.CellSize * 0.25f;
             
-            // 分配小段：前2个沿进入方向，中间1个在转弯点，后2个沿离开方向
+            // 转弯内角点：稍微向内偏移
+            Vector3 innerCorner = centerPos + (inDirection + outDirection).normalized * turnOffset * 0.5f;
+            
             for (int i = 0; i < subSegments.Count; i++)
             {
                 Vector3 pos;
                 
-                if (i < 2)
+                if (i == 0)
                 {
-                    // 前两个小段沿进入方向
-                    float offset = (2 - i) * subSegmentSize; // 第0个段在最远处，第1个段靠近转弯点
-                    pos = turnPoint - inDirection * offset;
+                    // 第1个小段：沿进入方向，距离转弯点最远
+                    pos = centerPos - inDirection * subSegmentSize * 2f;
+                }
+                else if (i == 1)
+                {
+                    // 第2个小段：沿进入方向，靠近转弯点
+                    pos = centerPos - inDirection * subSegmentSize;
                 }
                 else if (i == 2)
                 {
-                    // 中间小段在转弯点
-                    pos = turnPoint;
+                    // 第3个小段：在转弯内角，创造90度效果
+                    pos = innerCorner;
                 }
-                else
+                else if (i == 3)
                 {
-                    // 后两个小段沿离开方向
-                    float offset = (i - 2) * subSegmentSize; // 第3个段靠近转弯点，第4个段在最远处
-                    pos = turnPoint + outDirection * offset;
+                    // 第4个小段：沿离开方向，靠近转弯点
+                    pos = centerPos + outDirection * subSegmentSize;
+                }
+                else // i == 4
+                {
+                    // 第5个小段：沿离开方向，距离转弯点最远
+                    pos = centerPos + outDirection * subSegmentSize * 2f;
                 }
                 
                 var rt = subSegments[i].GetComponent<RectTransform>();
