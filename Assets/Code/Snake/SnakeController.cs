@@ -28,6 +28,19 @@ namespace ReGecko.SnakeSystem
         // 拖动优化：减少更新频率
         private float _lastDragUpdateTime = 0f;
         private const float DRAG_UPDATE_INTERVAL = 0.016f; // 约60FPS更新频率
+        
+        // 性能分析日志
+        private int _updateMovementCallCount = 0;
+        private int _enqueuePathCallCount = 0;
+        private int _updateVisualsCallCount = 0;
+        private float _lastPerformanceLogTime = 0f;
+        private const float PERFORMANCE_LOG_INTERVAL = 2.0f; // 每2秒记录一次
+        private System.Diagnostics.Stopwatch _updateMovementStopwatch = new System.Diagnostics.Stopwatch();
+        private System.Diagnostics.Stopwatch _updateVisualsStopwatch = new System.Diagnostics.Stopwatch();
+        private System.Diagnostics.Stopwatch _enqueuePathStopwatch = new System.Diagnostics.Stopwatch();
+        private long _totalUpdateMovementTime = 0;
+        private long _totalUpdateVisualsTime = 0;
+        private long _totalEnqueuePathTime = 0;
 
         enum DragAxis { None, X, Y }
         DragAxis _dragAxis = DragAxis.None;
@@ -196,11 +209,18 @@ namespace ReGecko.SnakeSystem
 
         public override void UpdateMovement()
         {
+            _updateMovementStopwatch.Restart();
+            _updateMovementCallCount++;
+            
             // 清理已销毁的组件
             CleanupCachedComponents();
             
             // 如果蛇已被完全消除或组件被销毁，停止所有移动更新
-            if (_bodyCells.Count == 0 || !IsAlive() || _cachedRectTransforms.Count == 0) return;
+            if (_bodyCells.Count == 0 || !IsAlive() || _cachedRectTransforms.Count == 0) 
+            {
+                _updateMovementStopwatch.Stop();
+                return;
+            }
 
             if (_dragging && !_consuming)
             {
@@ -212,13 +232,26 @@ namespace ReGecko.SnakeSystem
                     // 更新主方向：按更大位移轴确定
                     var delta = targetCell - (_dragOnHead ? _currentHeadCell : _currentTailCell);
                     _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
+                    _enqueuePathStopwatch.Restart();
+                    _enqueuePathCallCount++;
+                    int pathCountBefore = _pathQueue.Count;
                     EnqueueAxisAlignedPath(_lastSampledCell, targetCell);
+                    int pathCountAfter = _pathQueue.Count;
+                    int pathsAdded = pathCountAfter - pathCountBefore;
+                    _enqueuePathStopwatch.Stop();
+                    _totalEnqueuePathTime += _enqueuePathStopwatch.ElapsedTicks;
+                    
+                    // 记录路径添加情况
+                    if (pathsAdded > 5) // 只记录较大的路径添加
+                    {
+                        Debug.Log($"[蛇{SnakeId}] 快速拖动检测: 从({_lastSampledCell.x},{_lastSampledCell.y})到({targetCell.x},{targetCell.y}), 添加{pathsAdded}个路径点, 队列长度: {pathCountAfter}");
+                    }
                     _lastSampledCell = targetCell;
                 }
 
-                // 洞检测：若拖动端临近洞，触发吞噬
+                // 洞检测：若拖动端临近洞，且颜色匹配，触发吞噬
                 var hole = FindAdjacentHole(_dragOnHead ? _currentHeadCell : _currentTailCell);
-                if (hole != null)
+                if (hole != null && hole.CanInteractWithSnake(this))
                 {
                     _consumeCoroutine ??= StartCoroutine(CoConsume(hole, _dragOnHead));
                 }
@@ -228,6 +261,7 @@ namespace ReGecko.SnakeSystem
             _stepsConsumedThisFrame = 0;
             _moveAccumulator += MoveSpeedCellsPerSecond * Time.deltaTime;
             int stepsThisFrame = 0;
+            int pathQueueSizeBefore = _pathQueue.Count;
             while (_moveAccumulator >= 1f && _pathQueue.Count > 0 && stepsThisFrame < MaxCellsPerFrame)
             {
                 var nextCell = _pathQueue.Dequeue();
@@ -261,6 +295,14 @@ namespace ReGecko.SnakeSystem
                 stepsThisFrame++;
                 _stepsConsumedThisFrame++;
             }
+            
+            // 记录路径消费情况
+            int pathQueueSizeAfter = _pathQueue.Count;
+            int pathsConsumed = pathQueueSizeBefore - pathQueueSizeAfter;
+            if (_dragging && (pathsConsumed > 0 || pathQueueSizeAfter > 10))
+            {
+                Debug.Log($"[蛇{SnakeId}] 路径消费: 消费{pathsConsumed}个, 剩余{pathQueueSizeAfter}个, 移动累积器: {_moveAccumulator:F2}, 移动速度: {MoveSpeedCellsPerSecond}");
+            }
 
             // 拖动中的可视：使用折线距离定位，严格保持段间距=_grid.CellSize，避免重叠
             if (_dragging && !_consuming)
@@ -292,6 +334,13 @@ namespace ReGecko.SnakeSystem
             {
                 _bodySpriteManager.OnSnakeMoved();
             }
+            
+            // 性能统计
+            _updateMovementStopwatch.Stop();
+            _totalUpdateMovementTime += _updateMovementStopwatch.ElapsedTicks;
+            
+            // 定期输出性能日志
+            LogPerformanceStats();
         }
 
         void HandleInput()
@@ -753,10 +802,14 @@ namespace ReGecko.SnakeSystem
 
         void UpdateVisualsSmoothDragging()
         {
+            _updateVisualsStopwatch.Restart();
+            _updateVisualsCallCount++;
+            
             // 限制更新频率以提高性能
             float currentTime = Time.time;
             if (currentTime - _lastDragUpdateTime < DRAG_UPDATE_INTERVAL)
             {
+                _updateVisualsStopwatch.Stop();
                 return; // 跳过这帧的更新
             }
             _lastDragUpdateTime = currentTime;
@@ -849,6 +902,10 @@ namespace ReGecko.SnakeSystem
                     }
                 }
             }
+            
+            // 性能统计
+            _updateVisualsStopwatch.Stop();
+            _totalUpdateVisualsTime += _updateVisualsStopwatch.ElapsedTicks;
         }
 
         Vector3 GetPointAlongPolyline(List<Vector3> pts, float distance)
@@ -1253,6 +1310,40 @@ namespace ReGecko.SnakeSystem
                 {
                     _cachedRectTransforms.RemoveAt(i);
                 }
+            }
+        }
+
+        /// <summary>
+        /// 输出性能统计日志
+        /// </summary>
+        void LogPerformanceStats()
+        {
+            float currentTime = Time.time;
+            if (currentTime - _lastPerformanceLogTime >= PERFORMANCE_LOG_INTERVAL)
+            {
+                _lastPerformanceLogTime = currentTime;
+                
+                // 计算平均耗时（毫秒）
+                double avgUpdateMovementMs = _updateMovementCallCount > 0 ? 
+                    (_totalUpdateMovementTime * 1000.0 / System.Diagnostics.Stopwatch.Frequency) / _updateMovementCallCount : 0;
+                double avgUpdateVisualsMs = _updateVisualsCallCount > 0 ? 
+                    (_totalUpdateVisualsTime * 1000.0 / System.Diagnostics.Stopwatch.Frequency) / _updateVisualsCallCount : 0;
+                double avgEnqueuePathMs = _enqueuePathCallCount > 0 ? 
+                    (_totalEnqueuePathTime * 1000.0 / System.Diagnostics.Stopwatch.Frequency) / _enqueuePathCallCount : 0;
+                
+                Debug.Log($"[蛇{SnakeId}] 性能统计 - 过去{PERFORMANCE_LOG_INTERVAL}秒:\n" +
+                    $"UpdateMovement: {_updateMovementCallCount}次调用, 平均{avgUpdateMovementMs:F3}ms\n" +
+                    $"UpdateVisuals: {_updateVisualsCallCount}次调用, 平均{avgUpdateVisualsMs:F3}ms\n" +
+                    $"EnqueuePath: {_enqueuePathCallCount}次调用, 平均{avgEnqueuePathMs:F3}ms\n" +
+                    $"路径队列长度: {_pathQueue.Count}, 身体段数: {_bodyCells.Count}, 拖动中: {_dragging}");
+                
+                // 重置计数器
+                _updateMovementCallCount = 0;
+                _updateVisualsCallCount = 0;
+                _enqueuePathCallCount = 0;
+                _totalUpdateMovementTime = 0;
+                _totalUpdateVisualsTime = 0;
+                _totalEnqueuePathTime = 0;
             }
         }
 
