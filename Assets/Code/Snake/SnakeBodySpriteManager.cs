@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
+using System.Reflection;
 
 namespace ReGecko.SnakeSystem
 {
@@ -32,6 +33,9 @@ namespace ReGecko.SnakeSystem
         private List<Transform> _segments;
         private List<Image> _segmentImages;
         private List<RectTransform> _segmentRectTransforms;
+        
+        // 小段系统相关
+        private bool _isSubSegmentModeEnabled = false;
 
         void Awake()
         {
@@ -83,6 +87,9 @@ namespace ReGecko.SnakeSystem
             // 等待SnakeController构建完成
             yield return new WaitForEndOfFrame();
             
+            // 检测是否启用了小段系统
+            DetectSubSegmentMode();
+            
             // 从配置文件加载图片
             LoadSpritesFromConfig();
             
@@ -92,6 +99,26 @@ namespace ReGecko.SnakeSystem
             // 初始更新所有段的图片
             UpdateAllSegmentSprites();
         }
+        
+        /// <summary>
+        /// 检测SnakeController是否启用了小段系统
+        /// </summary>
+        void DetectSubSegmentMode()
+        {
+            if (_snakeController != null)
+            {
+                // 通过反射获取EnableSubSegments字段的值
+                var field = _snakeController.GetType().GetField("EnableSubSegments");
+                if (field != null)
+                {
+                    _isSubSegmentModeEnabled = (bool)field.GetValue(_snakeController);
+                }
+                else
+                {
+                    _isSubSegmentModeEnabled = false;
+                }
+            }
+        }
 
         void CollectSegments()
         {
@@ -99,14 +126,33 @@ namespace ReGecko.SnakeSystem
             _segmentImages.Clear();
             _segmentRectTransforms.Clear();
 
-            // 获取蛇的所有段
+            // 获取蛇的所有主段（不包括小段）
             for (int i = 0; i < transform.childCount; i++)
             {
                 var child = transform.GetChild(i);
+                
+                // 检查是否为主段（排除小段）
+                bool isMainSegment = false;
                 if (child.name.StartsWith("Head") || child.name.StartsWith("Body_"))
+                {
+                    // 如果启用了小段系统，需要确保这是主段而不是小段
+                    if (_isSubSegmentModeEnabled)
+                    {
+                        // 小段的名字格式为 "SubSegment_X_Y"，主段名字不包含"SubSegment"
+                        isMainSegment = !child.name.Contains("SubSegment");
+                    }
+                    else
+                    {
+                        // 没有小段系统时，所有符合条件的都是主段
+                        isMainSegment = true;
+                    }
+                }
+                
+                if (isMainSegment)
                 {
                     _segments.Add(child);
                     
+                    // 在小段模式下，主段的Image组件可能被禁用，但我们仍需要引用它
                     var image = child.GetComponent<Image>();
                     if (image != null)
                     {
@@ -160,6 +206,67 @@ namespace ReGecko.SnakeSystem
             {
                 UpdateTailSprite(bodyCells);
             }
+            
+            // 如果启用了小段系统，同步小段的图片
+            if (_isSubSegmentModeEnabled)
+            {
+                SyncSubSegmentSprites();
+            }
+        }
+        
+        /// <summary>
+        /// 同步小段的图片到主段的设置
+        /// </summary>
+        void SyncSubSegmentSprites()
+        {
+            for (int segmentIndex = 0; segmentIndex < _segments.Count; segmentIndex++)
+            {
+                var mainSegment = _segments[segmentIndex];
+                var mainImage = _segmentImages[segmentIndex];
+                var mainRT = _segmentRectTransforms[segmentIndex];
+                
+                if (mainSegment == null || mainImage == null) continue;
+                
+                // 找到该主段对应的所有小段
+                var subSegments = FindSubSegments(mainSegment, segmentIndex);
+                
+                foreach (var subSegment in subSegments)
+                {
+                    var subImage = subSegment.GetComponent<Image>();
+                    var subRT = subSegment.GetComponent<RectTransform>();
+                    
+                    if (subImage != null && subRT != null)
+                    {
+                        // 复制主段的图片和旋转设置到小段
+                        subImage.sprite = mainImage.sprite;
+                        subImage.color = mainImage.color;
+                        // 注意：不复制旋转，因为小段有自己的位置逻辑
+                        // subRT.rotation = mainRT.rotation;
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 查找指定主段对应的所有小段
+        /// </summary>
+        List<Transform> FindSubSegments(Transform mainSegment, int segmentIndex)
+        {
+            var subSegments = new List<Transform>();
+            
+            // 遍历SnakeController下的所有子对象，找到对应的小段
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                var child = transform.GetChild(i);
+                
+                // 小段命名格式：SubSegment_主段索引_小段索引
+                if (child.name.StartsWith($"SubSegment_{segmentIndex}_"))
+                {
+                    subSegments.Add(child);
+                }
+            }
+            
+            return subSegments;
         }
 
         /// <summary>
@@ -352,6 +459,8 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         public void ForceRefreshAllSprites()
         {
+            // 重新检测小段模式（可能在运行时改变）
+            DetectSubSegmentMode();
             CollectSegments();
             UpdateAllSegmentSprites();
         }
@@ -369,6 +478,18 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         public void OnSnakeLengthChanged()
         {
+            // 重新检测小段模式（长度改变时可能启用/禁用小段）
+            DetectSubSegmentMode();
+            CollectSegments();
+            UpdateAllSegmentSprites();
+        }
+        
+        /// <summary>
+        /// 当小段模式状态改变时调用
+        /// </summary>
+        public void OnSubSegmentModeChanged()
+        {
+            DetectSubSegmentMode();
             CollectSegments();
             UpdateAllSegmentSprites();
         }
