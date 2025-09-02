@@ -3,6 +3,7 @@ using ReGecko.GridSystem;
 using ReGecko.Levels;
 using ReGecko.SnakeSystem;
 using ReGecko.Grid.Entities;
+using ReGecko.Game;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -25,6 +26,7 @@ namespace ReGecko.Framework.UI
 
         // 管理的游戏对象
         SnakeManager _snakeManager;
+        GameStateController _gameStateController;
         readonly List<GridEntity> _entities = new List<GridEntity>();
         GridEntityManager _entityManager;
 
@@ -37,6 +39,7 @@ namespace ReGecko.Framework.UI
             SetupContainers();
             SetupEntityManager();
             SetupSnakeManager();
+            SetupGameStateController();
         }
 
         void SetupCanvases()
@@ -140,8 +143,23 @@ namespace ReGecko.Framework.UI
             var snakeManagerGo = new GameObject("SnakeManager");
             snakeManagerGo.transform.SetParent(transform, false);
             _snakeManager = snakeManagerGo.AddComponent<SnakeManager>();
-            
+
             // 注意：蛇的实际创建延迟到网格构建完成后
+        }
+
+        void SetupGameStateController()
+        {
+            // 创建游戏状态控制器组件
+            _gameStateController = gameObject.AddComponent<GameStateController>();
+
+            // 订阅游戏状态变化事件
+            GameStateController.OnGameStateChanged += OnGameStateChanged;
+
+            // 设置游戏时间限制（如果有的话）
+            if (_currentLevel != null && _currentLevel.EnableTimeLimit && _currentLevel.GameTimeLimit > 0)
+            {
+                _gameStateController.SetGameTimeLimit(_currentLevel.GameTimeLimit);
+            }
         }
 
         public void BuildGame()
@@ -221,7 +239,7 @@ namespace ReGecko.Framework.UI
             {
                 rt = entityGo.AddComponent<RectTransform>();
             }
-            
+
             // 设置正确的锚点和轴心（居中）
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -283,11 +301,17 @@ namespace ReGecko.Framework.UI
             {
                 snakeContainer = GridCanvas.transform;
             }
-            
+
             // 现在网格已经构建完成，使用正确的配置初始化蛇管理器
             _snakeManager.Initialize(_currentLevel, GridRenderer.Config, _entityManager, snakeContainer);
-            
+
             Debug.Log($"蛇管理器初始化完成，CellSize: {GridRenderer.Config.CellSize}, 蛇数量: {_snakeManager.GetStats().TotalCount}");
+
+            // 初始化完成后，开始游戏
+            if (_gameStateController != null)
+            {
+                _gameStateController.StartGame();
+            }
         }
 
         void UpdateSnakeGridConfigs()
@@ -327,20 +351,72 @@ namespace ReGecko.Framework.UI
             }
         }
 
-        //public void SetCellSprite(Sprite cellSprite)
-        //{
-        //    if (GridRenderer != null)
-        //    {
-        //        GridRenderer.CellSprite = cellSprite;
-        //    }
-        //}
 
         public GridEntityManager GetEntityManager() => _entityManager;
         public SnakeManager GetSnakeManager() => _snakeManager;
         public List<BaseSnake> GetSnakes() => _snakeManager?.GetAllSnakes() ?? new List<BaseSnake>();
+        public GameStateController GetGameStateController() => _gameStateController;
+
+        /// <summary>
+        /// 游戏状态变化事件处理
+        /// </summary>
+        void OnGameStateChanged(object sender, GameStateChangedEventArgs e)
+        {
+            Debug.Log($"游戏状态变化: {e.OldState} -> {e.NewState}");
+
+            switch (e.NewState)
+            {
+                case GameState.Initializing:
+                    OnEnterInitializingState();
+                    break;
+                case GameState.Playing:
+                    OnEnterPlayingState();
+                    break;
+                case GameState.Paused:
+                    OnEnterPausedState();
+                    break;
+                case GameState.GameOver:
+                    OnEnterGameOverState();
+                    break;
+            }
+        }
+
+        #region 游戏状态处理
+
+        void OnEnterInitializingState()
+        {
+            Debug.Log("UI管理器: 进入初始化状态");
+            // 可以在这里显示加载界面
+        }
+
+        void OnEnterPlayingState()
+        {
+            Debug.Log("UI管理器: 进入游戏中状态");
+            // 可以在这里隐藏暂停界面，显示游戏UI
+        }
+
+        void OnEnterPausedState()
+        {
+            Debug.Log("UI管理器: 进入暂停状态");
+            // 可以在这里显示暂停界面
+        }
+
+        void OnEnterGameOverState()
+        {
+            Debug.Log("UI管理器: 进入游戏结束状态");
+            // 可以在这里显示游戏结束界面
+        }
+
+        #endregion
 
         void OnDestroy()
         {
+            // 取消订阅事件
+            if (_gameStateController != null)
+            {
+                GameStateController.OnGameStateChanged -= OnGameStateChanged;
+            }
+
             ClearGame();
         }
     }

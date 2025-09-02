@@ -43,9 +43,16 @@ namespace ReGecko.Levels
 	[Serializable]
 	public class LevelConfig
 	{
+		[Header("关卡配置")]
 		public GridConfig Grid;
 		public SnakeInitConfig[] Snakes;
 		public GridEntityConfig[] Entities;
+		
+		[Header("游戏规则")]
+		[Tooltip("游戏时间限制（秒），0表示无限制")]
+		public float GameTimeLimit = 0f; // 游戏时间限制
+		[Tooltip("是否启用时间限制")]
+		public bool EnableTimeLimit = false; // 是否启用时间限制
 	}
 }
 

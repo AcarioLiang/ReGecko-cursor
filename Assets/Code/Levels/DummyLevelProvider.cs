@@ -105,7 +105,9 @@ namespace ReGecko.Levels
 			{
 				Grid = grid,
 				Snakes = snakes,
-				Entities = entities
+				Entities = entities,
+				GameTimeLimit = 300f, // 5分钟游戏时间
+				EnableTimeLimit = true
 			};
 		}
 	}

@@ -45,10 +45,12 @@ namespace ReGecko.Bootstrap
                 if (uiGameManager != null)
                 {
                     uiGameManager.Initialize(level);
-                    //uiGameManager.SetCellSprite(LevelProvider.GridCellSprite);
                     uiGameManager.BuildGame();
                 }
             }
+
+            var gameStateUIGo = new GameObject("GameStateUI");
+            gameStateUIGo.AddComponent<GameStateUI>();
         }
     }
 }

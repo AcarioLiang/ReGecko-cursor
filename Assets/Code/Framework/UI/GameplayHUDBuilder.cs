@@ -56,6 +56,9 @@ namespace ReGecko.Framework.UI
             pauseRt.pivot = new Vector2(0f, 0.5f);
             pauseRt.anchoredPosition = new Vector2(0f, 61f);
 
+
+            
+
             // 重置按钮
             var resetBtn = CreateButton(left.transform, "ResetButton", "", 98f, 98f, ResourceDefine.Game_Btn_Restat);
             var resetRt = resetBtn.GetComponent<RectTransform>();
@@ -324,6 +327,17 @@ namespace ReGecko.Framework.UI
 
             // UI游戏管理器
             var gameManager = gamemiddle.AddComponent<UIGameManager>();
+
+
+            var pauseBtnCom = pauseBtn.GetComponent<Button>();
+            pauseBtnCom.onClick.AddListener(() =>
+            {
+                var _gameStateController = gameManager.GetGameStateController();
+                if (_gameStateController != null)
+                {
+                    _gameStateController.PauseGame();
+                }
+            });
 
             return root;
         }
