@@ -29,6 +29,10 @@ namespace ReGecko.SnakeSystem
         private float _lastDragUpdateTime = 0f;
         private const float DRAG_UPDATE_INTERVAL = 0.016f; // 约60FPS更新频率
         
+        // 路径队列优化
+        private const int MAX_PATH_QUEUE_SIZE = 20; // 路径队列最大长度
+        private const int PATH_QUEUE_TRIM_SIZE = 10; // 超出限制时保留的路径数量
+        
         // 性能分析日志
         private int _updateMovementCallCount = 0;
         private int _enqueuePathCallCount = 0;
@@ -41,6 +45,17 @@ namespace ReGecko.SnakeSystem
         private long _totalUpdateMovementTime = 0;
         private long _totalUpdateVisualsTime = 0;
         private long _totalEnqueuePathTime = 0;
+        
+        // 可视化优化状态
+        private bool _polylineNeedsRebuild = true;
+        private Vector2Int _lastVisualHeadCell = Vector2Int.zero;
+        private int _lastVisualBodyCount = 0;
+        
+        // 预测性移动状态
+        private Vector2Int _lastPredictedTarget = Vector2Int.zero;
+        private float _lastPredictionTime = 0f;
+        private const float PREDICTION_UPDATE_INTERVAL = 0.1f; // 预测更新间隔
+        private const float PREDICTION_DISTANCE_THRESHOLD = 5f; // 预测距离阈值
 
         enum DragAxis { None, X, Y }
         DragAxis _dragAxis = DragAxis.None;
@@ -229,13 +244,24 @@ namespace ReGecko.SnakeSystem
                 var targetCell = ClampInside(_grid.WorldToCell(world));
                 if (targetCell != _lastSampledCell)
                 {
+                    // 预测性移动检查
+                    Vector2Int predictedTarget = PredictDragTarget(targetCell);
+                    bool shouldUsePrediction = ShouldUsePredictiveMovement(targetCell, predictedTarget);
+                    
+                    if (shouldUsePrediction)
+                    {
+                        Debug.Log($"[蛇{SnakeId}] 使用预测性移动: 当前({targetCell.x},{targetCell.y}) -> 预测({predictedTarget.x},{predictedTarget.y})");
+                        targetCell = predictedTarget;
+                        _pathQueue.Clear(); // 清空当前队列以使用预测路径
+                    }
+                    
                     // 更新主方向：按更大位移轴确定
                     var delta = targetCell - (_dragOnHead ? _currentHeadCell : _currentTailCell);
                     _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
                     _enqueuePathStopwatch.Restart();
                     _enqueuePathCallCount++;
                     int pathCountBefore = _pathQueue.Count;
-                    EnqueueAxisAlignedPath(_lastSampledCell, targetCell);
+                    EnqueueOptimizedPath(_lastSampledCell, targetCell);
                     int pathCountAfter = _pathQueue.Count;
                     int pathsAdded = pathCountAfter - pathCountBefore;
                     _enqueuePathStopwatch.Stop();
@@ -246,6 +272,9 @@ namespace ReGecko.SnakeSystem
                     {
                         Debug.Log($"[蛇{SnakeId}] 快速拖动检测: 从({_lastSampledCell.x},{_lastSampledCell.y})到({targetCell.x},{targetCell.y}), 添加{pathsAdded}个路径点, 队列长度: {pathCountAfter}");
                     }
+                    
+                    // 路径队列长度限制
+                    TrimPathQueueIfNeeded();
                     _lastSampledCell = targetCell;
                 }
 
@@ -257,9 +286,13 @@ namespace ReGecko.SnakeSystem
                 }
             }
 
-            // 按速度逐格消费路径
+            // 按动态速度逐格消费路径
             _stepsConsumedThisFrame = 0;
-            _moveAccumulator += MoveSpeedCellsPerSecond * Time.deltaTime;
+            
+            // 动态移动速度：根据路径队列长度自动调整
+            float dynamicSpeed = CalculateDynamicMoveSpeed();
+            _moveAccumulator += dynamicSpeed * Time.deltaTime;
+            
             int stepsThisFrame = 0;
             int pathQueueSizeBefore = _pathQueue.Count;
             while (_moveAccumulator >= 1f && _pathQueue.Count > 0 && stepsThisFrame < MaxCellsPerFrame)
@@ -276,6 +309,7 @@ namespace ReGecko.SnakeSystem
                     else
                     {
                         if (!AdvanceHeadTo(nextCell)) break;
+                        _polylineNeedsRebuild = true; // 标记需要重建折线
                     }
                 }
                 else
@@ -289,6 +323,7 @@ namespace ReGecko.SnakeSystem
                     else
                     {
                         if (!AdvanceTailTo(nextCell)) break;
+                        _polylineNeedsRebuild = true; // 标记需要重建折线
                     }
                 }
                 _moveAccumulator -= 1f;
@@ -814,6 +849,9 @@ namespace ReGecko.SnakeSystem
             }
             _lastDragUpdateTime = currentTime;
             
+            // 检查是否需要重建折线
+            bool needsRebuild = ShouldRebuildPolyline();
+            
             float frac = Mathf.Clamp01(_moveAccumulator);
             Vector3 finger = ScreenToWorld(Input.mousePosition);
             if (_dragOnHead)
@@ -832,16 +870,29 @@ namespace ReGecko.SnakeSystem
                     var center = _grid.CellToWorld(_currentHeadCell);
                     if (_dragAxis == DragAxis.X) headVisual.y = center.y; else if (_dragAxis == DragAxis.Y) headVisual.x = center.x;
                 }
-                // 构建折线：headVisual -> (body First.Next ... Last)
-                // 使用复用的列表减少GC分配
-                _tempPolylinePoints.Clear();
-                _tempPolylinePoints.Add(headVisual);
-                var it = _bodyCells.First;
-                if (it != null) it = it.Next; // skip head cell
-                while (it != null)
+                // 只在需要时重建折线
+                if (needsRebuild)
                 {
-                    _tempPolylinePoints.Add(_grid.CellToWorld(it.Value));
-                    it = it.Next;
+                    // 构建折线：headVisual -> (body First.Next ... Last)
+                    // 使用复用的列表减少GC分配
+                    _tempPolylinePoints.Clear();
+                    _tempPolylinePoints.Add(headVisual);
+                    var it = _bodyCells.First;
+                    if (it != null) it = it.Next; // skip head cell
+                    while (it != null)
+                    {
+                        _tempPolylinePoints.Add(_grid.CellToWorld(it.Value));
+                        it = it.Next;
+                    }
+                    _polylineNeedsRebuild = false;
+                }
+                else
+                {
+                    // 只更新头部位置
+                    if (_tempPolylinePoints.Count > 0)
+                    {
+                        _tempPolylinePoints[0] = headVisual;
+                    }
                 }
                 float spacing = _grid.CellSize;
                 for (int i = 0; i < _segments.Count && i < _cachedRectTransforms.Count; i++)
@@ -1314,6 +1365,200 @@ namespace ReGecko.SnakeSystem
         }
 
         /// <summary>
+        /// 预测拖动目标位置
+        /// </summary>
+        Vector2Int PredictDragTarget(Vector2Int currentTarget)
+        {
+            Vector2Int currentPos = _dragOnHead ? _currentHeadCell : _currentTailCell;
+            Vector2Int direction = currentTarget - currentPos;
+            
+            // 简单的线性预测：沿着当前方向延伸
+            if (direction.magnitude > 0)
+            {
+                Vector2Int normalizedDir = new Vector2Int(
+                    direction.x != 0 ? (direction.x > 0 ? 1 : -1) : 0,
+                    direction.y != 0 ? (direction.y > 0 ? 1 : -1) : 0
+                );
+                
+                // 预测未来位置（延伸2-4个格子）
+                int predictionDistance = Mathf.Clamp(Mathf.RoundToInt(direction.magnitude * 0.5f), 2, 4);
+                Vector2Int predicted = currentTarget + normalizedDir * predictionDistance;
+                
+                return ClampInside(predicted);
+            }
+            
+            return currentTarget;
+        }
+        
+        /// <summary>
+        /// 判断是否应该使用预测性移动
+        /// </summary>
+        bool ShouldUsePredictiveMovement(Vector2Int currentTarget, Vector2Int predictedTarget)
+        {
+            float currentTime = Time.time;
+            
+            // 限制预测更新频率
+            if (currentTime - _lastPredictionTime < PREDICTION_UPDATE_INTERVAL)
+            {
+                return false;
+            }
+            
+            // 检查距离阈值
+            float distance = Vector2Int.Distance(currentTarget, predictedTarget);
+            if (distance < PREDICTION_DISTANCE_THRESHOLD)
+            {
+                return false;
+            }
+            
+            // 检查路径队列是否过长（只在队列较长时使用预测）
+            if (_pathQueue.Count < 8)
+            {
+                return false;
+            }
+            
+            _lastPredictionTime = currentTime;
+            _lastPredictedTarget = predictedTarget;
+            return true;
+        }
+        
+        /// <summary>
+        /// 判断是否需要重建折线
+        /// </summary>
+        bool ShouldRebuildPolyline()
+        {
+            // 强制重建标志
+            if (_polylineNeedsRebuild) return true;
+            
+            // 检查关键状态变化
+            bool headCellChanged = _currentHeadCell != _lastVisualHeadCell;
+            bool bodySizeChanged = _bodyCells.Count != _lastVisualBodyCount;
+            
+            if (headCellChanged || bodySizeChanged)
+            {
+                _lastVisualHeadCell = _currentHeadCell;
+                _lastVisualBodyCount = _bodyCells.Count;
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// 优化的路径生成方法，根据距离选择不同策略
+        /// </summary>
+        void EnqueueOptimizedPath(Vector2Int from, Vector2Int to)
+        {
+            if (from == to) return;
+            
+            float distance = Vector2Int.Distance(from, to);
+            int dx = Mathf.Abs(to.x - from.x);
+            int dy = Mathf.Abs(to.y - from.y);
+            int totalSteps = dx + dy;
+            
+            // 根据距离选择不同的路径生成策略
+            if (totalSteps <= 8)
+            {
+                // 短距离：使用原始精确算法
+                EnqueueAxisAlignedPath(from, to);
+            }
+            else if (totalSteps <= 20)
+            {
+                // 中距离：使用适度采样
+                EnqueueSampledPath(from, to, Mathf.Min(12, totalSteps / 2));
+            }
+            else
+            {
+                // 长距离：使用粗采样 + 直接跳跃
+                EnqueueSampledPath(from, to, 8);
+            }
+        }
+        
+        /// <summary>
+        /// 采样路径生成，减少中间点数量
+        /// </summary>
+        void EnqueueSampledPath(Vector2Int from, Vector2Int to, int maxSamples)
+        {
+            _pathBuildBuffer.Clear();
+            
+            for (int i = 1; i <= maxSamples; i++)
+            {
+                float t = (float)i / maxSamples;
+                Vector2Int sample = new Vector2Int(
+                    Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t)),
+                    Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t))
+                );
+                
+                // 避免重复点
+                if (_pathBuildBuffer.Count == 0 || _pathBuildBuffer[_pathBuildBuffer.Count - 1] != sample)
+                {
+                    _pathBuildBuffer.Add(ClampInside(sample));
+                }
+            }
+            
+            // 添加到队列
+            for (int i = 0; i < _pathBuildBuffer.Count; i++)
+            {
+                //if (!IsPathValid(_pathBuildBuffer[i])) continue;
+                _pathQueue.Enqueue(_pathBuildBuffer[i]);
+            }
+        }
+        
+        /// <summary>
+        /// 修剪路径队列以防止过度积压
+        /// </summary>
+        void TrimPathQueueIfNeeded()
+        {
+            if (_pathQueue.Count > MAX_PATH_QUEUE_SIZE)
+            {
+                Debug.Log($"[蛇{SnakeId}] 路径队列过长({_pathQueue.Count}), 修剪到{PATH_QUEUE_TRIM_SIZE}个路径点");
+                
+                // 保留最近的路径点
+                var trimmedQueue = new Queue<Vector2Int>();
+                int keepCount = PATH_QUEUE_TRIM_SIZE;
+                int skipCount = _pathQueue.Count - keepCount;
+                
+                // 跳过早期的路径点
+                for (int i = 0; i < skipCount; i++)
+                {
+                    if (_pathQueue.Count > 0) _pathQueue.Dequeue();
+                }
+                
+                Debug.Log($"[蛇{SnakeId}] 路径队列修剪完成，剩余{_pathQueue.Count}个路径点");
+            }
+        }
+        
+        /// <summary>
+        /// 计算动态移动速度
+        /// </summary>
+        float CalculateDynamicMoveSpeed()
+        {
+            float baseSpeed = MoveSpeedCellsPerSecond;
+            
+            // 只在拖动时启用动态速度
+            if (!_dragging) return baseSpeed;
+            
+            int queueSize = _pathQueue.Count;
+            
+            // 动态速度调整策略
+            if (queueSize <= 3)
+            {
+                return baseSpeed; // 正常速度
+            }
+            else if (queueSize <= 8)
+            {
+                return baseSpeed * 1.5f; // 中度加速
+            }
+            else if (queueSize <= 15)
+            {
+                return baseSpeed * 2.5f; // 高速模式
+            }
+            else
+            {
+                return baseSpeed * 4.0f; // 极速模式，快速清空队列
+            }
+        }
+        
+        /// <summary>
         /// 输出性能统计日志
         /// </summary>
         void LogPerformanceStats()
@@ -1331,11 +1576,15 @@ namespace ReGecko.SnakeSystem
                 double avgEnqueuePathMs = _enqueuePathCallCount > 0 ? 
                     (_totalEnqueuePathTime * 1000.0 / System.Diagnostics.Stopwatch.Frequency) / _enqueuePathCallCount : 0;
                 
+                float currentDynamicSpeed = CalculateDynamicMoveSpeed();
+                float speedMultiplier = currentDynamicSpeed / MoveSpeedCellsPerSecond;
+                
                 Debug.Log($"[蛇{SnakeId}] 性能统计 - 过去{PERFORMANCE_LOG_INTERVAL}秒:\n" +
                     $"UpdateMovement: {_updateMovementCallCount}次调用, 平均{avgUpdateMovementMs:F3}ms\n" +
                     $"UpdateVisuals: {_updateVisualsCallCount}次调用, 平均{avgUpdateVisualsMs:F3}ms\n" +
                     $"EnqueuePath: {_enqueuePathCallCount}次调用, 平均{avgEnqueuePathMs:F3}ms\n" +
-                    $"路径队列长度: {_pathQueue.Count}, 身体段数: {_bodyCells.Count}, 拖动中: {_dragging}");
+                    $"路径队列长度: {_pathQueue.Count}, 动态速度倍数: {speedMultiplier:F1}x\n" +
+                    $"身体段数: {_bodyCells.Count}, 拖动中: {_dragging}, 移动累积器: {_moveAccumulator:F2}");
                 
                 // 重置计数器
                 _updateMovementCallCount = 0;
