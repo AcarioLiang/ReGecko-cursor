@@ -977,6 +977,33 @@ namespace ReGecko.SnakeSystem
                 return currentHeadWorld;
             }
             
+            // 检查手指所在的网格是否被阻挡
+            Vector2Int fingerCell = ClampInside(_grid.WorldToCell(fingerPos));
+            bool fingerCellBlocked = IsPathBlocked(fingerCell);
+            
+            // 如果手指位置被阻挡，限制视觉位置在当前格子边界内
+            if (fingerCellBlocked)
+            {
+                // 计算当前格子的边界
+                float halfCellSize = _grid.CellSize * 0.5f;
+                Vector3 clampedPos = currentHeadWorld;
+                
+                // 根据手指方向调整位置，但不超出当前格子
+                if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+                {
+                    // 主要是水平方向
+                    clampedPos.x += Mathf.Sign(direction.x) * halfCellSize * 0.8f;
+                }
+                else
+                {
+                    // 主要是垂直方向
+                    clampedPos.y += Mathf.Sign(direction.y) * halfCellSize * 0.8f;
+                }
+                
+                return clampedPos;
+            }
+            
+            // 手指位置不被阻挡，按原有逻辑计算
             // 限制最大距离以防止过度拉伸
             float maxDistance = _grid.CellSize * 1.5f;
             if (distance > maxDistance)
@@ -1076,10 +1103,8 @@ namespace ReGecko.SnakeSystem
             if (Manhattan(_currentHeadCell, nextCell) != 1) return false;
             // 检查网格边界
             if (!_grid.IsInside(nextCell)) return false;
-            // 检查实体阻挡
-            if (_entityManager != null && _entityManager.IsBlocked(nextCell)) return false;
-            // 检查是否被其他蛇阻挡
-            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(nextCell, this)) return false;
+            // 使用与IsPathBlocked相同的阻挡检测逻辑，支持颜色匹配
+            if (IsPathBlocked(nextCell)) return false;
             // 占用校验：允许进入原尾
             var tailCell = _bodyCells.Last.Value;
             if (IsOccupiedBySelf(nextCell) && nextCell != tailCell) return false;
@@ -1108,10 +1133,8 @@ namespace ReGecko.SnakeSystem
             if (Manhattan(_currentTailCell, nextCell) != 1) return false;
             // 检查网格边界
             if (!_grid.IsInside(nextCell)) return false;
-            // 检查实体阻挡
-            if (_entityManager != null && _entityManager.IsBlocked(nextCell)) return false;
-            // 检查是否被其他蛇阻挡
-            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(nextCell, this)) return false;
+            // 使用与IsPathBlocked相同的阻挡检测逻辑，支持颜色匹配
+            if (IsPathBlocked(nextCell)) return false;
             // 占用校验：允许进入原头
             var headCell = _bodyCells.First.Value;
             if (IsOccupiedBySelf(nextCell) && nextCell != headCell) return false;
@@ -1149,7 +1172,7 @@ namespace ReGecko.SnakeSystem
                 var next = tail + candidates[i];
                 if (!_grid.IsInside(next.x, next.y)) continue;
                 if (_grid.HasBlock(next.x, next.y)) continue;
-                if (_entityManager != null && _entityManager.IsBlocked(next)) continue;
+                if (IsPathBlocked(next)) continue;
                 if (!IsCellFree(next)) continue;
                 return AdvanceTailTo(next);
             }
@@ -1171,7 +1194,7 @@ namespace ReGecko.SnakeSystem
                 var nextHead = head + candidates[i];
                 if (!_grid.IsInside(nextHead.x, nextHead.y)) continue;
                 if (_grid.HasBlock(nextHead.x, nextHead.y)) continue;
-                if (_entityManager != null && _entityManager.IsBlocked(nextHead)) continue;
+                if (IsPathBlocked(nextHead)) continue;
                 if (!IsCellFree(nextHead)) continue;
                 return AdvanceHeadTo(nextHead);
             }
@@ -1386,6 +1409,33 @@ namespace ReGecko.SnakeSystem
                 return currentTailWorld;
             }
             
+            // 检查手指所在的网格是否被阻挡
+            Vector2Int fingerCell = ClampInside(_grid.WorldToCell(fingerPos));
+            bool fingerCellBlocked = IsPathBlocked(fingerCell);
+            
+            // 如果手指位置被阻挡，限制视觉位置在当前格子边界内
+            if (fingerCellBlocked)
+            {
+                // 计算当前格子的边界
+                float halfCellSize = _grid.CellSize * 0.5f;
+                Vector3 clampedPos = currentTailWorld;
+                
+                // 根据手指方向调整位置，但不超出当前格子
+                if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+                {
+                    // 主要是水平方向
+                    clampedPos.x += Mathf.Sign(direction.x) * halfCellSize * 0.8f;
+                }
+                else
+                {
+                    // 主要是垂直方向
+                    clampedPos.y += Mathf.Sign(direction.y) * halfCellSize * 0.8f;
+                }
+                
+                return clampedPos;
+            }
+            
+            // 手指位置不被阻挡，按原有逻辑计算
             // 限制最大距离以防止过度拉伸
             float maxDistance = _grid.CellSize * 1.5f;
             if (distance > maxDistance)
