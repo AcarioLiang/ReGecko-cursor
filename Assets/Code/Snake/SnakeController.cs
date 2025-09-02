@@ -8,34 +8,15 @@ using ReGecko.GameCore.Flow;
 
 namespace ReGecko.SnakeSystem
 {
-    public class SnakeController : MonoBehaviour
+    public class SnakeController : BaseSnake
     {
-        public Sprite BodySprite;
-        public Color BodyColor = Color.white;
-        public int Length = 4;
-        public Vector2Int HeadCell;
-        public Vector2Int[] InitialBodyCells; // 含头在index 0，可为空
-        public float MoveSpeedCellsPerSecond = 16f;
+        [Header("SnakeController特有属性")]
         public float SnapThreshold = 0.05f;
-        public int MaxCellsPerFrame = 12;
-        [Header("Debug / Profiler")]
-        public bool ShowDebugStats = false;
-        public bool DrawDebugGizmos = false;
-
-        [Header("Body Sprite Management")]
-        public bool EnableBodySpriteManagement = true;
-
-        GridConfig _grid;
-        GridEntityManager _entityManager;
-        readonly List<Transform> _segments = new List<Transform>();
-        readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
-        readonly Queue<Vector2Int> _pathQueue = new Queue<Vector2Int>(); // 待消费路径（目标格序列）
-        readonly List<Vector2Int> _pathBuildBuffer = new List<Vector2Int>(64); // 复用的路径构建缓冲
+        
+        // 拖拽相关
         Vector2Int _dragStartCell;
         bool _dragging;
         bool _dragOnHead;
-        Vector2Int _currentHeadCell;
-        Vector2Int _currentTailCell;
         Vector2Int _lastSampledCell; // 上次采样的手指网格
         float _moveAccumulator; // 基于速度的逐格推进计数器
         float _lastStatsTime;
@@ -44,36 +25,22 @@ namespace ReGecko.SnakeSystem
         enum DragAxis { None, X, Y }
         DragAxis _dragAxis = DragAxis.None;
 
-        bool _consuming; // 洞吞噬中
+        Coroutine _consumeCoroutine;
 
-        SnakeBodySpriteManager _bodySpriteManager;
-
-        // 公共访问方法
-        public Vector2Int GetHeadCell() => _bodyCells.Count > 0 ? _currentHeadCell : Vector2Int.zero;
-        public Vector2Int GetTailCell() => _bodyCells.Count > 0 ? _currentTailCell : Vector2Int.zero;
-        
-        /// <summary>
-        /// 获取身体格子列表（用于图片管理器）
-        /// </summary>
-        public LinkedList<Vector2Int> GetBodyCells() => _bodyCells;
-
-        public void Initialize(GridConfig grid, GridEntityManager entityManager = null)
+        public override void Initialize(GridConfig grid, GridEntityManager entityManager = null)
         {
             _grid = grid;
             _entityManager = entityManager ?? FindObjectOfType<GridEntityManager>();
 
             // 初始化身体图片管理器
-            if (EnableBodySpriteManagement)
-            {
-                InitializeBodySpriteManager();
-            }
+            InitializeBodySpriteManager();
 
             BuildSegments();
             PlaceInitial();
            
         }
 
-        public void UpdateGridConfig(GridConfig newGrid)
+        public override void UpdateGridConfig(GridConfig newGrid)
         {
             _grid = newGrid;
             for (int i = 0; i < _segments.Count; i++)
@@ -116,15 +83,14 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        void InitializeBodySpriteManager()
+        protected override void InitializeBodySpriteManager()
         {
-            // 检查是否已经有身体图片管理器
-            _bodySpriteManager = GetComponent<SnakeBodySpriteManager>();
-            if (_bodySpriteManager == null)
+            base.InitializeBodySpriteManager();
+            
+            if (_bodySpriteManager != null)
             {
-                _bodySpriteManager = gameObject.AddComponent<SnakeBodySpriteManager>();
+                _bodySpriteManager.Config = GameContext.SnakeBodyConfig;
             }
-            _bodySpriteManager.Config = GameContext.SnakeBodyConfig;
         }
 
         void PlaceInitial()
@@ -199,46 +165,18 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        Vector2Int ClampInside(Vector2Int cell)
-        {
-            cell.x = Mathf.Clamp(cell.x, 0, _grid.Width - 1);
-            cell.y = Mathf.Clamp(cell.y, 0, _grid.Height - 1);
-            return cell;
-        }
+
 
         void Update()
         {
-            HandleInput();
-            UpdateMovement();
+            if (IsControllable)
+            {
+                HandleInput();
+            }
+            // UpdateMovement由SnakeManager统一调用，避免重复
         }
 
-        void HandleInput()
-        {
-            if (Input.GetMouseButtonDown(0))
-            {
-                var world = ScreenToWorld(Input.mousePosition);
-                if (TryPickHeadOrTail(world, out _dragOnHead))
-                {
-                    _dragging = true;
-                    _dragStartCell = _grid.WorldToCell(world);
-                    _pathQueue.Clear();
-                    _lastSampledCell = _dragOnHead ? _currentHeadCell : _currentTailCell;
-                    _moveAccumulator = 0f;
-                    _stepsConsumedThisFrame = 0;
-                    _dragAxis = DragAxis.None;
-                }
-            }
-            else if (Input.GetMouseButtonUp(0))
-            {
-                _dragging = false;
-                // 结束拖拽：清空未消费路径并吸附（可选）
-                _pathQueue.Clear();
-                SnapToGrid();
-                _dragAxis = DragAxis.None;
-            }
-        }
-
-        void UpdateMovement()
+        public override void UpdateMovement()
         {
             // 如果蛇已被完全消除，停止所有移动更新
             if (_bodyCells.Count == 0) return;
@@ -334,7 +272,33 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        Coroutine _consumeCoroutine;
+        void HandleInput()
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                var world = ScreenToWorld(Input.mousePosition);
+                if (TryPickHeadOrTail(world, out _dragOnHead))
+                {
+                    _dragging = true;
+                    _dragStartCell = _grid.WorldToCell(world);
+                    _pathQueue.Clear();
+                    _lastSampledCell = _dragOnHead ? _currentHeadCell : _currentTailCell;
+                    _moveAccumulator = 0f;
+                    _stepsConsumedThisFrame = 0;
+                    _dragAxis = DragAxis.None;
+                }
+            }
+            else if (Input.GetMouseButtonUp(0))
+            {
+                _dragging = false;
+                // 结束拖拽：清空未消费路径并吸附（可选）
+                _pathQueue.Clear();
+                SnapToGrid();
+                _dragAxis = DragAxis.None;
+            }
+        }
+
+
         HoleEntity FindAdjacentHole(Vector2Int from)
         {
             // 简化：全局搜寻场景中的洞实体，找到与from相邻的第一个
@@ -1095,10 +1059,7 @@ namespace ReGecko.SnakeSystem
             return best;
         }
 
-        int Manhattan(Vector2Int a, Vector2Int b)
-        {
-            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
-        }
+
 
         bool TryPickHeadOrTail(Vector3 world, out bool onHead)
         {

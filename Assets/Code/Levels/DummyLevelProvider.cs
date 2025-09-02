@@ -22,19 +22,49 @@ namespace ReGecko.Levels
 				Height = 10,
 				CellSize = 1f
 			};
-			var snake = new SnakeInitConfig
+			
+			// 配置多条蛇
+			var snakes = new SnakeInitConfig[]
 			{
-				Length = 5,
-				HeadCell = new Vector2Int(0, 0),
-				Color = Color.white,
-				BodySprite = SnakeBodySprite,
-				BodyCells = new []
+				// 第一条蛇 - 玩家控制
+				new SnakeInitConfig
 				{
-					new Vector2Int(0, 0),
-					new Vector2Int(0, 1),
-					new Vector2Int(0, 2),
-					new Vector2Int(0, 3),
-					new Vector2Int(0, 4)
+					Id = "player_snake",
+					Name = "玩家蛇",
+					Length = 5,
+					HeadCell = new Vector2Int(0, 0),
+					Color = Color.green,
+					BodySprite = SnakeBodySprite,
+					MoveSpeed = 16f,
+					IsControllable = true,
+					BodyCells = new []
+					{
+						new Vector2Int(0, 0),
+						new Vector2Int(0, 1),
+						new Vector2Int(0, 2),
+						new Vector2Int(0, 3),
+						new Vector2Int(0, 4)
+					}
+				},
+				
+				// 第二条蛇 - AI控制（预留）
+				new SnakeInitConfig
+				{
+					Id = "ai_snake",
+					Name = "AI蛇",
+					Length = 3,
+					HeadCell = new Vector2Int(5, 5),
+					Color = Color.red,
+					BodySprite = SnakeBodySprite,
+					MoveSpeed = 12f,
+					IsControllable = true,
+					EnableAI = false,
+					BodyCells = new []
+					{
+						new Vector2Int(5, 5),
+						new Vector2Int(5, 6),
+						new Vector2Int(5, 7)
+					}
 				}
 			};
 
@@ -74,7 +104,7 @@ namespace ReGecko.Levels
 			return new LevelConfig
 			{
 				Grid = grid,
-				Snakes = new[] { snake },
+				Snakes = snakes,
 				Entities = entities
 			};
 		}
