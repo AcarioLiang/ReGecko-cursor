@@ -3,7 +3,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using ReGecko.GridSystem;
 using ReGecko.Grid.Entities;
+using ReGecko.Game;
 using System.Collections;
+using ReGecko.GameCore.Flow;
 
 namespace ReGecko.SnakeSystem
 {
@@ -19,6 +21,10 @@ namespace ReGecko.SnakeSystem
         public int Length = 4;
         public Vector2Int HeadCell;
         public Vector2Int[] InitialBodyCells; // 含头在index 0，可为空
+        
+        [Header("颜色配置")]
+        [Tooltip("蛇的颜色类型，用于匹配洞的颜色")]
+        public SnakeColorType ColorType = SnakeColorType.Red; // 蛇的颜色类型
         
         [Header("移动设置")]
         public float MoveSpeedCellsPerSecond = 16f;
@@ -49,54 +55,41 @@ namespace ReGecko.SnakeSystem
         
         protected SnakeBodySpriteManager _bodySpriteManager;
 
-        // 蛇的状态枚举
-        public enum SnakeState
-        {
-            Idle,       // 空闲状态
-            Moving,     // 移动状态
-            Consuming,  // 被消费状态
-            Dead        // 死亡状态
-        }
-        
-        protected SnakeState _state = SnakeState.Idle;
-        public SnakeState State => _state;
+        // 状态相关
+        protected SnakeState _state = SnakeState.Alive;
 
-        // 公共接口
-        public virtual Vector2Int GetHeadCell() => _bodyCells.Count > 0 ? _currentHeadCell : Vector2Int.zero;
-        public virtual Vector2Int GetTailCell() => _bodyCells.Count > 0 ? _currentTailCell : Vector2Int.zero;
+        // 公共属性
+        public string Name { get; set; } = "Snake";
+        public float MoveSpeed => MoveSpeedCellsPerSecond;
+        public SnakeState State => _state;
+        public Vector2Int CurrentHeadCell => _currentHeadCell;
+        public Vector2Int CurrentTailCell => _currentTailCell;
+        public int CurrentLength => _bodyCells.Count;
+        public bool IsAlive() => _state == SnakeState.Alive;
+        public bool IsDead() => _state == SnakeState.Dead;
+        public bool IsConsuming() => _consuming;
         public virtual LinkedList<Vector2Int> GetBodyCells() => _bodyCells;
-        public virtual int GetCurrentLength() => _bodyCells.Count;
-        public virtual bool IsAlive() => _state != SnakeState.Dead && _bodyCells.Count > 0;
 
         // 抽象方法，子类必须实现
         public abstract void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null);
         public abstract void UpdateMovement();
-        
+
         // 虚方法，子类可以重写
         public virtual void UpdateGridConfig(GridConfig newGrid)
         {
             _grid = newGrid;
-            for (int i = 0; i < _segments.Count; i++)
-            {
-                var rt = _segments[i].GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
-                }
-            }
         }
 
         public virtual void SetState(SnakeState newState)
         {
             if (_state != newState)
             {
-                var oldState = _state;
+                SnakeState oldState = _state;
                 _state = newState;
                 OnStateChanged(oldState, newState);
             }
         }
 
-        // 事件回调
         protected virtual void OnStateChanged(SnakeState oldState, SnakeState newState)
         {
             // 子类可以重写此方法来处理状态变化
@@ -140,31 +133,34 @@ namespace ReGecko.SnakeSystem
         {
             if (!EnableBodySpriteManagement) return;
             
-            // 检查是否已经有身体图片管理器
-            _bodySpriteManager = GetComponent<SnakeBodySpriteManager>();
-            if (_bodySpriteManager == null)
+            var bodySpriteGo = new GameObject("BodySpriteManager");
+            bodySpriteGo.transform.SetParent(transform, false);
+            _bodySpriteManager = bodySpriteGo.AddComponent<SnakeBodySpriteManager>();
+            // SnakeBodySpriteManager会通过GetComponent获取SnakeController
+            
+            if (GameContext.SnakeBodyConfig != null)
             {
-                _bodySpriteManager = gameObject.AddComponent<SnakeBodySpriteManager>();
+                _bodySpriteManager.Config = GameContext.SnakeBodyConfig;
             }
         }
 
-        // 销毁时清理资源
         protected virtual void OnDestroy()
         {
-            if (_segments != null)
+            // 清理资源
+            if (_bodySpriteManager != null)
             {
-                foreach (var segment in _segments)
-                {
-                    if (segment != null)
-                    {
-                        if (Application.isPlaying)
-                            Destroy(segment.gameObject);
-                        else
-                            DestroyImmediate(segment.gameObject);
-                    }
-                }
-                _segments.Clear();
+                Destroy(_bodySpriteManager.gameObject);
             }
         }
+    }
+
+    /// <summary>
+    /// 蛇的状态枚举
+    /// </summary>
+    public enum SnakeState
+    {
+        Alive,    // 活着
+        Dead,     // 死亡
+        Consuming // 正在被洞吞噬
     }
 }

@@ -1,38 +1,43 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using ReGecko.GridSystem;
 using ReGecko.Grid.Entities;
 using ReGecko.Levels;
-using System.Linq;
 
 namespace ReGecko.SnakeSystem
 {
     /// <summary>
-    /// 蛇管理类，负责管理多条蛇的创建和逻辑处理
+    /// 蛇管理器 - 负责管理多条蛇的创建、更新和销毁
     /// </summary>
     public class SnakeManager : MonoBehaviour
     {
-        [Header("管理器设置")]
-        public Transform SnakeContainer; // 蛇的父容器
-        
-        // 管理的蛇列表
-        private readonly List<BaseSnake> _snakes = new List<BaseSnake>();
-        private readonly Dictionary<string, BaseSnake> _snakeDict = new Dictionary<string, BaseSnake>();
-        
-        // 配置和依赖
-        private GridConfig _gridConfig;
-        private GridEntityManager _entityManager;
-        private LevelConfig _currentLevel;
+        [Header("调试信息")]
+        [SerializeField] private List<BaseSnake> _snakes = new List<BaseSnake>();
+        [SerializeField] private int _totalSnakeCount = 0;
+        [SerializeField] private int _aliveSnakeCount = 0;
 
         // 事件
-        public System.Action<BaseSnake> OnSnakeCreated;
-        public System.Action<BaseSnake> OnSnakeDestroyed;
-        public System.Action OnAllSnakesDead;
+        public static event Action<BaseSnake> OnSnakeCreated;
+        public static event Action<BaseSnake> OnSnakeDestroyed;
+        public static event Action OnAllSnakesDead;
+
+        // 私有字段
+        private readonly Dictionary<string, BaseSnake> _snakeDict = new Dictionary<string, BaseSnake>();
+        private LevelConfig _currentLevel;
+        private GridConfig _gridConfig;
+        private GridEntityManager _entityManager;
+
+        // 属性
+        public Transform SnakeContainer { get; private set; }
+        public int TotalSnakeCount => _snakes.Count;
+        public int AliveSnakeCount => _snakes.Count(s => s != null && s.IsAlive());
 
         /// <summary>
         /// 初始化蛇管理器
         /// </summary>
-        public void Initialize(LevelConfig levelConfig, GridConfig gridConfig, GridEntityManager entityManager, Transform container = null)
+        public void Initialize(LevelConfig levelConfig, GridConfig gridConfig, GridEntityManager entityManager = null, Transform container = null)
         {
             _currentLevel = levelConfig;
             _gridConfig = gridConfig;
@@ -103,13 +108,16 @@ namespace ReGecko.SnakeSystem
         private void ConfigureSnake(BaseSnake snake, SnakeInitConfig config, string snakeId)
         {
             snake.SnakeId = snakeId;
+            snake.Name = config.Name;
             snake.BodySprite = config.BodySprite;
             snake.BodyColor = config.Color;
+            snake.ColorType = config.ColorType; // 设置颜色类型
             snake.Length = Mathf.Max(1, config.Length);
             snake.HeadCell = config.HeadCell;
             snake.InitialBodyCells = config.BodyCells;
             snake.MoveSpeedCellsPerSecond = config.MoveSpeed > 0 ? config.MoveSpeed : 16f;
             snake.IsControllable = config.IsControllable;
+            
         }
 
         /// <summary>
@@ -134,33 +142,18 @@ namespace ReGecko.SnakeSystem
         {
             if (_snakeDict.TryGetValue(snakeId, out BaseSnake snake))
             {
-                return RemoveSnake(snake);
+                _snakes.Remove(snake);
+                _snakeDict.Remove(snakeId);
+                
+                if (snake != null)
+                {
+                    OnSnakeDestroyed?.Invoke(snake);
+                    Destroy(snake.gameObject);
+                }
+                
+                return true;
             }
             return false;
-        }
-
-        /// <summary>
-        /// 移除指定蛇
-        /// </summary>
-        public bool RemoveSnake(BaseSnake snake)
-        {
-            if (snake == null) return false;
-
-            _snakes.Remove(snake);
-            _snakeDict.Remove(snake.SnakeId);
-            
-            OnSnakeDestroyed?.Invoke(snake);
-            
-            if (snake.gameObject != null)
-            {
-                if (Application.isPlaying)
-                    Destroy(snake.gameObject);
-                else
-                    DestroyImmediate(snake.gameObject);
-            }
-
-            CheckAllSnakesDead();
-            return true;
         }
 
         /// <summary>
@@ -168,17 +161,21 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         public void ClearAllSnakes()
         {
-            var snakesCopy = new List<BaseSnake>(_snakes);
-            foreach (var snake in snakesCopy)
+            foreach (var snake in _snakes.ToList())
             {
-                RemoveSnake(snake);
+                if (snake != null)
+                {
+                    OnSnakeDestroyed?.Invoke(snake);
+                    Destroy(snake.gameObject);
+                }
             }
+            
             _snakes.Clear();
             _snakeDict.Clear();
         }
 
         /// <summary>
-        /// 获取指定ID的蛇
+        /// 根据ID获取蛇
         /// </summary>
         public BaseSnake GetSnake(string snakeId)
         {
@@ -195,7 +192,7 @@ namespace ReGecko.SnakeSystem
         }
 
         /// <summary>
-        /// 获取活着的蛇
+        /// 获取所有活着的蛇
         /// </summary>
         public List<BaseSnake> GetAliveSnakes()
         {
@@ -203,7 +200,7 @@ namespace ReGecko.SnakeSystem
         }
 
         /// <summary>
-        /// 获取可控制的蛇
+        /// 获取所有可控制的蛇
         /// </summary>
         public List<BaseSnake> GetControllableSnakes()
         {
@@ -211,11 +208,12 @@ namespace ReGecko.SnakeSystem
         }
 
         /// <summary>
-        /// 更新所有蛇的网格配置
+        /// 更新网格配置
         /// </summary>
         public void UpdateGridConfig(GridConfig newGridConfig)
         {
             _gridConfig = newGridConfig;
+            
             foreach (var snake in _snakes)
             {
                 if (snake != null)
@@ -226,15 +224,27 @@ namespace ReGecko.SnakeSystem
         }
 
         /// <summary>
-        /// 检查是否所有蛇都死了
+        /// 检查是否所有蛇都已死亡
         /// </summary>
-        private void CheckAllSnakesDead()
+        public bool AreAllSnakesDead()
         {
-            bool allDead = _snakes.Count == 0 || _snakes.All(s => s == null || !s.IsAlive());
-            if (allDead)
+            return _snakes.All(s => s == null || s.IsDead());
+        }
+
+        /// <summary>
+        /// 获取蛇的数量统计
+        /// </summary>
+        public SnakeStats GetStats()
+        {
+            var aliveSnakes = GetAliveSnakes();
+            var controllableSnakes = GetControllableSnakes();
+            
+            return new SnakeStats
             {
-                OnAllSnakesDead?.Invoke();
-            }
+                TotalCount = _snakes.Count,
+                AliveCount = aliveSnakes.Count,
+                ControllableCount = controllableSnakes.Count
+            };
         }
 
         /// <summary>
@@ -262,23 +272,20 @@ namespace ReGecko.SnakeSystem
                     snake.UpdateMovement();
                 }
             }
-        }
 
-        /// <summary>
-        /// 获取蛇的数量统计
-        /// </summary>
-        public SnakeStats GetStats()
-        {
-            return new SnakeStats
+            // 检查是否所有蛇都死了
+            _aliveSnakeCount = AliveSnakeCount;
+            _totalSnakeCount = TotalSnakeCount;
+            
+            if (_aliveSnakeCount == 0 && _totalSnakeCount > 0)
             {
-                TotalCount = _snakes.Count,
-                AliveCount = GetAliveSnakes().Count,
-                ControllableCount = GetControllableSnakes().Count
-            };
+                OnAllSnakesDead?.Invoke();
+            }
         }
 
+
         /// <summary>
-        /// 获取所有蛇占用的格子（用于碰撞检测）
+        /// 获取所有蛇占用的格子
         /// </summary>
         public HashSet<Vector2Int> GetAllSnakeOccupiedCells()
         {
@@ -381,10 +388,10 @@ namespace ReGecko.SnakeSystem
     }
 
     /// <summary>
-    /// 蛇的统计信息
+    /// 蛇的数量统计
     /// </summary>
-    [System.Serializable]
-    public class SnakeStats
+    [Serializable]
+    public struct SnakeStats
     {
         public int TotalCount;
         public int AliveCount;

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using ReGecko.GridSystem;
+using ReGecko.Game;
 
 namespace ReGecko.Levels
 {
@@ -12,6 +13,10 @@ namespace ReGecko.Levels
 		public string Name = "Snake"; // 蛇的显示名称
 		public Color Color = Color.white;
 		public Sprite BodySprite;
+		
+		[Header("颜色配置")]
+		[Tooltip("蛇的颜色类型，用于匹配洞的颜色")]
+		public SnakeColorType ColorType = SnakeColorType.Red; // 蛇的颜色类型
 		
 		[Header("初始配置")]
 		public int Length = 5;
@@ -38,6 +43,10 @@ namespace ReGecko.Levels
 		public Vector2Int Cell = new Vector2Int(0, 0);
 		public Sprite Sprite;
 		public Color Color = Color.white;
+		
+		[Header("颜色配置")]
+		[Tooltip("洞的颜色类型，只有相同颜色的蛇才能进入")]
+		public SnakeColorType ColorType = SnakeColorType.Red; // 洞的颜色类型
 	}
 
 	[Serializable]
@@ -55,5 +64,4 @@ namespace ReGecko.Levels
 		public bool EnableTimeLimit = false; // 是否启用时间限制
 	}
 }
-
 

@@ -11,8 +11,6 @@ namespace ReGecko.SnakeSystem
     public class SnakeController : BaseSnake
     {
         [Header("SnakeController特有属性")]
-        public float SnapThreshold = 0.05f;
-        
         // 拖拽相关
         Vector2Int _dragStartCell;
         bool _dragging;
@@ -21,6 +19,15 @@ namespace ReGecko.SnakeSystem
         float _moveAccumulator; // 基于速度的逐格推进计数器
         float _lastStatsTime;
         int _stepsConsumedThisFrame;
+        
+        // 性能优化缓存
+        private readonly List<RectTransform> _cachedRectTransforms = new List<RectTransform>();
+        private readonly List<Vector3> _tempPolylinePoints = new List<Vector3>(); // 复用的折线点列表
+        private readonly List<Vector2Int> _tempBodyCellsList = new List<Vector2Int>(); // 复用的身体格子列表
+        
+        // 拖动优化：减少更新频率
+        private float _lastDragUpdateTime = 0f;
+        private const float DRAG_UPDATE_INTERVAL = 0.016f; // 约60FPS更新频率
 
         enum DragAxis { None, X, Y }
         DragAxis _dragAxis = DragAxis.None;
@@ -61,6 +68,8 @@ namespace ReGecko.SnakeSystem
                 if (_segments[i] != null) Destroy(_segments[i].gameObject);
             }
             _segments.Clear();
+            _cachedRectTransforms.Clear(); // 清理缓存
+            
             for (int i = 0; i < Mathf.Max(1, Length); i++)
             {
                 var go = new GameObject(i == 0 ? "Head" : $"Body_{i}");
@@ -81,6 +90,7 @@ namespace ReGecko.SnakeSystem
                 rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
 
                 _segments.Add(go.transform);
+                _cachedRectTransforms.Add(rt); // 缓存RectTransform组件
             }
         }
 
@@ -147,11 +157,15 @@ namespace ReGecko.SnakeSystem
             {
                 _bodyCells.AddLast(cells[i]);
                 
-                var rt = _segments[i].GetComponent<RectTransform>();
-                if (rt != null)
+                // 使用缓存的RectTransform（添加null检查）
+                if (i < _cachedRectTransforms.Count)
                 {
-                    var worldPos = _grid.CellToWorld(cells[i]);
-                    rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                    var rt = _cachedRectTransforms[i];
+                    if (rt != null)
+                    {
+                        var worldPos = _grid.CellToWorld(cells[i]);
+                        rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                    }
                 }
 
 
@@ -182,8 +196,11 @@ namespace ReGecko.SnakeSystem
 
         public override void UpdateMovement()
         {
-            // 如果蛇已被完全消除，停止所有移动更新
-            if (_bodyCells.Count == 0) return;
+            // 清理已销毁的组件
+            CleanupCachedComponents();
+            
+            // 如果蛇已被完全消除或组件被销毁，停止所有移动更新
+            if (_bodyCells.Count == 0 || !IsAlive() || _cachedRectTransforms.Count == 0) return;
 
             if (_dragging && !_consuming)
             {
@@ -256,15 +273,16 @@ namespace ReGecko.SnakeSystem
                 int idx = 0;
                 foreach (var cell in _bodyCells)
                 {
-                    if (idx >= _segments.Count) break;
+                    if (idx >= _cachedRectTransforms.Count) break;
 
-                    // UI渲染：使用RectTransform的anchoredPosition
-                    var rt = _segments[idx].GetComponent<RectTransform>();
+                    // UI渲染：使用缓存的RectTransform（添加null检查）
+                    var rt = _cachedRectTransforms[idx];
                     if (rt != null)
                     {
                         var worldPos = _grid.CellToWorld(cell);
                         rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                     }
+                    
                     idx++;
                 }
             }
@@ -700,7 +718,7 @@ namespace ReGecko.SnakeSystem
 
         bool IsPathBlocked(Vector2Int cell)
         {
-            // 检查是否被墙体阻挡（洞本身不算阻挡）
+            // 检查是否被实体阻挡
             if (_entityManager != null)
             {
                 var entities = _entityManager.GetAt(cell);
@@ -708,8 +726,18 @@ namespace ReGecko.SnakeSystem
                 {
                     foreach (var entity in entities)
                     {
-                        if (entity is WallEntity) return true;
-                        // 洞不算阻挡，可以通过
+                        if (entity is WallEntity) 
+                        {
+                            return true; // 墙体总是阻挡
+                        }
+                        else if (entity is HoleEntity holeEntity)
+                        {
+                            // 洞的阻挡取决于颜色匹配
+                            if (holeEntity.IsBlockingCell(cell, this))
+                            {
+                                return true; // 颜色不匹配，洞算作阻挡物
+                            }
+                        }
                     }
                 }
             }
@@ -725,6 +753,14 @@ namespace ReGecko.SnakeSystem
 
         void UpdateVisualsSmoothDragging()
         {
+            // 限制更新频率以提高性能
+            float currentTime = Time.time;
+            if (currentTime - _lastDragUpdateTime < DRAG_UPDATE_INTERVAL)
+            {
+                return; // 跳过这帧的更新
+            }
+            _lastDragUpdateTime = currentTime;
+            
             float frac = Mathf.Clamp01(_moveAccumulator);
             Vector3 finger = ScreenToWorld(Input.mousePosition);
             if (_dragOnHead)
@@ -744,21 +780,21 @@ namespace ReGecko.SnakeSystem
                     if (_dragAxis == DragAxis.X) headVisual.y = center.y; else if (_dragAxis == DragAxis.Y) headVisual.x = center.x;
                 }
                 // 构建折线：headVisual -> (body First.Next ... Last)
-                List<Vector3> pts = new List<Vector3>(_segments.Count + 2);
-                pts.Add(headVisual);
+                // 使用复用的列表减少GC分配
+                _tempPolylinePoints.Clear();
+                _tempPolylinePoints.Add(headVisual);
                 var it = _bodyCells.First;
                 if (it != null) it = it.Next; // skip head cell
                 while (it != null)
                 {
-                    pts.Add(_grid.CellToWorld(it.Value));
+                    _tempPolylinePoints.Add(_grid.CellToWorld(it.Value));
                     it = it.Next;
                 }
                 float spacing = _grid.CellSize;
-                for (int i = 0; i < _segments.Count; i++)
+                for (int i = 0; i < _segments.Count && i < _cachedRectTransforms.Count; i++)
                 {
-                    Vector3 p = GetPointAlongPolyline(pts, i * spacing);
-
-                    var rt = _segments[i].GetComponent<RectTransform>();
+                    Vector3 p = GetPointAlongPolyline(_tempPolylinePoints, i * spacing);
+                    var rt = _cachedRectTransforms[i];
                     if (rt != null)
                     {
                         rt.anchoredPosition = new Vector2(p.x, p.y);
@@ -784,29 +820,32 @@ namespace ReGecko.SnakeSystem
                 }
                 
                 // 构建折线：从尾部拖动位置开始，向头部方向延伸
-                List<Vector3> pts = new List<Vector3>(_segments.Count);
-                pts.Add(tailVisual); // 尾部拖动位置
+                // 使用复用的列表减少GC分配
+                _tempPolylinePoints.Clear();
+                _tempPolylinePoints.Add(tailVisual); // 尾部拖动位置
                 
                 // 添加身体段位置（从尾部向头部）
                 var it = _bodyCells.Last;
                 if (it != null) it = it.Previous; // 跳过尾部cell（已经用tailVisual代替）
                 while (it != null)
                 {
-                    pts.Add(_grid.CellToWorld(it.Value));
+                    _tempPolylinePoints.Add(_grid.CellToWorld(it.Value));
                     it = it.Previous;
                 }
                 
                 float spacing = _grid.CellSize;
                 // 从尾部开始分布，索引0对应尾部段
-                for (int i = 0; i < _segments.Count; i++)
+                for (int i = 0; i < _segments.Count && i < _cachedRectTransforms.Count; i++)
                 {
                     int segmentIndex = _segments.Count - 1 - i; // 倒序：尾部段在前
-                    Vector3 p = GetPointAlongPolyline(pts, i * spacing);
-
-                    var rt = _segments[segmentIndex].GetComponent<RectTransform>();
-                    if (rt != null)
+                    if (segmentIndex < _cachedRectTransforms.Count)
                     {
-                        rt.anchoredPosition = new Vector2(p.x, p.y);
+                        Vector3 p = GetPointAlongPolyline(_tempPolylinePoints, i * spacing);
+                        var rt = _cachedRectTransforms[segmentIndex];
+                        if (rt != null)
+                        {
+                            rt.anchoredPosition = new Vector2(p.x, p.y);
+                        }
                     }
                 }
             }
@@ -1184,6 +1223,47 @@ namespace ReGecko.SnakeSystem
                 if (prev.x > -10000f) Gizmos.DrawLine(prev, p);
                 prev = p;
             }
+        }
+
+        /// <summary>
+        /// 获取蛇头的格子位置
+        /// </summary>
+        public Vector2Int GetHeadCell()
+        {
+            return _currentHeadCell;
+        }
+
+        /// <summary>
+        /// 获取蛇尾的格子位置
+        /// </summary>
+        public Vector2Int GetTailCell()
+        {
+            return _currentTailCell;
+        }
+
+        /// <summary>
+        /// 清理缓存的RectTransform组件，防止内存泄漏
+        /// </summary>
+        void CleanupCachedComponents()
+        {
+            // 清理已销毁的RectTransform引用
+            for (int i = _cachedRectTransforms.Count - 1; i >= 0; i--)
+            {
+                if (_cachedRectTransforms[i] == null)
+                {
+                    _cachedRectTransforms.RemoveAt(i);
+                }
+            }
+        }
+
+        protected override void OnDestroy()
+        {
+            // 清理缓存
+            _cachedRectTransforms.Clear();
+            _tempPolylinePoints.Clear();
+            _tempBodyCellsList.Clear();
+            
+            base.OnDestroy();
         }
     }
 }

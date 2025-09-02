@@ -67,14 +67,6 @@ namespace ReGecko.Framework.UI
             resetRt.pivot = new Vector2(0f, 0.5f);
             resetRt.anchoredPosition = new Vector2(103f, 61f); // 98 + 5 = 103
 
-            var resetBtnCom = resetBtn.GetComponent<Button>();
-            // 添加按钮点击事件
-            resetBtnCom.onClick.AddListener(() =>
-            {
-                ReGecko.Framework.Scene.SceneManager.Instance.LoadSceneAsync(GameScenes.Loading,()=> {
-                    UIManager.Instance.Destroy("GameplayHUD");
-                });
-            });
 
             // 中间组（文体）
             var middle = new GameObject("MiddleGroup");
@@ -337,6 +329,21 @@ namespace ReGecko.Framework.UI
                 {
                     _gameStateController.PauseGame();
                 }
+            });
+
+
+            var resetBtnCom = resetBtn.GetComponent<Button>();
+            // 添加按钮点击事件
+            resetBtnCom.onClick.AddListener(() =>
+            {
+                var _gameStateController = gameManager.GetGameStateController();
+                if (_gameStateController != null)
+                {
+                    _gameStateController.StartGame();
+                }
+                ReGecko.Framework.Scene.SceneManager.Instance.LoadSceneAsync(GameScenes.Loading, () => {
+                    UIManager.Instance.Destroy("GameplayHUD");
+                });
             });
 
             return root;

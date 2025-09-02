@@ -73,6 +73,7 @@
     <Compile Include="Assets\Code\Grid\Entities\WallEntity.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntityManager.cs" />
     <Compile Include="Assets\Code\Game\GameStateController.cs" />
+    <Compile Include="Assets\Code\Game\SnakeColorType.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIManager.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIGameManager.cs" />
     <Compile Include="Assets\Code\Grid\Entities\ItemEntity.cs" />

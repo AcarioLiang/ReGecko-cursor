@@ -263,6 +263,13 @@ namespace ReGecko.Framework.UI
             {
                 entity.Cell = entityConfig.Cell;
                 entity.Sprite = entityConfig.Sprite;
+                
+                // 如果是洞实体，设置颜色类型
+                if (entity is HoleEntity holeEntity)
+                {
+                    holeEntity.ColorType = entityConfig.ColorType;
+                    Debug.Log($"创建洞实体 {entityConfig.Cell}，颜色类型：{entityConfig.ColorType.GetDisplayName()}");
+                }
 
                 // 使用Image组件替代SpriteRenderer
                 var image = entityGo.AddComponent<UnityEngine.UI.Image>();
