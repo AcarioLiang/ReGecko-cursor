@@ -1005,7 +1005,7 @@ namespace ReGecko.SnakeSystem
             
             // 手指位置不被阻挡，按原有逻辑计算
             // 限制最大距离以防止过度拉伸
-            float maxDistance = _grid.CellSize * 1.5f;
+            float maxDistance = _grid.CellSize * 0.4f;
             if (distance > maxDistance)
             {
                 direction = direction.normalized * maxDistance;
@@ -1081,16 +1081,44 @@ namespace ReGecko.SnakeSystem
             int stepx = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
             int stepy = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
             Vector2Int cur = from;
+            
+            // 水平移动
             if (horizFirst)
             {
-                for (int i = 0; i < Mathf.Abs(dx); i++) { cur = new Vector2Int(cur.x + stepx, cur.y); _pathBuildBuffer.Add(ClampInside(cur)); }
-                for (int i = 0; i < Mathf.Abs(dy); i++) { cur = new Vector2Int(cur.x, cur.y + stepy); _pathBuildBuffer.Add(ClampInside(cur)); }
+                for (int i = 0; i < Mathf.Abs(dx); i++)
+                {
+                    cur = new Vector2Int(cur.x + stepx, cur.y);
+                    Vector2Int clampedCell = ClampInside(cur);
+                    if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
+                    _pathBuildBuffer.Add(clampedCell);
+                }
+                for (int i = 0; i < Mathf.Abs(dy); i++)
+                {
+                    cur = new Vector2Int(cur.x, cur.y + stepy);
+                    Vector2Int clampedCell = ClampInside(cur);
+                    if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
+                    _pathBuildBuffer.Add(clampedCell);
+                }
             }
             else
             {
-                for (int i = 0; i < Mathf.Abs(dy); i++) { cur = new Vector2Int(cur.x, cur.y + stepy); _pathBuildBuffer.Add(ClampInside(cur)); }
-                for (int i = 0; i < Mathf.Abs(dx); i++) { cur = new Vector2Int(cur.x + stepx, cur.y); _pathBuildBuffer.Add(ClampInside(cur)); }
+                for (int i = 0; i < Mathf.Abs(dy); i++)
+                {
+                    cur = new Vector2Int(cur.x, cur.y + stepy);
+                    Vector2Int clampedCell = ClampInside(cur);
+                    if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
+                    _pathBuildBuffer.Add(clampedCell);
+                }
+                for (int i = 0; i < Mathf.Abs(dx); i++)
+                {
+                    cur = new Vector2Int(cur.x + stepx, cur.y);
+                    Vector2Int clampedCell = ClampInside(cur);
+                    if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
+                    _pathBuildBuffer.Add(clampedCell);
+                }
             }
+            
+            // 将有效路径点加入队列
             for (int i = 0; i < _pathBuildBuffer.Count; i++)
             {
                 _pathQueue.Enqueue(_pathBuildBuffer[i]);
@@ -1437,7 +1465,7 @@ namespace ReGecko.SnakeSystem
             
             // 手指位置不被阻挡，按原有逻辑计算
             // 限制最大距离以防止过度拉伸
-            float maxDistance = _grid.CellSize * 1.5f;
+            float maxDistance = _grid.CellSize * 0.4f;
             if (distance > maxDistance)
             {
                 direction = direction.normalized * maxDistance;
@@ -1783,17 +1811,24 @@ namespace ReGecko.SnakeSystem
                     Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t))
                 );
                 
-                // 避免重复点
-                if (_pathBuildBuffer.Count == 0 || _pathBuildBuffer[_pathBuildBuffer.Count - 1] != sample)
+                Vector2Int clampedSample = ClampInside(sample);
+                
+                // 检查是否被阻挡
+                if (IsPathBlocked(clampedSample))
                 {
-                    _pathBuildBuffer.Add(ClampInside(sample));
+                    break; // 遇到阻挡物停止采样
+                }
+                
+                // 避免重复点
+                if (_pathBuildBuffer.Count == 0 || _pathBuildBuffer[_pathBuildBuffer.Count - 1] != clampedSample)
+                {
+                    _pathBuildBuffer.Add(clampedSample);
                 }
             }
             
-            // 添加到队列
+            // 将有效路径点加入队列
             for (int i = 0; i < _pathBuildBuffer.Count; i++)
             {
-                //if (!IsPathValid(_pathBuildBuffer[i])) continue;
                 _pathQueue.Enqueue(_pathBuildBuffer[i]);
             }
         }

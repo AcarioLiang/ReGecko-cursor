@@ -34,8 +34,8 @@ namespace ReGecko.Levels
 					Name = "玩家蛇",
 					Length = 5,
 					HeadCell = new Vector2Int(0, 0),
-					Color = Color.red,
-					ColorType = SnakeColorType.Red, // 红色类型
+					Color = Color.green,
+					ColorType = SnakeColorType.Green, // 红色类型
 					BodySprite = SnakeBodySprite,
 					MoveSpeed = 16f,
 					IsControllable = true,
