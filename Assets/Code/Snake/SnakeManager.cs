@@ -86,7 +86,7 @@ namespace ReGecko.SnakeSystem
             ConfigureSnake(snake, snakeConfig, snakeId);
             
             // 初始化蛇
-            snake.Initialize(_gridConfig, _entityManager);
+            snake.Initialize(_gridConfig, _entityManager, this);
             
             // 添加到管理列表
             _snakes.Add(snake);
@@ -251,6 +251,9 @@ namespace ReGecko.SnakeSystem
                 }
             }
 
+            // 每帧开始时刷新碰撞缓存
+            InvalidateOccupiedCellsCache();
+
             // 更新所有活着的蛇
             foreach (var snake in _snakes)
             {
@@ -272,6 +275,103 @@ namespace ReGecko.SnakeSystem
                 AliveCount = GetAliveSnakes().Count,
                 ControllableCount = GetControllableSnakes().Count
             };
+        }
+
+        /// <summary>
+        /// 获取所有蛇占用的格子（用于碰撞检测）
+        /// </summary>
+        public HashSet<Vector2Int> GetAllSnakeOccupiedCells()
+        {
+            var occupiedCells = new HashSet<Vector2Int>();
+            foreach (var snake in _snakes)
+            {
+                if (snake != null && snake.IsAlive())
+                {
+                    var bodyCells = snake.GetBodyCells();
+                    foreach (var cell in bodyCells)
+                    {
+                        occupiedCells.Add(cell);
+                    }
+                }
+            }
+            return occupiedCells;
+        }
+
+        /// <summary>
+        /// 检查指定格子是否被任何蛇占用
+        /// </summary>
+        public bool IsCellOccupiedByAnySnake(Vector2Int cell)
+        {
+            foreach (var snake in _snakes)
+            {
+                if (snake != null && snake.IsAlive())
+                {
+                    var bodyCells = snake.GetBodyCells();
+                    foreach (var bodyCell in bodyCells)
+                    {
+                        if (bodyCell == cell) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 缓存所有蛇的占用格子，避免重复计算
+        private HashSet<Vector2Int> _cachedOccupiedCells = new HashSet<Vector2Int>();
+        private Dictionary<BaseSnake, HashSet<Vector2Int>> _snakeOccupiedCells = new Dictionary<BaseSnake, HashSet<Vector2Int>>();
+        private bool _occupiedCellsCacheValid = false;
+
+        /// <summary>
+        /// 检查指定格子是否被指定蛇以外的其他蛇占用（优化版本）
+        /// </summary>
+        public bool IsCellOccupiedByOtherSnakes(Vector2Int cell, BaseSnake excludeSnake)
+        {
+            UpdateOccupiedCellsCache();
+            
+            foreach (var kvp in _snakeOccupiedCells)
+            {
+                if (kvp.Key != excludeSnake && kvp.Key != null && kvp.Key.IsAlive())
+                {
+                    if (kvp.Value.Contains(cell))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 更新占用格子缓存
+        /// </summary>
+        private void UpdateOccupiedCellsCache()
+        {
+            if (_occupiedCellsCacheValid) return;
+
+            _cachedOccupiedCells.Clear();
+            _snakeOccupiedCells.Clear();
+
+            foreach (var snake in _snakes)
+            {
+                if (snake != null && snake.IsAlive())
+                {
+                    var snakeCells = new HashSet<Vector2Int>();
+                    var bodyCells = snake.GetBodyCells();
+                    foreach (var cell in bodyCells)
+                    {
+                        snakeCells.Add(cell);
+                        _cachedOccupiedCells.Add(cell);
+                    }
+                    _snakeOccupiedCells[snake] = snakeCells;
+                }
+            }
+            _occupiedCellsCacheValid = true;
+        }
+
+        /// <summary>
+        /// 标记占用格子缓存为无效（当蛇移动后调用）
+        /// </summary>
+        public void InvalidateOccupiedCellsCache()
+        {
+            _occupiedCellsCacheValid = false;
         }
 
         private void OnDestroy()

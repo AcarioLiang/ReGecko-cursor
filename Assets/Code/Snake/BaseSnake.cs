@@ -36,8 +36,10 @@ namespace ReGecko.SnakeSystem
         // 保护成员，子类可以访问
         protected GridConfig _grid;
         protected GridEntityManager _entityManager;
+        protected SnakeManager _snakeManager; // 蛇管理器引用，用于碰撞检测
         protected readonly List<Transform> _segments = new List<Transform>();
         protected readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
+        protected readonly HashSet<Vector2Int> _bodyCellsSet = new HashSet<Vector2Int>(); // 用于快速查找的身体格子集合
         protected readonly Queue<Vector2Int> _pathQueue = new Queue<Vector2Int>(); // 待消费路径（目标格序列）
         protected readonly List<Vector2Int> _pathBuildBuffer = new List<Vector2Int>(64); // 复用的路径构建缓冲
         
@@ -67,7 +69,7 @@ namespace ReGecko.SnakeSystem
         public virtual bool IsAlive() => _state != SnakeState.Dead && _bodyCells.Count > 0;
 
         // 抽象方法，子类必须实现
-        public abstract void Initialize(GridConfig grid, GridEntityManager entityManager = null);
+        public abstract void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null);
         public abstract void UpdateMovement();
         
         // 虚方法，子类可以重写
@@ -112,6 +114,26 @@ namespace ReGecko.SnakeSystem
         protected int Manhattan(Vector2Int a, Vector2Int b)
         {
             return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+        }
+
+        /// <summary>
+        /// 同步身体格子的HashSet缓存
+        /// </summary>
+        protected virtual void SyncBodyCellsSet()
+        {
+            _bodyCellsSet.Clear();
+            foreach (var cell in _bodyCells)
+            {
+                _bodyCellsSet.Add(cell);
+            }
+        }
+
+        /// <summary>
+        /// 检查格子是否被自身占用（优化版本）
+        /// </summary>
+        protected virtual bool IsOccupiedBySelf(Vector2Int cell)
+        {
+            return _bodyCellsSet.Contains(cell);
         }
 
         protected virtual void InitializeBodySpriteManager()

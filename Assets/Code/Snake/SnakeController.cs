@@ -27,10 +27,11 @@ namespace ReGecko.SnakeSystem
 
         Coroutine _consumeCoroutine;
 
-        public override void Initialize(GridConfig grid, GridEntityManager entityManager = null)
+        public override void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null)
         {
             _grid = grid;
             _entityManager = entityManager ?? FindObjectOfType<GridEntityManager>();
+            _snakeManager = snakeManager ?? FindObjectOfType<SnakeManager>();
 
             // 初始化身体图片管理器
             InitializeBodySpriteManager();
@@ -157,6 +158,9 @@ namespace ReGecko.SnakeSystem
             }
             _currentHeadCell = _bodyCells.First.Value;
             _currentTailCell = _bodyCells.Last.Value;
+            
+            // 同步HashSet缓存
+            SyncBodyCellsSet();
             
             // 初始放置完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
@@ -709,6 +713,13 @@ namespace ReGecko.SnakeSystem
                     }
                 }
             }
+            
+            // 检查是否被其他蛇阻挡
+            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(cell, this))
+            {
+                return true;
+            }
+            
             return false;
         }
 
@@ -861,13 +872,13 @@ namespace ReGecko.SnakeSystem
             Vector2Int step = new Vector2Int(Mathf.Clamp(to.x - from.x, -1, 1), Mathf.Clamp(to.y - from.y, -1, 1));
             if (step.x != 0 && step.y != 0) return false;
             Vector2Int cur = from;
-            // 构建当前身体占据的格集合（基于离散cells）
-            var occupied = new HashSet<Vector2Int>(_bodyCells);
+            
+            // 使用缓存的HashSet，避免每次重新创建
             var tailCell = _bodyCells.Last.Value; // 允许移动到尾的格
             while (cur != to)
             {
                 cur += step;
-                if (occupied.Contains(cur) && cur != tailCell) return false;
+                if (IsOccupiedBySelf(cur) && cur != tailCell) return false;
             }
             return true;
         }
@@ -915,13 +926,20 @@ namespace ReGecko.SnakeSystem
             if (!_grid.IsInside(nextCell)) return false;
             // 检查实体阻挡
             if (_entityManager != null && _entityManager.IsBlocked(nextCell)) return false;
+            // 检查是否被其他蛇阻挡
+            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(nextCell, this)) return false;
             // 占用校验：允许进入原尾
             var tailCell = _bodyCells.Last.Value;
-            if (_bodyCells.Contains(nextCell) && nextCell != tailCell) return false;
+            if (IsOccupiedBySelf(nextCell) && nextCell != tailCell) return false;
+            
+            // 更新身体
             _bodyCells.AddFirst(nextCell);
             _bodyCells.RemoveLast();
             _currentHeadCell = nextCell;
             _currentTailCell = _bodyCells.Last.Value;
+            
+            // 同步HashSet缓存
+            SyncBodyCellsSet();
             
             // 移动完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
@@ -940,13 +958,20 @@ namespace ReGecko.SnakeSystem
             if (!_grid.IsInside(nextCell)) return false;
             // 检查实体阻挡
             if (_entityManager != null && _entityManager.IsBlocked(nextCell)) return false;
+            // 检查是否被其他蛇阻挡
+            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(nextCell, this)) return false;
             // 占用校验：允许进入原头
             var headCell = _bodyCells.First.Value;
-            if (_bodyCells.Contains(nextCell) && nextCell != headCell) return false;
+            if (IsOccupiedBySelf(nextCell) && nextCell != headCell) return false;
+            
+            // 更新身体
             _bodyCells.AddLast(nextCell);
             _bodyCells.RemoveFirst();
             _currentTailCell = nextCell;
             _currentHeadCell = _bodyCells.First.Value;
+            
+            // 同步HashSet缓存
+            SyncBodyCellsSet();
             
             // 移动完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
@@ -1003,8 +1028,12 @@ namespace ReGecko.SnakeSystem
 
         bool IsCellFree(Vector2Int cell)
         {
-            // 不允许进入身体占用格；允许进入当前头（在反向时不需要，但保持一致性）
-            foreach (var c in _bodyCells) { if (c == cell) return false; }
+            // 不允许进入自身身体占用格（使用优化的HashSet查找）
+            if (IsOccupiedBySelf(cell)) return false;
+            
+            // 不允许进入其他蛇占用的格子
+            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(cell, this)) return false;
+            
             return true;
         }
 
