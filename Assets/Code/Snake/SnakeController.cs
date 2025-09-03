@@ -20,33 +20,40 @@ namespace ReGecko.SnakeSystem
         float _lastStatsTime;
         int _stepsConsumedThisFrame;
 
+        //优化缓存
+        Vector3 _lastMousePos;
+        Canvas _parentCanvas;
+        RectTransform _headRt;
+        RectTransform _tailRt;
+
+
         // 性能优化缓存
         private readonly List<RectTransform> _cachedRectTransforms = new List<RectTransform>();
         private readonly List<Vector3> _tempPolylinePoints = new List<Vector3>(); // 复用的折线点列表
         private readonly List<Vector2Int> _tempBodyCellsList = new List<Vector2Int>(); // 复用的身体格子列表
-        
+
         // 拖动优化：减少更新频率
         private float _lastDragUpdateTime = 0f;
         private const float DRAG_UPDATE_INTERVAL = 0.016f; // 约60FPS更新频率
-        
+
         // 路径队列优化
         private const int MAX_PATH_QUEUE_SIZE = 20; // 路径队列最大长度
         private const int PATH_QUEUE_TRIM_SIZE = 10; // 超出限制时保留的路径数量
-        
+
         // 松开后快速移动相关
         private bool _isReleaseMovement = false; // 是否处于松开后的快速移动状态
         private float _releaseSpeedMultiplier = 1f; // 松开后的速度倍数
         private const float MIN_RELEASE_SPEED_MULTIPLIER = 1f; // 最小松开速度倍数
         private const float MAX_RELEASE_SPEED_MULTIPLIER = 5f; // 最大松开速度倍数
         private const int RELEASE_SPEED_PATH_THRESHOLD = 3; // 开始加速的路径长度阈值
-        
 
-        
+
+
         // 可视化优化状态
         private bool _polylineNeedsRebuild = true;
         private Vector2Int _lastVisualHeadCell = Vector2Int.zero;
         private int _lastVisualBodyCount = 0;
-        
+
         // 预测性移动状态
         private Vector2Int _lastPredictedTarget = Vector2Int.zero;
         private float _lastPredictionTime = 0f;
@@ -63,13 +70,21 @@ namespace ReGecko.SnakeSystem
             _grid = grid;
             _entityManager = entityManager ?? FindObjectOfType<GridEntityManager>();
             _snakeManager = snakeManager ?? FindObjectOfType<SnakeManager>();
+            _parentCanvas = GetComponentInParent<Canvas>();
 
             // 初始化身体图片管理器
-                InitializeBodySpriteManager();
+            InitializeBodySpriteManager();
 
             BuildSegments();
             PlaceInitial();
-           
+
+            //更新缓存
+            if(_segments.Count > 0)
+            {
+                _headRt = _segments[0].GetComponent<RectTransform>();
+                _tailRt = _segments[_segments.Count - 1].GetComponent<RectTransform>();
+            }
+
         }
 
         public override void UpdateGridConfig(GridConfig newGrid)
@@ -93,7 +108,7 @@ namespace ReGecko.SnakeSystem
             }
             _segments.Clear();
             _cachedRectTransforms.Clear(); // 清理缓存
-            
+
             for (int i = 0; i < Mathf.Max(1, Length); i++)
             {
                 var go = new GameObject(i == 0 ? "Head" : $"Body_{i}");
@@ -121,10 +136,10 @@ namespace ReGecko.SnakeSystem
         protected override void InitializeBodySpriteManager()
         {
             base.InitializeBodySpriteManager();
-            
+
             if (_bodySpriteManager != null)
             {
-            _bodySpriteManager.Config = GameContext.SnakeBodyConfig;
+                _bodySpriteManager.Config = GameContext.SnakeBodyConfig;
             }
         }
 
@@ -180,15 +195,15 @@ namespace ReGecko.SnakeSystem
             for (int i = 0; i < Mathf.Min(cells.Count, _segments.Count); i++)
             {
                 _bodyCells.AddLast(cells[i]);
-                
+
                 // 使用缓存的RectTransform（添加null检查）
                 if (i < _cachedRectTransforms.Count)
                 {
                     var rt = _cachedRectTransforms[i];
-                if (rt != null)
-                {
-                    var worldPos = _grid.CellToWorld(cells[i]);
-                    rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                    if (rt != null)
+                    {
+                        var worldPos = _grid.CellToWorld(cells[i]);
+                        rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                     }
                 }
 
@@ -196,10 +211,10 @@ namespace ReGecko.SnakeSystem
             }
             _currentHeadCell = _bodyCells.First.Value;
             _currentTailCell = _bodyCells.Last.Value;
-            
+
             // 同步HashSet缓存
             SyncBodyCellsSet();
-            
+
             // 初始放置完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
@@ -212,8 +227,8 @@ namespace ReGecko.SnakeSystem
         void Update()
         {
             if (IsControllable)
-        {
-            HandleInput();
+            {
+                HandleInput();
             }
             // UpdateMovement由SnakeManager统一调用，避免重复
         }
@@ -222,9 +237,9 @@ namespace ReGecko.SnakeSystem
         {
             // 清理已销毁的组件
             CleanupCachedComponents();
-            
+
             // 如果蛇已被完全消除或组件被销毁，停止所有移动更新
-            if (_bodyCells.Count == 0 || !IsAlive() || _cachedRectTransforms.Count == 0) 
+            if (_bodyCells.Count == 0 || !IsAlive() || _cachedRectTransforms.Count == 0)
             {
                 return;
             }
@@ -236,22 +251,11 @@ namespace ReGecko.SnakeSystem
                 var targetCell = ClampInside(_grid.WorldToCell(world));
                 if (targetCell != _lastSampledCell)
                 {
-                    // 预测性移动检查
-                    Vector2Int predictedTarget = PredictDragTarget(targetCell);
-                    bool shouldUsePrediction = ShouldUsePredictiveMovement(targetCell, predictedTarget);
-                    
-                    if (shouldUsePrediction)
-                    {
-                        Debug.Log($"[蛇{SnakeId}] 使用预测性移动: 当前({targetCell.x},{targetCell.y}) -> 预测({predictedTarget.x},{predictedTarget.y})");
-                        targetCell = predictedTarget;
-                        _pathQueue.Clear(); // 清空当前队列以使用预测路径
-                    }
-                    
                     // 更新主方向：按更大位移轴确定
                     var delta = targetCell - (_dragOnHead ? _currentHeadCell : _currentTailCell);
                     _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
                     EnqueueOptimizedPath(_lastSampledCell, targetCell);
-                    
+
                     // 路径队列长度限制
                     TrimPathQueueIfNeeded();
                     _lastSampledCell = targetCell;
@@ -267,11 +271,11 @@ namespace ReGecko.SnakeSystem
 
             // 按动态速度逐格消费路径
             _stepsConsumedThisFrame = 0;
-            
+
             // 动态移动速度：根据路径队列长度自动调整
             float dynamicSpeed = CalculateDynamicMoveSpeed();
             _moveAccumulator += dynamicSpeed * Time.deltaTime;
-            
+
             int stepsThisFrame = 0;
             while (_moveAccumulator >= 1f && _pathQueue.Count > 0 && stepsThisFrame < MaxCellsPerFrame)
             {
@@ -308,7 +312,7 @@ namespace ReGecko.SnakeSystem
                 stepsThisFrame++;
                 _stepsConsumedThisFrame++;
             }
-            
+
             // 检查是否需要重置松开移动状态
             if (_isReleaseMovement && _pathQueue.Count == 0)
             {
@@ -337,11 +341,11 @@ namespace ReGecko.SnakeSystem
                         var worldPos = _grid.CellToWorld(cell);
                         rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                     }
-                    
+
                     idx++;
                 }
             }
-            
+
             // 移动完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null && stepsThisFrame > 0)
             {
@@ -353,17 +357,23 @@ namespace ReGecko.SnakeSystem
         {
             if (Input.GetMouseButtonDown(0))
             {
-                var world = ScreenToWorld(Input.mousePosition);
-                if (TryPickHeadOrTail(world, out _dragOnHead))
+                if(_lastMousePos != Input.mousePosition)
                 {
-                    _dragging = true;
-                    _dragStartCell = _grid.WorldToCell(world);
-                    _pathQueue.Clear();
-                    _lastSampledCell = _dragOnHead ? _currentHeadCell : _currentTailCell;
-                    _moveAccumulator = 0f;
-                    _stepsConsumedThisFrame = 0;
-                    _dragAxis = DragAxis.None;
+                    _lastMousePos = Input.mousePosition;
+
+                    var world = ScreenToWorld(Input.mousePosition);
+                    if (TryPickHeadOrTail(world, out _dragOnHead))
+                    {
+                        _dragging = true;
+                        _dragStartCell = _grid.WorldToCell(world);
+                        _pathQueue.Clear();
+                        _lastSampledCell = _dragOnHead ? _currentHeadCell : _currentTailCell;
+                        _moveAccumulator = 0f;
+                        _stepsConsumedThisFrame = 0;
+                        _dragAxis = DragAxis.None;
+                    }
                 }
+                
             }
             else if (Input.GetMouseButtonUp(0))
             {
@@ -374,6 +384,7 @@ namespace ReGecko.SnakeSystem
                 }
                 _dragging = false;
                 _dragAxis = DragAxis.None;
+                _lastMousePos = Vector3.zero;
             }
         }
 
@@ -388,7 +399,7 @@ namespace ReGecko.SnakeSystem
             }
             return null;
         }
-        
+
         /// <summary>
         /// 查找目标位置本身或邻近位置的洞
         /// </summary>
@@ -632,7 +643,7 @@ namespace ReGecko.SnakeSystem
 
                         // 平滑移动所有身体段到新位置
                         yield return StartCoroutine(SmoothMoveAllSegments(duration));
-                        
+
                         // 长度改变后，更新身体图片
                         if (EnableBodySpriteManagement && _bodySpriteManager != null)
                         {
@@ -805,7 +816,7 @@ namespace ReGecko.SnakeSystem
                 {
                     foreach (var entity in entities)
                     {
-                        if (entity is WallEntity) 
+                        if (entity is WallEntity)
                         {
                             return true; // 墙体总是阻挡
                         }
@@ -820,28 +831,28 @@ namespace ReGecko.SnakeSystem
                     }
                 }
             }
-            
+
             // 检查是否被其他蛇阻挡
             if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(cell, this))
             {
                 return true;
             }
-            
+
             return false;
         }
 
         void UpdateVisualsSmoothDragging()
         {
-            
+
             // 智能更新频率控制
             if (!ShouldUpdateDragVisuals())
             {
                 return;
             }
-            
+
             // 检查是否需要重建折线
             bool needsRebuild = ShouldRebuildPolyline();
-            
+
             float frac = Mathf.Clamp01(_moveAccumulator);
             Vector3 finger = ScreenToWorld(Input.mousePosition);
             if (_dragOnHead)
@@ -888,10 +899,10 @@ namespace ReGecko.SnakeSystem
                     // 使用增强的平滑插值算法
                     tailVisual = GetEnhancedTailVisual(finger, _currentTailCell);
                 }
-                
+
                 // 优化的折线更新机制
                 UpdatePolylineForTail(tailVisual);
-                
+
                 float spacing = _grid.CellSize;
                 // 从尾部开始分布，索引0对应尾部段
                 for (int i = 0; i < _segments.Count && i < _cachedRectTransforms.Count; i++)
@@ -901,10 +912,10 @@ namespace ReGecko.SnakeSystem
                     {
                         Vector3 p = GetPointAlongPolyline(_tempPolylinePoints, i * spacing);
                         var rt = _cachedRectTransforms[segmentIndex];
-                    if (rt != null)
-                    {
-                        rt.anchoredPosition = new Vector2(p.x, p.y);
-                    }
+                        if (rt != null)
+                        {
+                            rt.anchoredPosition = new Vector2(p.x, p.y);
+                        }
                     }
                 }
             }
@@ -918,20 +929,20 @@ namespace ReGecko.SnakeSystem
             if (pts.Count == 0) return Vector3.zero;
             if (pts.Count == 1) return pts[0];
             if (distance <= 0) return pts[0];
-            
+
             float remaining = distance;
-            
+
             // 优化：预计算线段长度以减少重复计算
             for (int i = 0; i < pts.Count - 1; i++)
             {
                 Vector3 a = pts[i];
                 Vector3 b = pts[i + 1];
-                
+
                 // 使用平方距离比较来优化性能（避免开方）
                 Vector3 diff = b - a;
                 float segLenSq = diff.sqrMagnitude;
                 float segLen = Mathf.Sqrt(segLenSq);
-                
+
                 if (remaining <= segLen)
                 {
                     if (segLen <= 0.0001f) return a;
@@ -940,23 +951,23 @@ namespace ReGecko.SnakeSystem
                 }
                 remaining -= segLen;
             }
-            
+
             // 超出折线长度时的处理
             if (pts.Count >= 2)
             {
                 Vector3 lastA = pts[pts.Count - 2];
                 Vector3 lastB = pts[pts.Count - 1];
                 Vector3 direction = lastB - lastA;
-                
+
                 // 避免归一化计算，直接使用比例
                 if (direction.sqrMagnitude > 0.0001f)
                 {
                     float dirLen = Mathf.Sqrt(direction.sqrMagnitude);
                     direction = direction / dirLen;
-                return lastB + direction * remaining;
+                    return lastB + direction * remaining;
                 }
             }
-            
+
             return pts[pts.Count - 1];
         }
 
@@ -966,28 +977,28 @@ namespace ReGecko.SnakeSystem
         Vector3 GetEnhancedHeadVisual(Vector3 fingerPos, Vector2Int currentHeadCell)
         {
             Vector3 currentHeadWorld = _grid.CellToWorld(currentHeadCell);
-            
+
             // 计算手指与当前头部的距离和方向
             Vector3 direction = fingerPos - currentHeadWorld;
             float distance = direction.magnitude;
-            
+
             // 如果距离很小，直接返回当前位置
             if (distance < 0.1f)
             {
                 return currentHeadWorld;
             }
-            
+
             // 检查手指所在的网格是否被阻挡
             Vector2Int fingerCell = ClampInside(_grid.WorldToCell(fingerPos));
             bool fingerCellBlocked = IsPathBlocked(fingerCell);
-            
+
             // 如果手指位置被阻挡，限制视觉位置在当前格子边界内
             if (fingerCellBlocked)
             {
                 // 计算当前格子的边界
                 float halfCellSize = _grid.CellSize * 0.5f;
                 Vector3 clampedPos = currentHeadWorld;
-                
+
                 // 根据手指方向调整位置，但不超出当前格子
                 if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
                 {
@@ -999,10 +1010,10 @@ namespace ReGecko.SnakeSystem
                     // 主要是垂直方向
                     clampedPos.y += Mathf.Sign(direction.y) * halfCellSize * 0.8f;
                 }
-                
+
                 return clampedPos;
             }
-            
+
             // 手指位置不被阻挡，按原有逻辑计算
             // 限制最大距离以防止过度拉伸
             float maxDistance = _grid.CellSize * 0.4f;
@@ -1010,7 +1021,7 @@ namespace ReGecko.SnakeSystem
             {
                 direction = direction.normalized * maxDistance;
             }
-            
+
             // 根据拖动轴限制方向
             Vector3 targetPos = currentHeadWorld + direction;
             if (_dragAxis == DragAxis.X)
@@ -1021,7 +1032,7 @@ namespace ReGecko.SnakeSystem
             {
                 targetPos.x = currentHeadWorld.x; // 只允许垂直移动
             }
-            
+
             return targetPos;
         }
 
@@ -1051,7 +1062,7 @@ namespace ReGecko.SnakeSystem
             Vector2Int step = new Vector2Int(Mathf.Clamp(to.x - from.x, -1, 1), Mathf.Clamp(to.y - from.y, -1, 1));
             if (step.x != 0 && step.y != 0) return false;
             Vector2Int cur = from;
-            
+
             // 使用缓存的HashSet，避免每次重新创建
             var tailCell = _bodyCells.Last.Value; // 允许移动到尾的格
             while (cur != to)
@@ -1081,7 +1092,7 @@ namespace ReGecko.SnakeSystem
             int stepx = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
             int stepy = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
             Vector2Int cur = from;
-            
+
             // 水平移动
             if (horizFirst)
             {
@@ -1117,7 +1128,7 @@ namespace ReGecko.SnakeSystem
                     _pathBuildBuffer.Add(clampedCell);
                 }
             }
-            
+
             // 将有效路径点加入队列
             for (int i = 0; i < _pathBuildBuffer.Count; i++)
             {
@@ -1136,22 +1147,22 @@ namespace ReGecko.SnakeSystem
             // 占用校验：允许进入原尾
             var tailCell = _bodyCells.Last.Value;
             if (IsOccupiedBySelf(nextCell) && nextCell != tailCell) return false;
-            
+
             // 更新身体
             _bodyCells.AddFirst(nextCell);
             _bodyCells.RemoveLast();
             _currentHeadCell = nextCell;
             _currentTailCell = _bodyCells.Last.Value;
-            
+
             // 同步HashSet缓存
             SyncBodyCellsSet();
-            
+
             // 移动完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
                 _bodySpriteManager.OnSnakeMoved();
             }
-            
+
             return true;
         }
 
@@ -1166,22 +1177,22 @@ namespace ReGecko.SnakeSystem
             // 占用校验：允许进入原头
             var headCell = _bodyCells.First.Value;
             if (IsOccupiedBySelf(nextCell) && nextCell != headCell) return false;
-            
+
             // 更新身体
             _bodyCells.AddLast(nextCell);
             _bodyCells.RemoveFirst();
             _currentTailCell = nextCell;
             _currentHeadCell = _bodyCells.First.Value;
-            
+
             // 同步HashSet缓存
             SyncBodyCellsSet();
-            
+
             // 移动完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
                 _bodySpriteManager.OnSnakeMoved();
             }
-            
+
             return true;
         }
 
@@ -1233,10 +1244,10 @@ namespace ReGecko.SnakeSystem
         {
             // 不允许进入自身身体占用格（使用优化的HashSet查找）
             if (IsOccupiedBySelf(cell)) return false;
-            
+
             // 不允许进入其他蛇占用的格子
             if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(cell, this)) return false;
-            
+
             return true;
         }
 
@@ -1253,7 +1264,7 @@ namespace ReGecko.SnakeSystem
             foreach (var cell in _bodyCells)
             {
                 if (index >= _segments.Count) break;
-                
+
                 var rt = _segments[index].GetComponent<RectTransform>();
                 if (rt != null)
                 {
@@ -1300,10 +1311,8 @@ namespace ReGecko.SnakeSystem
 
             Vector3 head, tail;
 
-            var headRT = _segments[0].GetComponent<RectTransform>();
-            var tailRT = _segments[_segments.Count - 1].GetComponent<RectTransform>();
-            head = new Vector3(headRT.anchoredPosition.x, headRT.anchoredPosition.y, 0f);
-            tail = new Vector3(tailRT.anchoredPosition.x, tailRT.anchoredPosition.y, 0f);
+            head = new Vector3(_headRt.anchoredPosition.x, _headRt.anchoredPosition.y, 0f);
+            tail = new Vector3(_tailRt.anchoredPosition.x, _tailRt.anchoredPosition.y, 0f);
 
             float headDist = Vector3.Distance(world, head);
             float tailDist = Vector3.Distance(world, tail);
@@ -1315,31 +1324,18 @@ namespace ReGecko.SnakeSystem
         Vector3 ScreenToWorld(Vector3 screen)
         {
             // UI渲染模式：使用UI坐标转换
-            var canvas = GetComponentInParent<Canvas>();
-            if (canvas != null)
+            if (_parentCanvas != null)
             {
                 var rect = transform.parent as RectTransform; // GridContainer
-                if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, canvas.worldCamera, out Vector2 localPoint))
+                if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, _parentCanvas.worldCamera, out Vector2 localPoint))
                 {
                     return new Vector3(localPoint.x, localPoint.y, 0f);
                 }
             }
-
-            // Fallback: 改进的屏幕到UI坐标转换
-            var gridContainer = transform.parent as RectTransform;
-            if (gridContainer != null)
+            else
             {
-                var canvasRT = gridContainer.GetComponentInParent<Canvas>().GetComponent<RectTransform>();
-                if (canvasRT != null)
-                {
-                    // 将屏幕坐标转换为Canvas坐标
-                    if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRT, screen, null, out Vector2 canvasPoint))
-                    {
-                        // 再转换为GridContainer内的本地坐标
-                        Vector2 localPoint = canvasPoint - (Vector2)gridContainer.anchoredPosition;
-                        return new Vector3(localPoint.x, localPoint.y, 0f);
-                    }
-                }
+                _parentCanvas = GetComponentInParent<Canvas>();
+                Debug.LogError("cache _parentCanvas error!!!");
             }
 
             // 最后的fallback：简单的比例转换
@@ -1354,6 +1350,7 @@ namespace ReGecko.SnakeSystem
             float worldY = (normalizedScreen.y - 0.5f) * gridHeight;
 
             return new Vector3(worldX, worldY, 0f);
+            
         }
 
         void OnGUI()
@@ -1426,28 +1423,28 @@ namespace ReGecko.SnakeSystem
         Vector3 GetEnhancedTailVisual(Vector3 fingerPos, Vector2Int currentTailCell)
         {
             Vector3 currentTailWorld = _grid.CellToWorld(currentTailCell);
-            
+
             // 计算手指与当前尾部的距离和方向
             Vector3 direction = fingerPos - currentTailWorld;
             float distance = direction.magnitude;
-            
+
             // 如果距离很小，直接返回当前位置
             if (distance < 0.1f)
             {
                 return currentTailWorld;
             }
-            
+
             // 检查手指所在的网格是否被阻挡
             Vector2Int fingerCell = ClampInside(_grid.WorldToCell(fingerPos));
             bool fingerCellBlocked = IsPathBlocked(fingerCell);
-            
+
             // 如果手指位置被阻挡，限制视觉位置在当前格子边界内
             if (fingerCellBlocked)
             {
                 // 计算当前格子的边界
                 float halfCellSize = _grid.CellSize * 0.5f;
                 Vector3 clampedPos = currentTailWorld;
-                
+
                 // 根据手指方向调整位置，但不超出当前格子
                 if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
                 {
@@ -1459,10 +1456,10 @@ namespace ReGecko.SnakeSystem
                     // 主要是垂直方向
                     clampedPos.y += Mathf.Sign(direction.y) * halfCellSize * 0.8f;
                 }
-                
+
                 return clampedPos;
             }
-            
+
             // 手指位置不被阻挡，按原有逻辑计算
             // 限制最大距离以防止过度拉伸
             float maxDistance = _grid.CellSize * 0.4f;
@@ -1470,7 +1467,7 @@ namespace ReGecko.SnakeSystem
             {
                 direction = direction.normalized * maxDistance;
             }
-            
+
             // 根据拖动轴限制方向
             Vector3 targetPos = currentTailWorld + direction;
             if (_dragAxis == DragAxis.X)
@@ -1481,10 +1478,10 @@ namespace ReGecko.SnakeSystem
             {
                 targetPos.x = currentTailWorld.x; // 只允许垂直移动
             }
-            
+
             return targetPos;
         }
-        
+
         /// <summary>
         /// 优化的蛇头折线更新
         /// </summary>
@@ -1495,7 +1492,7 @@ namespace ReGecko.SnakeSystem
                 // 完全重建折线
                 _tempPolylinePoints.Clear();
                 _tempPolylinePoints.Add(headVisual);
-                
+
                 var it = _bodyCells.First;
                 if (it != null) it = it.Next; // 跳过头部
                 while (it != null)
@@ -1514,7 +1511,7 @@ namespace ReGecko.SnakeSystem
                 }
             }
         }
-        
+
         /// <summary>
         /// 智能判断是否需要更新拖动视觉效果
         /// </summary>
@@ -1522,13 +1519,13 @@ namespace ReGecko.SnakeSystem
         {
             float currentTime = Time.time;
             float timeSinceLastUpdate = currentTime - _lastDragUpdateTime;
-            
+
             // 基本频率限制
             if (timeSinceLastUpdate < DRAG_UPDATE_INTERVAL)
             {
                 return false;
             }
-            
+
             // 如果路径队列很少或为空，提高更新频率以改善平滑度
             if (_pathQueue.Count <= 2)
             {
@@ -1540,12 +1537,12 @@ namespace ReGecko.SnakeSystem
                 }
                 return false;
             }
-            
+
             // 正常情况下的更新
             _lastDragUpdateTime = currentTime;
             return true;
         }
-        
+
         /// <summary>
         /// 优化的蛇尾折线更新
         /// </summary>
@@ -1554,7 +1551,7 @@ namespace ReGecko.SnakeSystem
             // 构建从尾部开始的折线
             _tempPolylinePoints.Clear();
             _tempPolylinePoints.Add(tailVisual);
-            
+
             // 添加身体段位置（从尾部向头部）
             var it = _bodyCells.Last;
             if (it != null) it = it.Previous; // 跳过尾部
@@ -1564,14 +1561,14 @@ namespace ReGecko.SnakeSystem
                 it = it.Previous;
             }
         }
-        
+
         /// <summary>
         /// 计算松开后的速度倍数
         /// </summary>
         void CalculateReleaseSpeedMultiplier()
         {
             int pathLength = _pathQueue.Count;
-            
+
             if (pathLength <= RELEASE_SPEED_PATH_THRESHOLD)
             {
                 // 路径太短，使用正常速度
@@ -1584,14 +1581,14 @@ namespace ReGecko.SnakeSystem
                 // 使用平方根函数让长路径的速度增益递减
                 float normalizedLength = Mathf.Sqrt(pathLength - RELEASE_SPEED_PATH_THRESHOLD) / Mathf.Sqrt(20f); // 基于20个路径点的正则化
                 normalizedLength = Mathf.Clamp01(normalizedLength);
-                
+
                 _releaseSpeedMultiplier = Mathf.Lerp(MIN_RELEASE_SPEED_MULTIPLIER, MAX_RELEASE_SPEED_MULTIPLIER, normalizedLength);
                 _isReleaseMovement = true;
-                
+
                 Debug.Log($"[蛇{SnakeId}] 松开后加速: 路径长度={pathLength}, 速度倍数={_releaseSpeedMultiplier:F2}x");
             }
         }
-        
+
         /// <summary>
         /// 检查手指松开后的洞吞噬逻辑
         /// </summary>
@@ -1602,12 +1599,12 @@ namespace ReGecko.SnakeSystem
             if (hole != null && hole.CanInteractWithSnake(this))
             {
                 Debug.Log($"[蛇{SnakeId}] 手指松开后检测到目标位置或邻近的可交互洞，准备触发吞噬");
-                
+
                 // 延迟触发吞噬，等待蛇移动到目标位置附近
                 StartCoroutine(DelayedHoleConsumption(hole));
             }
         }
-        
+
         /// <summary>
         /// 延迟的洞吞噬检查
         /// </summary>
@@ -1618,10 +1615,10 @@ namespace ReGecko.SnakeSystem
             {
                 yield return null;
             }
-            
+
             // 再次检查是否可以与洞交互
             var currentDragEnd = _dragOnHead ? _currentHeadCell : _currentTailCell;
-            
+
             // 检查是否在洞的位置或邻近位置，并且颜色匹配
             bool canInteract = false;
             if (hole.Cell == currentDragEnd)
@@ -1636,7 +1633,7 @@ namespace ReGecko.SnakeSystem
                 canInteract = hole.CanInteractWithSnake(this);
                 Debug.Log($"[蛇{SnakeId}] 蛇头/尾邻近洞，可交互: {canInteract}");
             }
-            
+
             if (canInteract)
             {
                 Debug.Log($"[蛇{SnakeId}] 延迟检查确认，开始吞噬进程");
@@ -1647,7 +1644,7 @@ namespace ReGecko.SnakeSystem
                 Debug.Log($"[蛇{SnakeId}] 延迟检查失败，无法与洞交互");
             }
         }
-        
+
         /// <summary>
         /// 手指松开时记录最终路径
         /// </summary>
@@ -1656,27 +1653,27 @@ namespace ReGecko.SnakeSystem
             var world = ScreenToWorld(Input.mousePosition);
             var finalTargetCell = ClampInside(_grid.WorldToCell(world));
             var currentDragCell = _dragOnHead ? _currentHeadCell : _currentTailCell;
-            
+
             // 如果手指松开位置与当前拖动端不同，生成最终路径
             if (finalTargetCell != currentDragCell)
             {
                 Debug.Log($"[蛇{SnakeId}] 手指松开：从({currentDragCell.x},{currentDragCell.y})到({finalTargetCell.x},{finalTargetCell.y})");
-                
+
                 // 清空当前路径队列
                 _pathQueue.Clear();
-                
+
                 // 生成最终路径
                 EnqueueOptimizedPath(currentDragCell, finalTargetCell);
-                
+
                 // 重置移动累积器以确保平滑移动
                 _moveAccumulator = 0f;
-                
+
                 // 计算并设置松开后的速度倍数
                 CalculateReleaseSpeedMultiplier();
-                
+
                 // 检查最终目标位置是否邻近洞，如果是则触发吞噬
                 CheckHoleConsumptionOnRelease(finalTargetCell);
-                
+
                 Debug.Log($"[蛇{SnakeId}] 最终路径生成完成，路径长度: {_pathQueue.Count}");
             }
             else
@@ -1686,7 +1683,7 @@ namespace ReGecko.SnakeSystem
                 SnapToGrid();
             }
         }
-        
+
         /// <summary>
         /// 预测拖动目标位置
         /// </summary>
@@ -1694,7 +1691,7 @@ namespace ReGecko.SnakeSystem
         {
             Vector2Int currentPos = _dragOnHead ? _currentHeadCell : _currentTailCell;
             Vector2Int direction = currentTarget - currentPos;
-            
+
             // 简单的线性预测：沿着当前方向延伸
             if (direction.magnitude > 0)
             {
@@ -1702,48 +1699,48 @@ namespace ReGecko.SnakeSystem
                     direction.x != 0 ? (direction.x > 0 ? 1 : -1) : 0,
                     direction.y != 0 ? (direction.y > 0 ? 1 : -1) : 0
                 );
-                
+
                 // 预测未来位置（延伸2-4个格子）
                 int predictionDistance = Mathf.Clamp(Mathf.RoundToInt(direction.magnitude * 0.5f), 2, 4);
                 Vector2Int predicted = currentTarget + normalizedDir * predictionDistance;
-                
+
                 return ClampInside(predicted);
             }
-            
+
             return currentTarget;
         }
-        
+
         /// <summary>
         /// 判断是否应该使用预测性移动
         /// </summary>
         bool ShouldUsePredictiveMovement(Vector2Int currentTarget, Vector2Int predictedTarget)
         {
             float currentTime = Time.time;
-            
+
             // 限制预测更新频率
             if (currentTime - _lastPredictionTime < PREDICTION_UPDATE_INTERVAL)
             {
                 return false;
             }
-            
+
             // 检查距离阈值
             float distance = Vector2Int.Distance(currentTarget, predictedTarget);
             if (distance < PREDICTION_DISTANCE_THRESHOLD)
             {
                 return false;
             }
-            
+
             // 检查路径队列是否过长（只在队列较长时使用预测）
             if (_pathQueue.Count < 8)
             {
                 return false;
             }
-            
+
             _lastPredictionTime = currentTime;
             _lastPredictedTarget = predictedTarget;
             return true;
         }
-        
+
         /// <summary>
         /// 判断是否需要重建折线
         /// </summary>
@@ -1751,33 +1748,33 @@ namespace ReGecko.SnakeSystem
         {
             // 强制重建标志
             if (_polylineNeedsRebuild) return true;
-            
+
             // 检查关键状态变化
             bool headCellChanged = _currentHeadCell != _lastVisualHeadCell;
             bool bodySizeChanged = _bodyCells.Count != _lastVisualBodyCount;
-            
+
             if (headCellChanged || bodySizeChanged)
             {
                 _lastVisualHeadCell = _currentHeadCell;
                 _lastVisualBodyCount = _bodyCells.Count;
                 return true;
             }
-            
+
             return false;
         }
-        
+
         /// <summary>
         /// 优化的路径生成方法，根据距离选择不同策略
         /// </summary>
         void EnqueueOptimizedPath(Vector2Int from, Vector2Int to)
         {
             if (from == to) return;
-            
+
             float distance = Vector2Int.Distance(from, to);
             int dx = Mathf.Abs(to.x - from.x);
             int dy = Mathf.Abs(to.y - from.y);
             int totalSteps = dx + dy;
-            
+
             // 根据距离选择不同的路径生成策略
             if (totalSteps <= 8)
             {
@@ -1795,14 +1792,14 @@ namespace ReGecko.SnakeSystem
                 EnqueueSampledPath(from, to, 8);
             }
         }
-        
+
         /// <summary>
         /// 采样路径生成，减少中间点数量
         /// </summary>
         void EnqueueSampledPath(Vector2Int from, Vector2Int to, int maxSamples)
         {
             _pathBuildBuffer.Clear();
-            
+
             for (int i = 1; i <= maxSamples; i++)
             {
                 float t = (float)i / maxSamples;
@@ -1810,29 +1807,29 @@ namespace ReGecko.SnakeSystem
                     Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t)),
                     Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t))
                 );
-                
+
                 Vector2Int clampedSample = ClampInside(sample);
-                
+
                 // 检查是否被阻挡
                 if (IsPathBlocked(clampedSample))
                 {
                     break; // 遇到阻挡物停止采样
                 }
-                
+
                 // 避免重复点
                 if (_pathBuildBuffer.Count == 0 || _pathBuildBuffer[_pathBuildBuffer.Count - 1] != clampedSample)
                 {
                     _pathBuildBuffer.Add(clampedSample);
                 }
             }
-            
+
             // 将有效路径点加入队列
             for (int i = 0; i < _pathBuildBuffer.Count; i++)
             {
                 _pathQueue.Enqueue(_pathBuildBuffer[i]);
             }
         }
-        
+
         /// <summary>
         /// 修剪路径队列以防止过度积压
         /// </summary>
@@ -1841,40 +1838,40 @@ namespace ReGecko.SnakeSystem
             if (_pathQueue.Count > MAX_PATH_QUEUE_SIZE)
             {
                 Debug.Log($"[蛇{SnakeId}] 路径队列过长({_pathQueue.Count}), 修剪到{PATH_QUEUE_TRIM_SIZE}个路径点");
-                
+
                 // 保留最近的路径点
                 var trimmedQueue = new Queue<Vector2Int>();
                 int keepCount = PATH_QUEUE_TRIM_SIZE;
                 int skipCount = _pathQueue.Count - keepCount;
-                
+
                 // 跳过早期的路径点
                 for (int i = 0; i < skipCount; i++)
                 {
                     if (_pathQueue.Count > 0) _pathQueue.Dequeue();
                 }
-                
+
                 Debug.Log($"[蛇{SnakeId}] 路径队列修剪完成，剩余{_pathQueue.Count}个路径点");
             }
         }
-        
+
         /// <summary>
         /// 计算动态移动速度
         /// </summary>
         float CalculateDynamicMoveSpeed()
         {
             float baseSpeed = MoveSpeedCellsPerSecond;
-            
+
             // 如果处于松开后的快速移动状态，优先使用松开速度倍数
             if (_isReleaseMovement)
             {
                 return baseSpeed * _releaseSpeedMultiplier;
             }
-            
+
             // 只在拖动时启用动态速度
             if (!_dragging) return baseSpeed;
-            
+
             int queueSize = _pathQueue.Count;
-            
+
             // 动态速度调整策略
             if (queueSize <= 3)
             {
@@ -1893,7 +1890,7 @@ namespace ReGecko.SnakeSystem
                 return baseSpeed * 4.0f; // 极速模式，快速清空队列
             }
         }
-        
+
 
 
         protected override void OnDestroy()
@@ -1902,7 +1899,7 @@ namespace ReGecko.SnakeSystem
             _cachedRectTransforms.Clear();
             _tempPolylinePoints.Clear();
             _tempBodyCellsList.Clear();
-            
+
             base.OnDestroy();
         }
     }
