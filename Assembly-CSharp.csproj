@@ -73,6 +73,7 @@
     <Compile Include="Assets\Code\Framework\Resources\ResourceDefine.cs" />
     <Compile Include="Assets\Code\Grid\Entities\WallEntity.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntityManager.cs" />
+    <Compile Include="Assets\Code\Framework\UI\Panel\UIGameFaild.cs" />
     <Compile Include="Assets\Code\Game\GameStateController.cs" />
     <Compile Include="Assets\Code\Game\SnakeColorType.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIManager.cs" />
@@ -90,6 +91,7 @@
     <Compile Include="Assets\Code\Grid\GridConfig.cs" />
     <Compile Include="Assets\Code\Framework\Scene\SceneManager.cs" />
     <Compile Include="Assets\Code\GameCore\Player\PlayerData.cs" />
+    <Compile Include="Assets\Code\Framework\UI\Panel\UIGameSetting.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntity.cs" />
     <Compile Include="Assets\Code\Framework\UI\GameplayHUDBuilder.cs" />
   </ItemGroup>

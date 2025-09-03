@@ -102,7 +102,8 @@ namespace ReGecko.Framework.UI
             textGo1.transform.SetParent(centerImg11.transform, false);
             var text1 = textGo1.AddComponent<Text>();
             text1.text = "LEVEL 1";
-            text1.fontSize = 36;
+            text1.fontSize = 42;
+            text1.fontStyle = FontStyle.Bold;
             text1.alignment = TextAnchor.MiddleCenter;
             text1.color = Color.white;
             text1.font = UnityEngine.Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -153,7 +154,8 @@ namespace ReGecko.Framework.UI
             textGo4.transform.SetParent(centerImg4.transform, false);
             var text4 = textGo4.AddComponent<Text>();
             text4.text = "88:88";
-            text4.fontSize = 36;
+            text4.fontSize = 40;
+            text4.fontStyle = FontStyle.Bold;
             text4.alignment = TextAnchor.MiddleCenter;
             text4.color = Color.white;
             text4.font = UnityEngine.Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -161,7 +163,7 @@ namespace ReGecko.Framework.UI
             var textRt4 = textGo4.GetComponent<RectTransform>();
             textRt4.anchorMin = Vector2.zero;
             textRt4.anchorMax = Vector2.one;
-            textRt4.offsetMin = Vector2.zero;
+            textRt4.offsetMin = new Vector2(30f, 10f);
             textRt4.offsetMax = Vector2.zero;
 
 
@@ -209,10 +211,14 @@ namespace ReGecko.Framework.UI
             var img2TextRt = img2TextObj.GetComponent<RectTransform>();
             img2TextRt.anchorMin = Vector2.zero;
             img2TextRt.anchorMax = Vector2.one;
-            img2TextRt.offsetMin = Vector2.zero;
-            img2TextRt.offsetMax = Vector2.zero;
+            img2TextRt.offsetMin = new Vector2(80f, 0f);
+            img2TextRt.offsetMax = new Vector2(-10f, 0f);
             var img2Text = img2TextObj.GetComponent<Text>();
             img2Text.color = Color.gray;
+            img2Text.fontSize = 38;
+            img2Text.fontStyle = FontStyle.Bold;
+            img2Text.raycastTarget = false; // 文字不阻挡点击事件
+
 
             // 第一个图片 (108*103)
             var img1 = CreateImage(right.transform, "Image1", 102f, 102f, ResourceDefine.Game_Img_Coin_icon);

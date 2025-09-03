@@ -24,8 +24,6 @@ namespace ReGecko.Bootstrap
         Slider _progress;
         GameObject _progressBar;
         GameObject _startButton;
-        public string UIPrefabPath = "";//"UI/GameplayHUD"; // Resources 下路径
-        public string UIPrefabPath_Panel_GameSuccess = "Perfab/UI_Panel_GameSuccess"; // Resources 下路径
 
         IEnumerator Start()
         {
@@ -59,6 +57,9 @@ namespace ReGecko.Bootstrap
             // 并行加载资源
             GameObject loadedUIPrefab = null;
             GameObject loadedUIPrefab_Panel_GameSuccess = null;
+            GameObject loadedUIPrefab_Panel_GameFaild = null;
+            GameObject loadedUIPrefab_Panel_GameSetting = null;
+            GameObject loadedUIPrefab_Panel_Lobby = null;
             int uiLoadedCount = 0;
             int uiNeedCount = 0;
             bool otherResourcesLoaded = false;
@@ -68,38 +69,52 @@ namespace ReGecko.Bootstrap
             // 启动UI加载
             if (GameContext.PreloadedUIPrefab_GameMain == null)
             {
-                if (!string.IsNullOrEmpty(UIPrefabPath))
-                {
-                    uiNeedCount++;
-                    StartCoroutine(ResourceManager.LoadPrefabAsync(UIPrefabPath, prefab =>
-                 {
-                     loadedUIPrefab = prefab;
-                     uiLoadedCount++;
-                 }));
-                }
-                else
-                {
-                    uiNeedCount++;
-                    // 用代码生成的是实例，不需要再Instantiate
-                    loadedUIPrefab = ReGecko.Framework.UI.GameplayHUDBuilder.BuildPrefabTemplate();
-                    loadedUIPrefab.SetActive(false); // 先隐藏，等到Game场景再显示
-                    uiLoadedCount++;
-                }
+                uiNeedCount++;
+                // 用代码生成的是实例，不需要再Instantiate
+                loadedUIPrefab = ReGecko.Framework.UI.GameplayHUDBuilder.BuildPrefabTemplate();
+                loadedUIPrefab.SetActive(false); // 先隐藏，等到Game场景再显示
+                uiLoadedCount++;
             }
 
             if (GameContext.PreloadedUIPrefab_GameSuccess == null)
             {
-                if (!string.IsNullOrEmpty(UIPrefabPath_Panel_GameSuccess))
+                uiNeedCount++;
+                StartCoroutine(ResourceManager.LoadPrefabAsync(ResourceDefine.Path_UI_Prefab_GameSuccess, prefab =>
                 {
-                    uiNeedCount++;
-                    StartCoroutine(ResourceManager.LoadPrefabAsync(UIPrefabPath_Panel_GameSuccess, prefab =>
-                    {
-                        loadedUIPrefab_Panel_GameSuccess = prefab;
-                        uiLoadedCount++;
-                    }));
-                }
+                    loadedUIPrefab_Panel_GameSuccess = prefab;
+                    uiLoadedCount++;
+                }));
             }
 
+            if (GameContext.PreloadedUIPrefab_GameFaild == null)
+            {
+                uiNeedCount++;
+                StartCoroutine(ResourceManager.LoadPrefabAsync(ResourceDefine.Path_UI_Prefab_GameFaild, prefab =>
+                {
+                    loadedUIPrefab_Panel_GameFaild = prefab;
+                    uiLoadedCount++;
+                }));
+            }
+
+            if (GameContext.PreloadedUIPrefab_GameSetting == null)
+            {
+                uiNeedCount++;
+                StartCoroutine(ResourceManager.LoadPrefabAsync(ResourceDefine.Path_UI_Prefab_GameSetting, prefab =>
+                {
+                    loadedUIPrefab_Panel_GameSetting = prefab;
+                    uiLoadedCount++;
+                }));
+            }
+
+            if (GameContext.PreloadedUIPrefab_Lobby == null)
+            {
+                uiNeedCount++;
+                StartCoroutine(ResourceManager.LoadPrefabAsync(ResourceDefine.Path_UI_Prefab_Lobby, prefab =>
+                {
+                    loadedUIPrefab_Panel_Lobby = prefab;
+                    uiLoadedCount++;
+                }));
+            }
 
             // 启动其他资源加载（预留）
             StartCoroutine(LoadOtherResources(() => otherResourcesLoaded = true));
@@ -112,11 +127,33 @@ namespace ReGecko.Bootstrap
             {
                 DontDestroyOnLoad(loadedUIPrefab);
             }
+            //if (loadedUIPrefab_Panel_GameSuccess != null)
+            //{
+            //    DontDestroyOnLoad(loadedUIPrefab_Panel_GameSuccess);
+            //}
+            //if (loadedUIPrefab_Panel_GameFaild != null)
+            //{
+            //    DontDestroyOnLoad(loadedUIPrefab_Panel_GameFaild);
+            //}
+            //if (loadedUIPrefab_Panel_GameSetting != null)
+            //{
+            //    DontDestroyOnLoad(loadedUIPrefab_Panel_GameSetting);
+            //}
+            //if (loadedUIPrefab_Panel_Lobby != null)
+            //{
+            //    DontDestroyOnLoad(loadedUIPrefab_Panel_Lobby);
+            //}
 
             if (GameContext.PreloadedUIPrefab_GameMain == null)
                 GameContext.PreloadedUIPrefab_GameMain = loadedUIPrefab;
             if (GameContext.PreloadedUIPrefab_GameSuccess == null)
                 GameContext.PreloadedUIPrefab_GameSuccess = loadedUIPrefab_Panel_GameSuccess;
+            if (GameContext.PreloadedUIPrefab_GameFaild == null)
+                GameContext.PreloadedUIPrefab_GameFaild = loadedUIPrefab_Panel_GameFaild;
+            if (GameContext.PreloadedUIPrefab_GameSetting == null)
+                GameContext.PreloadedUIPrefab_GameSetting = loadedUIPrefab_Panel_GameSetting;
+            if (GameContext.PreloadedUIPrefab_Lobby == null)
+                GameContext.PreloadedUIPrefab_Lobby = loadedUIPrefab_Panel_Lobby;
 
             // 不再自动切换场景，等待用户点击开始按钮
         }
@@ -229,8 +266,9 @@ namespace ReGecko.Bootstrap
             var textGo = new GameObject("Text");
             textGo.transform.SetParent(buttonGo.transform, false);
             var text = textGo.AddComponent<Text>();
-            text.text = "开始游戏";
-            text.fontSize = 36;
+            text.text = "START";
+            text.fontSize = 78;
+            text.fontStyle = FontStyle.Bold;
             text.alignment = TextAnchor.MiddleCenter;
             text.color = Color.white;
             text.font = UnityEngine.Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -238,8 +276,8 @@ namespace ReGecko.Bootstrap
             var textRt = textGo.GetComponent<RectTransform>();
             textRt.anchorMin = Vector2.zero;
             textRt.anchorMax = Vector2.one;
-            textRt.offsetMin = Vector2.zero;
-            textRt.offsetMax = Vector2.zero;
+            textRt.offsetMin = new Vector2(0f, 13f);
+            textRt.offsetMax = new Vector2(0f, 13f);
 
             // 设置Button的targetGraphic
             button.targetGraphic = buttonImg;
@@ -291,7 +329,14 @@ namespace ReGecko.Bootstrap
             }
             else
             {
-                ReGecko.Framework.Scene.SceneManager.Instance.LoadGameScene();
+                if (GameContext.NextLoadIsPlayer)
+                {
+                    ReGecko.Framework.Scene.SceneManager.Instance.LoadLobbyScene();
+                }
+                else
+                {
+                    ReGecko.Framework.Scene.SceneManager.Instance.LoadGameScene();
+                }
             }
 
 

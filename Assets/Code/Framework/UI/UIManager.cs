@@ -43,29 +43,40 @@ namespace ReGecko.Framework.UI
         public GameObject Show(string key, GameObject prefabOrInstance)
         {
             if (prefabOrInstance == null) return null;
-            if (_spawned.TryGetValue(key, out var go) && go != null)
-            {
-                go.SetActive(true);
-                return go;
-            }
 
             GameObject inst;
-            // 判断是否已经是实例（在场景中的GameObject）
-            if (prefabOrInstance.scene.IsValid())
+            bool isExisting = false;
+
+            if (_spawned.TryGetValue(key, out var go) && go != null)
             {
-                // 已经是实例，直接使用
-                inst = prefabOrInstance;
-                inst.transform.SetParent(_canvas.transform, false);
+                // UI已存在，直接激活
+                inst = go;
+                inst.SetActive(true);
+                isExisting = true;
             }
             else
             {
-                // 是prefab模板，需要实例化
-                inst = Instantiate(prefabOrInstance, _canvas.transform, false);
+                // 判断是否已经是实例（在场景中的GameObject）
+                if (prefabOrInstance.scene.IsValid())
+                {
+                    // 已经是实例，直接使用
+                    inst = prefabOrInstance;
+                    inst.transform.SetParent(_canvas.transform, false);
+                }
+                else
+                {
+                    // 是prefab模板，需要实例化
+                    inst = Instantiate(prefabOrInstance, _canvas.transform, false);
+                }
+
+                inst.name = key;
+                inst.SetActive(true);
+                _spawned[key] = inst;
             }
 
-            inst.name = key;
-            inst.SetActive(true);
-            _spawned[key] = inst;
+            // 确保UI显示在最前面：移动到Canvas的最后一个子对象位置
+            inst.transform.SetAsLastSibling();
+
             return inst;
         }
 

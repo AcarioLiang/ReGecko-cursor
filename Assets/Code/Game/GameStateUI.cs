@@ -137,7 +137,16 @@ namespace ReGecko.Framework.UI
                     UIManager.Instance.Show("GameSetting", GameContext.PreloadedUIPrefab_GameSetting);
                     break;
                 case GameState.GameOver:
-                    UIManager.Instance.Show("GameSuccess", GameContext.PreloadedUIPrefab_GameSuccess);
+                    if(_gameStateController && _gameStateController.RemainingTime > 0)
+                    {
+                        UIManager.Instance.Show("GameSuccess", GameContext.PreloadedUIPrefab_GameSuccess);
+
+                    }
+                    else
+                    {
+                        UIManager.Instance.Show("GameFaild", GameContext.PreloadedUIPrefab_GameFaild);
+
+                    }
                     break;
             }
 
