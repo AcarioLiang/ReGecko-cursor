@@ -98,16 +98,34 @@ public class UIGameSetting : MonoBehaviour
     {
 
     }
+    private GameStateController GetGameStateController()
+    {
+        if (_gameStateController == null)
+        {
+            var hudInstance = UIManager.Instance.FindUI("GameplayHUD");
+            if (hudInstance != null)
+            {
+                var gameManager = hudInstance.GetComponentInChildren<UIGameManager>();
+                if (gameManager != null)
+                {
+                    _gameStateController = gameManager.GetGameStateController();
+                }
+            }
+        }
+        return _gameStateController;
+    }
+
     void OnAdButtonClicked()
     {
         UIManager.Instance.Hide("GameSetting");
-        if (_gameStateController != null)
+        var controller = GetGameStateController();
+        if (controller != null)
         {
-            _gameStateController.ResumeGame();
+            controller.ResumeGame();
         }
         else
         {
-            Debug.Log("_gameStateController is null!!!");
+            Debug.LogError("无法获取GameStateController!");
         }
     }
 }

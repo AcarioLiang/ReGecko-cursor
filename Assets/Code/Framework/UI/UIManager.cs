@@ -110,7 +110,8 @@ namespace ReGecko.Framework.UI
         {
             foreach(var _go in _spawned)
             {
-                _go.Value.SetActive(false);
+                if(_go.Value != null)
+                    _go.Value.SetActive(false);
             }
 
         }
