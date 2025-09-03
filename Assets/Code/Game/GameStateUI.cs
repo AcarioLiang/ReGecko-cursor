@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using ReGecko.Game;
 using ReGecko.SnakeSystem;
+using ReGecko.GameCore.Flow;
 
 namespace ReGecko.Framework.UI
 {
@@ -42,6 +43,10 @@ namespace ReGecko.Framework.UI
         private void OnDestroy()
         {
             UnsubscribeFromEvents();
+            if (_gameStateController != null)
+            {
+                _gameStateController.RestartGame();
+            }
         }
 
         /// <summary>
@@ -84,7 +89,7 @@ namespace ReGecko.Framework.UI
                 restartButton.onClick.AddListener(OnRestartButtonClicked);
 
             // 初始状态
-            UpdateUIForState(GameState.Initializing);
+            UpdateUIForState(GameState.Playing);
         }
 
         /// <summary>
@@ -117,30 +122,22 @@ namespace ReGecko.Framework.UI
         void UpdateUIForState(GameState state)
         {
             // 隐藏所有面板
-            if (pausePanel != null) pausePanel.SetActive(false);
-            if (gameOverPanel != null) gameOverPanel.SetActive(false);
-            if (loadingPanel != null) loadingPanel.SetActive(false);
+            //UIManager.Instance.CloseAll();
 
             // 根据状态显示对应面板
             switch (state)
             {
                 case GameState.Initializing:
-                    if (loadingPanel != null) loadingPanel.SetActive(true);
                     break;
                 case GameState.Playing:
                     // 游戏中状态，显示暂停按钮
-                    if (pauseButton != null) pauseButton.gameObject.SetActive(true);
-                    if (resumeButton != null) resumeButton.gameObject.SetActive(false);
+                    UIManager.Instance.Show("GameplayHUD", GameContext.PreloadedUIPrefab_GameMain);
                     break;
                 case GameState.Paused:
-                    if (pausePanel != null) pausePanel.SetActive(true);
-                    if (pauseButton != null) pauseButton.gameObject.SetActive(false);
-                    if (resumeButton != null) resumeButton.gameObject.SetActive(true);
+                    UIManager.Instance.Show("GameSetting", GameContext.PreloadedUIPrefab_GameSetting);
                     break;
                 case GameState.GameOver:
-                    if (gameOverPanel != null) gameOverPanel.SetActive(true);
-                    if (pauseButton != null) pauseButton.gameObject.SetActive(false);
-                    if (resumeButton != null) resumeButton.gameObject.SetActive(false);
+                    UIManager.Instance.Show("GameSuccess", GameContext.PreloadedUIPrefab_GameSuccess);
                     break;
             }
 

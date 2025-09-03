@@ -31,14 +31,18 @@ namespace ReGecko.Bootstrap
             }
 
             // 初始化实体管理器
-            var entityManagerGo = new GameObject("EntityManager");
-            _entityManager = entityManagerGo.AddComponent<GridEntityManager>();
-            _entityManager.Grid = level.Grid;
+            if (FindObjectOfType<GridEntityManager>() == null)
+            {
+                var entityManagerGo = new GameObject("EntityManager");
+                _entityManager = entityManagerGo.AddComponent<GridEntityManager>();
+                _entityManager.Grid = level.Grid;
+            }
+                
 
             // 显示预加载的UI并初始化游戏渲染
-            if (GameContext.PreloadedUIPrefab != null)
+            if (GameContext.PreloadedUIPrefab_GameMain != null)
             {
-                var hudInstance = UIManager.Instance.Show("GameplayHUD", GameContext.PreloadedUIPrefab);
+                var hudInstance = UIManager.Instance.Show("GameplayHUD", GameContext.PreloadedUIPrefab_GameMain);
 
                 // 查找并初始化UI游戏管理器
                 var uiGameManager = hudInstance.GetComponentInChildren<UIGameManager>();
@@ -49,8 +53,11 @@ namespace ReGecko.Bootstrap
                 }
             }
 
-            var gameStateUIGo = new GameObject("GameStateUI");
-            gameStateUIGo.AddComponent<GameStateUI>();
+            if (FindObjectOfType<GameStateUI>() == null)
+            {
+                var gameStateUIGo = new GameObject("GameStateUI");
+                gameStateUIGo.AddComponent<GameStateUI>();
+            }
         }
     }
 }

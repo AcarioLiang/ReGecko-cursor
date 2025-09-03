@@ -336,9 +336,8 @@ namespace ReGecko.Framework.UI
             // 添加按钮点击事件
             resetBtnCom.onClick.AddListener(() =>
             {
-                ReGecko.Framework.Scene.SceneManager.Instance.LoadSceneAsync(GameScenes.Loading, () => {
-                    UIManager.Instance.Destroy("GameplayHUD");
-                });
+                GameContext.NextLoadIsPlayer = false;
+                ReGecko.Framework.Scene.SceneManager.Instance.LoadLoadingScene();
                 var _gameStateController = gameManager.GetGameStateController();
                 if (_gameStateController != null)
                 {

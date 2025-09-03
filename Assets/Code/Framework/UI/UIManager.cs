@@ -94,6 +94,15 @@ namespace ReGecko.Framework.UI
                 DestroyImmediate(go);
             }
         }
+
+        public void CloseAll()
+        {
+            foreach(var _go in _spawned)
+            {
+                _go.Value.SetActive(false);
+            }
+
+        }
     }
 }
 

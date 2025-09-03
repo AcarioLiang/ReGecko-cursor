@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 using System;
 using ReGecko.GameCore.Flow;
 using UnityEngine.UI;
+using ReGecko.Framework.UI;
 
 namespace ReGecko.Framework.Scene
 {
@@ -80,7 +81,7 @@ namespace ReGecko.Framework.Scene
         /// <summary>
         /// 异步加载场景（无淡入淡出效果）
         /// </summary>
-        public void LoadSceneAsync(string sceneName, Action onComplete = null)
+        private void LoadSceneAsync(string sceneName, Action onComplete = null)
         {
             if (_isTransitioning) return;
             
@@ -90,7 +91,7 @@ namespace ReGecko.Framework.Scene
         /// <summary>
         /// 异步加载场景（带淡入淡出效果）
         /// </summary>
-        public void LoadSceneAsyncWithFade(string sceneName, Action onComplete = null)
+        private void LoadSceneAsyncWithFade(string sceneName, Action onComplete = null)
         {
             if (_isTransitioning) return;
             
@@ -104,11 +105,15 @@ namespace ReGecko.Framework.Scene
         {
             if(withFade)
             {
-                LoadSceneAsyncWithFade(GameScenes.Loading, null);
+                LoadSceneAsyncWithFade(GameScenes.Loading, () => {
+                    UIManager.Instance.Destroy("GameplayHUD");
+                });
             }
             else
             {
-                LoadSceneAsync(GameScenes.Loading, null);
+                LoadSceneAsync(GameScenes.Loading, () => {
+                    UIManager.Instance.Destroy("GameplayHUD");
+                });
             }
         }
 

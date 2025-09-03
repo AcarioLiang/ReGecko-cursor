@@ -25,6 +25,7 @@ namespace ReGecko.Bootstrap
         GameObject _progressBar;
         GameObject _startButton;
         public string UIPrefabPath = "";//"UI/GameplayHUD"; // Resources 下路径
+        public string UIPrefabPath_Panel_GameSuccess = "Perfab/UI_Panel_GameSuccess"; // Resources 下路径
 
         IEnumerator Start()
         {
@@ -57,40 +58,65 @@ namespace ReGecko.Bootstrap
 
             // 并行加载资源
             GameObject loadedUIPrefab = null;
-            bool uiLoaded = false;
+            GameObject loadedUIPrefab_Panel_GameSuccess = null;
+            int uiLoadedCount = 0;
+            int uiNeedCount = 0;
             bool otherResourcesLoaded = false;
 
             yield return new WaitForSeconds(0.5f);
 
             // 启动UI加载
-            if (!string.IsNullOrEmpty(UIPrefabPath))
+            if (GameContext.PreloadedUIPrefab_GameMain == null)
             {
-                StartCoroutine(ResourceManager.LoadPrefabAsync(UIPrefabPath, prefab =>
+                if (!string.IsNullOrEmpty(UIPrefabPath))
                 {
-                    loadedUIPrefab = prefab;
-                    uiLoaded = true;
-                }));
+                    uiNeedCount++;
+                    StartCoroutine(ResourceManager.LoadPrefabAsync(UIPrefabPath, prefab =>
+                 {
+                     loadedUIPrefab = prefab;
+                     uiLoadedCount++;
+                 }));
+                }
+                else
+                {
+                    uiNeedCount++;
+                    // 用代码生成的是实例，不需要再Instantiate
+                    loadedUIPrefab = ReGecko.Framework.UI.GameplayHUDBuilder.BuildPrefabTemplate();
+                    loadedUIPrefab.SetActive(false); // 先隐藏，等到Game场景再显示
+                    uiLoadedCount++;
+                }
             }
-            else
+
+            if (GameContext.PreloadedUIPrefab_GameSuccess == null)
             {
-                // 用代码生成的是实例，不需要再Instantiate
-                loadedUIPrefab = ReGecko.Framework.UI.GameplayHUDBuilder.BuildPrefabTemplate();
-                loadedUIPrefab.SetActive(false); // 先隐藏，等到Game场景再显示
-                uiLoaded = true;
+                if (!string.IsNullOrEmpty(UIPrefabPath_Panel_GameSuccess))
+                {
+                    uiNeedCount++;
+                    StartCoroutine(ResourceManager.LoadPrefabAsync(UIPrefabPath_Panel_GameSuccess, prefab =>
+                    {
+                        loadedUIPrefab_Panel_GameSuccess = prefab;
+                        uiLoadedCount++;
+                    }));
+                }
             }
+
 
             // 启动其他资源加载（预留）
             StartCoroutine(LoadOtherResources(() => otherResourcesLoaded = true));
 
             // 运行进度条，等待所有资源加载完成
-            yield return StartCoroutine(RunFakeProgress(() => uiLoaded && otherResourcesLoaded));
+            yield return StartCoroutine(RunFakeProgress(() => uiLoadedCount == uiNeedCount && otherResourcesLoaded));
 
             // 将加载的UI保存到GameContext，并确保不会被场景切换销毁
             if (loadedUIPrefab != null)
             {
                 DontDestroyOnLoad(loadedUIPrefab);
             }
-            GameContext.PreloadedUIPrefab = loadedUIPrefab;
+
+            if (GameContext.PreloadedUIPrefab_GameMain == null)
+                GameContext.PreloadedUIPrefab_GameMain = loadedUIPrefab;
+            if (GameContext.PreloadedUIPrefab_GameSuccess == null)
+                GameContext.PreloadedUIPrefab_GameSuccess = loadedUIPrefab_Panel_GameSuccess;
 
             // 不再自动切换场景，等待用户点击开始按钮
         }
@@ -217,7 +243,7 @@ namespace ReGecko.Bootstrap
 
             // 设置Button的targetGraphic
             button.targetGraphic = buttonImg;
-            
+
             // 添加按钮点击事件
             button.onClick.AddListener(() =>
             {
@@ -256,8 +282,9 @@ namespace ReGecko.Bootstrap
             // 等待一帧确保进度条更新完成
             yield return null;
 
-            if (GameContext.NextLoadIsPlayer)
+            if (GameContext.BootUp)
             {
+                GameContext.BootUp = false;
                 // 进度达到100%时，总是隐藏进度条，显示开始按钮
                 if (_progressBar != null) _progressBar.SetActive(false);
                 if (_startButton != null) _startButton.SetActive(true);
@@ -267,7 +294,7 @@ namespace ReGecko.Bootstrap
                 ReGecko.Framework.Scene.SceneManager.Instance.LoadGameScene();
             }
 
-                
+
         }
     }
 }

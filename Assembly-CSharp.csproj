@@ -63,6 +63,7 @@
     <Compile Include="Assets\Code\GameCore\Flow\GameContext.cs" />
     <Compile Include="Assets\Code\Framework\UI\GameRenderer.cs" />
     <Compile Include="Assets\Code\Snake\SnakeBodySpriteManager.cs" />
+    <Compile Include="Assets\Code\Framework\UI\Panel\UIGameSuccess.cs" />
     <Compile Include="Assets\Code\Game\GameStateUI.cs" />
     <Compile Include="Assets\Code\Levels\LevelConfig.cs" />
     <Compile Include="Assets\Code\Bootstrap\LobbyBootstrap.cs" />

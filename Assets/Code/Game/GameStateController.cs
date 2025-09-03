@@ -105,7 +105,7 @@ namespace ReGecko.Game
         /// </summary>
         public void StartGame()
         {
-            if (currentState == GameState.Initializing)
+            if (currentState != GameState.Playing)
             {
                 ChangeState(GameState.Playing);
             }
