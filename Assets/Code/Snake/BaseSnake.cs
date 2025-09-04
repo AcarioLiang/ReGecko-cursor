@@ -89,6 +89,14 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        public virtual void ForceRefreshAllSprites()
+        {
+            if (_bodySpriteManager != null)
+            {
+                _bodySpriteManager.ForceRefreshAllSprites();
+            }
+        }
+
         protected virtual void OnStateChanged(SnakeState oldState, SnakeState newState)
         {
             // 子类可以重写此方法来处理状态变化

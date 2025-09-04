@@ -35,7 +35,7 @@ namespace ReGecko.SnakeSystem
 
         void Awake()
         {
-            _snakeController = GetComponent<SnakeController>();
+            _snakeController = transform.parent.GetComponent<SnakeController>();
             _segments = new List<Transform>();
             _segmentImages = new List<Image>();
             _segmentRectTransforms = new List<RectTransform>();
@@ -99,10 +99,14 @@ namespace ReGecko.SnakeSystem
             _segmentImages.Clear();
             _segmentRectTransforms.Clear();
 
+            var parentT = transform.parent;
+            if (parentT == null)
+                return;
+
             // 获取蛇的所有段
-            for (int i = 0; i < transform.childCount; i++)
+            for (int i = 0; i < parentT.childCount; i++)
             {
-                var child = transform.GetChild(i);
+                var child = parentT.GetChild(i);
                 if (child.name.StartsWith("Head") || child.name.StartsWith("Body_"))
                 {
                     _segments.Add(child);

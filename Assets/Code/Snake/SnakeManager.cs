@@ -92,6 +92,7 @@ namespace ReGecko.SnakeSystem
             
             // 初始化蛇
             snake.Initialize(_gridConfig, _entityManager, this);
+            snake.ForceRefreshAllSprites();
             
             // 添加到管理列表
             _snakes.Add(snake);
