@@ -28,7 +28,6 @@ namespace ReGecko.SnakeSystem
         
         [Header("移动设置")]
         public float MoveSpeedCellsPerSecond = 16f;
-        public float SnapThreshold = 0.05f;
         public int MaxCellsPerFrame = 12;
         
         [Header("功能开关")]
@@ -46,7 +45,7 @@ namespace ReGecko.SnakeSystem
         protected readonly List<Transform> _segments = new List<Transform>();
         protected readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
         protected readonly HashSet<Vector2Int> _bodyCellsSet = new HashSet<Vector2Int>(); // 用于快速查找的身体格子集合
-        protected readonly Queue<Vector2Int> _pathQueue = new Queue<Vector2Int>(); // 待消费路径（目标格序列）
+        protected readonly LinkedList<Vector2Int> _pathQueue = new LinkedList<Vector2Int>(); // 待消费路径（目标格序列）
         protected readonly List<Vector2Int> _pathBuildBuffer = new List<Vector2Int>(64); // 复用的路径构建缓冲
         
         protected Vector2Int _currentHeadCell;
