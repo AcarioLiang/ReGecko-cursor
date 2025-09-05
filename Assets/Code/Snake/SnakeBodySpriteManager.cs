@@ -2,11 +2,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
+using ReGecko.GridSystem; // *** SubGrid 改动开始 ***
 
 namespace ReGecko.SnakeSystem
 {
     /// <summary>
     /// 蛇身体图片管理器：动态更新蛇身体各部位的图片
+    /// *** SubGrid 改动：支持5段身体细分渲染 ***
     /// </summary>
     public class SnakeBodySpriteManager : MonoBehaviour
     {
@@ -32,6 +34,17 @@ namespace ReGecko.SnakeSystem
         private List<Transform> _segments;
         private List<Image> _segmentImages;
         private List<RectTransform> _segmentRectTransforms;
+
+        // *** SubGrid 改动：5段身体细分渲染 ***
+        [Header("SubGrid 细分渲染")]
+        [Tooltip("是否启用5段身体细分渲染")]
+        public bool EnableSubSegmentRendering = false;
+        [Tooltip("子段预制体")]
+        public GameObject SubSegmentPrefab;
+        
+        // 每个大格身体节点对应的5个子段
+        private Dictionary<int, List<GameObject>> _subSegments = new Dictionary<int, List<GameObject>>();
+        private Queue<GameObject> _subSegmentPool = new Queue<GameObject>();
 
         void Awake()
         {
@@ -85,12 +98,19 @@ namespace ReGecko.SnakeSystem
             
             // 从配置文件加载图片
             LoadSpritesFromConfig();
-            
+
             // 获取所有段
             CollectSegments();
-            
+
             // 初始更新所有段的图片
             UpdateAllSegmentSprites();
+
+            // *** SubGrid 改动：确保子段位置正确初始化 ***
+            if (EnableSubSegmentRendering)
+            {
+                RecreateSubSegments();
+                InitializeSubSegmentPositions();
+            }
         }
 
         void CollectSegments()
@@ -375,7 +395,226 @@ namespace ReGecko.SnakeSystem
         {
             CollectSegments();
             UpdateAllSegmentSprites();
+            
+            // *** SubGrid 改动：重新创建子段 ***
+            if (EnableSubSegmentRendering)
+            {
+                RecreateSubSegments();
+            }
         }
+
+        // *** SubGrid 改动：子段管理方法开始 ***
+        
+        /// <summary>
+        /// 创建或获取子段GameObject
+        /// </summary>
+        GameObject GetSubSegmentFromPool()
+        {
+            if (_subSegmentPool.Count > 0)
+            {
+                var obj = _subSegmentPool.Dequeue();
+                obj.SetActive(true);
+                return obj;
+            }
+            
+            if (SubSegmentPrefab != null)
+            {
+                return Instantiate(SubSegmentPrefab, transform);
+            }
+            
+            // 如果没有预制体，创建一个基本的Image对象
+            var go = new GameObject("SubSegment");
+            go.transform.SetParent(transform);
+            var image = go.AddComponent<Image>();
+            image.sprite = VerticalBodySprite;
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(100f, SubGridHelper.SUB_CELL_SIZE * 100f); // 转换为UI单位
+            return go;
+        }
+
+        /// <summary>
+        /// 回收子段到对象池
+        /// </summary>
+        void ReturnSubSegmentToPool(GameObject obj)
+        {
+            obj.SetActive(false);
+            _subSegmentPool.Enqueue(obj);
+        }
+
+        /// <summary>
+        /// 重新创建所有子段
+        /// </summary>
+        void RecreateSubSegments()
+        {
+            // 清理现有子段
+            foreach (var kvp in _subSegments)
+            {
+                foreach (var subSeg in kvp.Value)
+                {
+                    ReturnSubSegmentToPool(subSeg);
+                }
+            }
+            _subSegments.Clear();
+
+            // 为每个身体节点创建5个子段
+            var bodyCells = _snakeController.GetBodyCells();
+            if (bodyCells == null) return;
+
+            int segmentIndex = 0;
+            foreach (var cell in bodyCells)
+            {
+                var subSegmentList = new List<GameObject>();
+                for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                {
+                    var subSegment = GetSubSegmentFromPool();
+                    subSegmentList.Add(subSegment);
+                }
+                _subSegments[segmentIndex] = subSegmentList;
+                segmentIndex++;
+            }
+
+            // *** SubGrid 改动：创建子段后立即初始化位置 ***
+            InitializeSubSegmentPositions();
+        }
+
+        /// <summary>
+        /// 初始化所有子段的位置
+        /// </summary>
+        void InitializeSubSegmentPositions()
+        {
+            if (!EnableSubSegmentRendering)
+                return;
+
+            // 为每个身体节点初始化5个子段的位置
+            var bodyCells = _snakeController.GetBodyCells();
+            if (bodyCells == null) return;
+
+            var grid = _snakeController.GetGrid();
+            int segmentIndex = 0;
+            
+            foreach (var bigCell in bodyCells)
+            {
+                if (!_subSegments.ContainsKey(segmentIndex))
+                {
+                    segmentIndex++;
+                    continue;
+                }
+
+                // 初始化时，所有子段都居中对齐到大格中心
+                var centerSubCell = SubGridHelper.BigCellToCenterSubCell(bigCell);
+                var bigCellFirstSub = SubGridHelper.BigCellToCenterSubCell(bigCell);
+                
+                Vector2Int[] subCellPositions = new Vector2Int[SubGridHelper.SUB_DIV];
+                for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                {
+                    // 初始状态：所有子段沿Y轴排列，居中对齐
+                    subCellPositions[i] = new Vector2Int(
+                        bigCellFirstSub.x + SubGridHelper.SUB_DIV / 2,
+                        bigCellFirstSub.y + i
+                    );
+                }
+                
+                // 更新子段位置
+                UpdateSubSegmentPositions(segmentIndex, subCellPositions);
+                segmentIndex++;
+            }
+        }
+
+        /// <summary>
+        /// 更新子段位置（由SnakeController调用）
+        /// </summary>
+        /// <param name="segmentIndex">身体节点索引</param>
+        /// <param name="subCellPositions">5个子段的小格坐标</param>
+        public void UpdateSubSegmentPositions(int segmentIndex, Vector2Int[] subCellPositions)
+        {
+            if (!EnableSubSegmentRendering || !_subSegments.ContainsKey(segmentIndex))
+                return;
+
+            var subSegmentList = _subSegments[segmentIndex];
+            var grid = _snakeController.GetGrid();
+
+            //for (int i = 0; i < Mathf.Min(subSegmentList.Count, subCellPositions.Length); i++)
+            //{
+            //    var subSegment = subSegmentList[i];
+            //    var worldPos = SubGridHelper.SubCellToWorld(subCellPositions[i], grid);
+            //    var rt = subSegment.GetComponent<RectTransform>();
+            //    if (rt != null)
+            //    {
+            //        rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+            //    }
+            //}
+
+
+            float maxOffset = grid.CellSize * 0.4f;
+
+            for (int i = 0; i < Mathf.Min(subSegmentList.Count, subCellPositions.Length); i++)
+            {
+                var worldPos = SubGridHelper.SubCellToWorld(subCellPositions[i], grid);
+                // 小段沿大段方向线性分布
+                float t = (float)i / (SubGridHelper.SUB_DIV - 1); // 0, 0.25, 0.5, 0.75, 1
+                float offset = (t - 0.5f) * maxOffset * 2f; // 在 ±maxOffset 范围内分布
+                Vector3 pos = worldPos + Vector3.up * offset;
+
+                var rt = subSegmentList[i].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    // 小段跟随大段位置
+                    rt.anchoredPosition = new Vector2(pos.x, pos.y);
+
+                    // 直线状态下不旋转
+                    rt.rotation = Quaternion.Euler(0, 0, 0f);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 切换子段渲染模式
+        /// </summary>
+        public void SetSubSegmentMode(bool useSubSegments)
+        {
+            EnableSubSegmentRendering = useSubSegments;
+            
+            if (useSubSegments)
+            {
+                // 启用子段模式：隐藏原始段，显示子段
+                foreach (var segment in _segments)
+                {
+                    segment.gameObject.SetActive(false);
+                }
+                
+                // 确保子段存在并显示
+                if (_subSegments.Count == 0)
+                {
+                    RecreateSubSegments();
+                }
+                
+                foreach (var kvp in _subSegments)
+                {
+                    foreach (var subSeg in kvp.Value)
+                    {
+                        subSeg.SetActive(true);
+                    }
+                }
+            }
+            else
+            {
+                // 禁用子段模式：显示原始段，隐藏子段
+                foreach (var segment in _segments)
+                {
+                    segment.gameObject.SetActive(true);
+                }
+                
+                foreach (var kvp in _subSegments)
+                {
+                    foreach (var subSeg in kvp.Value)
+                    {
+                        subSeg.SetActive(false);
+                    }
+                }
+            }
+        }
+
+        // *** SubGrid 改动：子段管理方法结束 ***
 
     }
 }

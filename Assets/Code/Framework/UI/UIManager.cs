@@ -45,14 +45,12 @@ namespace ReGecko.Framework.UI
             if (prefabOrInstance == null) return null;
 
             GameObject inst;
-            bool isExisting = false;
 
             if (_spawned.TryGetValue(key, out var go) && go != null)
             {
                 // UI已存在，直接激活
                 inst = go;
                 inst.SetActive(true);
-                isExisting = true;
             }
             else
             {

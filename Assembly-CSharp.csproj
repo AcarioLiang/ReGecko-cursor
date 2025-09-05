@@ -81,6 +81,7 @@
     <Compile Include="Assets\Code\Grid\Entities\ItemEntity.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIGridRenderer.cs" />
     <Compile Include="Assets\Code\Levels\DummyLevelProvider.cs" />
+    <Compile Include="Assets\Code\Grid\SubGridHelper.cs" />
     <Compile Include="Assets\Code\Framework\UI\Panel\UIGameLobby.cs" />
     <Compile Include="Assets\Code\GameCore\Flow\GameScenes.cs" />
     <Compile Include="Assets\Code\Game\GameState.cs" />

@@ -21,6 +21,26 @@ namespace ReGecko.SnakeSystem
         float _moveAccumulator; // 基于速度的逐格推进计数器
         float _lastStatsTime;
 
+        // *** SubGrid 改动开始 ***
+        [Header("SubGrid 小格移动系统")]
+        [Tooltip("是否启用小格移动系统")]
+        public bool EnableSubGridMovement = true;
+        [Tooltip("小格移动速度（小格/秒）")]
+        public float MoveSpeedSubCellsPerSecond = 25f; // 5倍于原来的大格速度
+
+        private Dictionary<int, List<GameObject>> _subSegments = new Dictionary<int, List<GameObject>>();// 每段的5个小段
+        private Queue<GameObject> _subSegmentPool = new Queue<GameObject>();
+
+        protected readonly Dictionary<int, LinkedList<Vector2Int>> _subBodyCells = new Dictionary<int, LinkedList<Vector2Int>>(); // 离散身体占用格，头在First
+
+        // 小格移动相关
+        private Vector2Int _currentHeadSubCell;
+        private Vector2Int _currentTailSubCell;
+        private Vector2Int _lastSampledSubCell; // 上次采样的手指小格
+        private LinkedList<Vector2Int> _subCellPathQueue = new LinkedList<Vector2Int>(); // 小格路径队列
+        private float _subCellMoveAccumulator; // 小格移动累积器
+        // *** SubGrid 改动结束 ***
+
         //优化缓存
         Vector3 _lastMousePos;
         Canvas _parentCanvas;
@@ -78,12 +98,25 @@ namespace ReGecko.SnakeSystem
 
             BuildSegments();
             PlaceInitial();
-
             //更新缓存
             if (_segments.Count > 0)
             {
                 _headRt = _segments[0].GetComponent<RectTransform>();
                 _tailRt = _segments[_segments.Count - 1].GetComponent<RectTransform>();
+            }
+
+            // *** SubGrid 改动：确保子段位置正确初始化 ***
+            if (EnableSubGridMovement)
+            {
+                RecreateSubSegments();
+                InitializeSubSegmentPositions();
+            }
+
+
+            // 初始放置完成后，更新身体图片
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            {
+                _bodySpriteManager.UpdateAllSegmentSprites();
             }
 
         }
@@ -99,6 +132,23 @@ namespace ReGecko.SnakeSystem
                     rt.sizeDelta = new Vector2(_grid.CellSize, _grid.CellSize);
                 }
             }
+
+            // 更新小段的大小
+            if (EnableSubGridMovement)
+            {
+                float subSegmentSize = _grid.CellSize / SubGridHelper.SUB_DIV;
+                for (int i = 0; i < _subSegments.Count; i++)
+                {
+                    for (int j = 0; j < _subSegments[i].Count; j++)
+                    {
+                        var rt = _subSegments[i][j].GetComponent<RectTransform>();
+                        if (rt != null)
+                        {
+                            rt.sizeDelta = new Vector2(_grid.CellSize, subSegmentSize);
+                        }
+                    }
+                }
+            }
         }
 
         void BuildSegments()
@@ -109,6 +159,16 @@ namespace ReGecko.SnakeSystem
             }
             _segments.Clear();
             _cachedRectTransforms.Clear(); // 清理缓存
+
+            // 清理现有小段和转弯状态
+            for (int i = 0; i < _subSegments.Count; i++)
+            {
+                for (int j = 0; j < _subSegments[i].Count; j++)
+                {
+                    if (_subSegments[i][j] != null) Destroy(_subSegments[i][j].gameObject);
+                }
+            }
+            _subSegments.Clear();
 
             for (int i = 0; i < Mathf.Max(1, Length); i++)
             {
@@ -132,7 +192,167 @@ namespace ReGecko.SnakeSystem
                 _segments.Add(go.transform);
                 _cachedRectTransforms.Add(rt); // 缓存RectTransform组件
             }
+
         }
+
+        // *** SubGrid 改动：子段管理方法开始 ***
+
+        /// <summary>
+        /// 创建或获取子段GameObject
+        /// </summary>
+        GameObject GetSubSegmentFromPool()
+        {
+            if (_subSegmentPool.Count > 0)
+            {
+                var obj = _subSegmentPool.Dequeue();
+                obj.SetActive(true);
+                return obj;
+            }
+
+            // 如果没有预制体，创建一个基本的Image对象
+            var go = new GameObject("SubSegment");
+            go.transform.SetParent(transform);
+            var image = go.AddComponent<Image>();
+            //image.sprite = VerticalBodySprite;
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(_grid.CellSize, SubGridHelper.SUB_CELL_SIZE * _grid.CellSize); // 转换为UI单位
+            return go;
+        }
+
+        /// <summary>
+        /// 回收子段到对象池
+        /// </summary>
+        void ReturnSubSegmentToPool(GameObject obj)
+        {
+            obj.SetActive(false);
+            _subSegmentPool.Enqueue(obj);
+        }
+
+        /// <summary>
+        /// 重新创建所有子段
+        /// </summary>
+        void RecreateSubSegments()
+        {
+            // 清理现有子段
+            foreach (var kvp in _subSegments)
+            {
+                foreach (var subSeg in kvp.Value)
+                {
+                    ReturnSubSegmentToPool(subSeg);
+                }
+            }
+            _subSegments.Clear();
+
+            // 为每个身体节点创建5个子段
+            var bodyCells = GetBodyCells();
+            if (bodyCells == null) return;
+
+            int segmentIndex = 0;
+            foreach (var cell in bodyCells)
+            {
+                var subSegmentList = new List<GameObject>();
+                for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                {
+                    var subSegment = GetSubSegmentFromPool();
+                    subSegment.name = ($"SubSegment_{segmentIndex}_{i}");
+                    subSegmentList.Add(subSegment);
+                }
+                _subSegments[segmentIndex] = subSegmentList;
+                segmentIndex++;
+            }
+        }
+
+        /// <summary>
+        /// 初始化所有子段的位置
+        /// </summary>
+        void InitializeSubSegmentPositions()
+        {
+            if (!EnableSubGridMovement)
+                return;
+
+            // 为每个身体节点初始化5个子段的位置
+            var bodyCells = GetBodyCells();
+            if (bodyCells == null) return;
+
+            var grid = GetGrid();
+            int segmentIndex = 0;
+
+            _subBodyCells.Clear();
+
+            foreach (var bigCell in bodyCells)
+            {
+                if (!_subSegments.ContainsKey(segmentIndex))
+                {
+                    segmentIndex++;
+                    continue;
+                }
+
+                // 初始化时，所有子段都居中对齐到大格中心
+                var bigCellFirstSub = SubGridHelper.BigCellToFirstSubCell(bigCell);
+
+                Vector2Int[] subCellPositions = new Vector2Int[SubGridHelper.SUB_DIV];
+                for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                {
+                    // 初始状态：所有子段沿Y轴排列，居中对齐
+                    subCellPositions[i] = new Vector2Int(
+                        bigCellFirstSub.x + SubGridHelper.SUB_DIV / 2,
+                        bigCellFirstSub.y + i
+                    );
+
+                    // 同步到链表与可视
+                    _subBodyCells[segmentIndex].AddLast(subCellPositions[i]);
+                }
+
+                // 更新子段位置
+                UpdateSubSegmentPositions(segmentIndex, subCellPositions);
+
+
+                segmentIndex++;
+            }
+
+            _currentHeadSubCell = _subBodyCells[0].First.Value;
+            _currentTailSubCell = _subBodyCells[_subBodyCells.Count - 1].Last.Value;
+            _lastSampledSubCell = _currentHeadSubCell;
+
+        }
+
+
+        /// <summary>
+        /// 更新子段位置（由SnakeController调用）
+        /// </summary>
+        /// <param name="segmentIndex">身体节点索引</param>
+        /// <param name="subCellPositions">5个子段的小格坐标</param>
+        public void UpdateSubSegmentPositions(int segmentIndex, Vector2Int[] subCellPositions)
+        {
+            if (!EnableSubGridMovement || !_subSegments.ContainsKey(segmentIndex))
+                return;
+
+            var subSegmentList = _subSegments[segmentIndex];
+            var grid = GetGrid();
+
+            float maxOffset = grid.CellSize * 0.5f;
+
+            for (int i = 0; i < Mathf.Min(subSegmentList.Count, subCellPositions.Length); i++)
+            {
+                var worldPos = SubGridHelper.SubCellToWorld(subCellPositions[i], grid);
+                // 小段沿大段方向线性分布
+                float t = (float)i / (SubGridHelper.SUB_DIV - 1); // 0, 0.25, 0.5, 0.75, 1
+                float offset = (t - 0.5f) * maxOffset * 2f; // 在 ±maxOffset 范围内分布
+                Vector3 pos = worldPos + Vector3.up * offset;
+
+                var rt = subSegmentList[i].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    // 小段跟随大段位置
+                    rt.anchoredPosition = new Vector2(pos.x, pos.y);
+
+                    // 直线状态下不旋转
+                    rt.rotation = Quaternion.Euler(0, 0, 0f);
+                }
+            }
+
+        }
+
 
         protected override void InitializeBodySpriteManager()
         {
@@ -213,14 +433,10 @@ namespace ReGecko.SnakeSystem
             _currentHeadCell = _bodyCells.First.Value;
             _currentTailCell = _bodyCells.Last.Value;
 
+
             // 同步HashSet缓存
             SyncBodyCellsSet();
 
-            // 初始放置完成后，更新身体图片
-            if (EnableBodySpriteManagement && _bodySpriteManager != null)
-            {
-                _bodySpriteManager.UpdateAllSegmentSprites();
-            }
         }
 
 
@@ -231,12 +447,17 @@ namespace ReGecko.SnakeSystem
             {
                 HandleInput();
             }
+
+            // *** SubGrid 改动：确保小格视觉效果始终更新 ***
+            if (EnableSubGridMovement && !_dragging)
+            {
+                // 非拖拽状态下也要保持小格视觉位置正确
+                UpdateMainSegmentPositionsFromSubCells();
+            }
         }
 
         public override void UpdateMovement()
         {
-            // 清理已销毁的组件
-            CleanupCachedComponents();
 
             // 如果蛇已被完全消除或组件被销毁，停止所有移动更新
             if (_bodyCells.Count == 0 || !IsAlive() || _cachedRectTransforms.Count == 0)
@@ -248,15 +469,123 @@ namespace ReGecko.SnakeSystem
                 return;
 
             if (_consuming)
+            {
+                // 清理已销毁的组件
+                CleanupCachedComponents();
                 return;
+            }
 
+            // *** SubGrid 改动：使用小格或大格移动 ***
+            if (EnableSubGridMovement)
+            {
+                UpdateSubGridMovement();
+            }
+            else
+            {
+                UpdateLegacyMovement();
+            }
+        }
 
+        // *** SubGrid 改动：新的小格移动逻辑 ***
+        void UpdateSubGridMovement()
+        {
+            // 采样当前手指所在小格，扩充小格路径队列
+            var world = ScreenToWorld(Input.mousePosition);
+            var targetSubCell = SubGridHelper.WorldToSubCell(world, _grid);
+            if (targetSubCell != _lastSampledSubCell)
+            {
+                // 更新主方向：按更大位移轴确定
+                var delta = targetSubCell - (_dragFromHead ? _currentHeadSubCell : _currentTailSubCell);
+                _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
+
+                EnqueueSubCellPath(_lastSampledSubCell, targetSubCell);
+                _lastSampledSubCell = targetSubCell;
+            }
+
+            // 洞检测：若拖动端在洞位置或临近洞，且颜色匹配，触发吞噬
+            var currentBigCell = _dragFromHead ? _currentHeadCell : _currentTailCell;
+            var hole = FindHoleAtOrAdjacent(currentBigCell);
+            if (hole != null && hole.CanInteractWithSnake(this))
+            {
+                _consumeCoroutine ??= StartCoroutine(CoConsume(hole, _dragFromHead));
+                return;
+            }
+
+            // 处理小格移动
+            if (_subCellPathQueue.Count > 0)
+            {
+                float subCellSpeed = MoveSpeedSubCellsPerSecond;
+                _subCellMoveAccumulator += subCellSpeed * Time.deltaTime;
+
+                var nextSubCell = _subCellPathQueue.First.Value;
+
+                // 检查目标点合法性
+                //if (!CheckNextPoint(nextSubCell))
+                //{
+                //    _subCellPathQueue.RemoveFirst();
+                //    return;
+                //}
+
+                // 当移动累积器达到1.0时，表示应该移动到下一个格子
+                if (_subCellMoveAccumulator >= 1.0f)
+                {
+                    _subCellMoveAccumulator -= 1.0f; // 减去1.0，保留余数
+                    _subCellPathQueue.RemoveFirst();
+
+                    // 更新蛇的逻辑位置
+                    if (_dragFromHead)
+                    {
+                        /*
+                         * 倒车暂时不做
+                        // 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
+                        var nextBody = _bodyCells.First.Next != null ? _bodyCells.First.Next.Value : _bodyCells.First.Value;
+                        if (nextCell == nextBody)
+                        {
+                            //TryReverseOneStep();
+                        }
+                        else
+                        {
+                            AdvanceHeadTo(nextCell);
+                        }
+                        */
+                        AdvanceHeadToSubCell(nextSubCell);
+                    }
+                    else
+                    {
+                        /*
+                         * 倒车暂时不做
+                        // 尾部倒车：若下一步将进入紧邻身体，则改为让头部前进一步
+                        var prevBody = _bodyCells.Last.Previous != null ? _bodyCells.Last.Previous.Value : _bodyCells.Last.Value;
+                        if (nextCell == prevBody)
+                        {
+                            //TryReverseFromTail();
+                        }
+                        else
+                        {
+                            AdvanceTailTo(nextCell);
+                        }
+                        */
+                        AdvanceTailToSubCell(nextSubCell);
+                    }
+                }
+                else
+                {
+                    // 还没到达目标格子，进行平滑视觉更新
+                    // 实时更新拖拽视觉效果（平滑插值）
+                    UpdateSubGridDragVisuals();
+                }
+
+            }
+        }
+
+        // *** SubGrid 改动：保留原有大格移动逻辑 ***
+        void UpdateLegacyMovement()
+        {
             // 采样当前手指所在格，扩充路径队列（仅四向路径）
             var world = ScreenToWorld(Input.mousePosition);
             var targetCell = ClampInside(_grid.WorldToCell(world));
             if (targetCell != _lastSampledCell)
             {
-
                 // 更新主方向：按更大位移轴确定
                 var delta = targetCell - (_dragFromHead ? _currentHeadCell : _currentTailCell);
                 _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
@@ -265,6 +594,545 @@ namespace ReGecko.SnakeSystem
                 _lastSampledCell = targetCell;
             }
 
+            // 继续执行原有移动逻辑
+            ContinueLegacyMovement();
+        }
+
+        // *** SubGrid 改动：小格路径生成方法（只生成中线路径） ***
+        void EnqueueSubCellPath(Vector2Int fromSubCell, Vector2Int toSubCell)
+        {
+            if (fromSubCell == toSubCell) return;
+
+            // 验证起始和目标小格都在中线上
+            if (!SubGridHelper.IsValidSubCell(fromSubCell) || !SubGridHelper.IsValidSubCell(toSubCell))
+            {
+                Debug.LogWarning($"Invalid sub cell coordinates: from={fromSubCell}, to={toSubCell}");
+                return;
+            }
+
+            // 获取起始和目标的大格坐标
+            Vector2Int fromBigCell = SubGridHelper.SubCellToBigCell(fromSubCell);
+            Vector2Int toBigCell = SubGridHelper.SubCellToBigCell(toSubCell);
+
+            // 如果在大格内移动，直接生成中线路径
+            if (fromBigCell == toBigCell)
+            {
+                GenerateIntraCellCenterLinePath(fromSubCell, toSubCell);
+            }
+            else
+            {
+                // 跨大格移动，生成多段中线路径
+                GenerateInterCellCenterLinePath(fromSubCell, toSubCell);
+            }
+        }
+
+        // *** SubGrid 改动：生成大格内的中线路径 ***
+        void GenerateIntraCellCenterLinePath(Vector2Int fromSubCell, Vector2Int toSubCell)
+        {
+            Vector2Int fromLocal = SubGridHelper.GetSubCellLocalPos(fromSubCell);
+            Vector2Int toLocal = SubGridHelper.GetSubCellLocalPos(toSubCell);
+
+            // 确定移动方向
+            if (fromLocal.x == SubGridHelper.CENTER_INDEX && toLocal.x == SubGridHelper.CENTER_INDEX)
+            {
+                // 垂直移动：沿Y轴中线
+                int startY = Mathf.Min(fromLocal.y, toLocal.y);
+                int endY = Mathf.Max(fromLocal.y, toLocal.y);
+
+                for (int y = startY + 1; y <= endY; y++)
+                {
+                    Vector2Int nextSubCell = new Vector2Int(
+                        fromSubCell.x - fromLocal.x + SubGridHelper.CENTER_INDEX,
+                        fromSubCell.y - fromLocal.y + y
+                    );
+
+                    if (SubGridHelper.IsSubCellInside(nextSubCell, _grid))
+                    {
+                        _subCellPathQueue.AddLast(nextSubCell);
+                    }
+                }
+            }
+            else if (fromLocal.y == SubGridHelper.CENTER_INDEX && toLocal.y == SubGridHelper.CENTER_INDEX)
+            {
+                // 水平移动：沿X轴中线
+                int startX = Mathf.Min(fromLocal.x, toLocal.x);
+                int endX = Mathf.Max(fromLocal.x, toLocal.x);
+
+                for (int x = startX + 1; x <= endX; x++)
+                {
+                    Vector2Int nextSubCell = new Vector2Int(
+                        fromSubCell.x - fromLocal.x + x,
+                        fromSubCell.y - fromLocal.y + SubGridHelper.CENTER_INDEX
+                    );
+
+                    if (SubGridHelper.IsSubCellInside(nextSubCell, _grid))
+                    {
+                        _subCellPathQueue.AddLast(nextSubCell);
+                    }
+                }
+            }
+        }
+
+        // *** SubGrid 改动：生成跨大格的中线路径 ***
+        void GenerateInterCellCenterLinePath(Vector2Int fromSubCell, Vector2Int toSubCell)
+        {
+            Vector2Int fromBigCell = SubGridHelper.SubCellToBigCell(fromSubCell);
+            Vector2Int toBigCell = SubGridHelper.SubCellToBigCell(toSubCell);
+
+            // 计算大格之间的移动方向
+            Vector2Int bigCellDelta = toBigCell - fromBigCell;
+
+            // 先移动到目标大格的中线
+            Vector2Int targetCenterSubCell = SubGridHelper.BigCellToCenterSubCell(toBigCell);
+
+            // 生成从当前位置到目标大格中线的路径
+            if (bigCellDelta.x != 0)
+            {
+                // 水平移动：先移动到目标大格的X中线
+                Vector2Int intermediateSubCell = new Vector2Int(
+                    targetCenterSubCell.x,
+                    fromSubCell.y
+                );
+
+                if (SubGridHelper.IsSubCellInside(intermediateSubCell, _grid))
+                {
+                    _subCellPathQueue.AddLast(intermediateSubCell);
+                }
+            }
+
+            if (bigCellDelta.y != 0)
+            {
+                // 垂直移动：移动到目标大格的Y中线
+                Vector2Int finalSubCell = new Vector2Int(
+                    targetCenterSubCell.x,
+                    targetCenterSubCell.y
+                );
+
+                if (SubGridHelper.IsSubCellInside(finalSubCell, _grid))
+                {
+                    _subCellPathQueue.AddLast(finalSubCell);
+                }
+            }
+
+            // 最后移动到目标位置
+            if (SubGridHelper.IsSubCellInside(toSubCell, _grid))
+            {
+                _subCellPathQueue.AddLast(toSubCell);
+            }
+        }
+
+        // *** SubGrid 改动：小格头部移动方法 ***
+        bool AdvanceHeadToSubCell(Vector2Int nextSubCell)
+        {
+            Vector2Int nextBigCell = SubGridHelper.SubCellToBigCell(nextSubCell);
+
+            // 必须相邻
+            //if (Manhattan(_currentHeadCell, nextCell) != 1) return false;
+            // 检查网格边界
+            if (!_grid.IsInside(nextBigCell)) return false;
+            // 使用与IsPathBlocked相同的阻挡检测逻辑，支持颜色匹配
+            if (IsPathBlocked(nextBigCell)) return false;
+            // 占用校验：允许进入原尾
+            var tailCell = _bodyCells.Last.Value;
+            if (IsOccupiedBySelf(nextBigCell) && nextBigCell != tailCell) return false;
+            /*
+
+            // 更新身体
+            _bodyCells.AddFirst(nextCell);
+            _bodyCells.RemoveLast();
+            _currentHeadCell = nextCell;
+            _currentTailCell = _bodyCells.Last.Value;
+
+            // 同步HashSet缓存
+            SyncBodyCellsSet();
+
+            // 移动完成后，更新身体图片
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            {
+                _bodySpriteManager.OnSnakeMoved();
+            }
+
+
+            _currentHeadSubCell = nextSubCell;
+            */
+            //// 检查是否跨越了大格边界
+            //var newBigCell = SubGridHelper.SubCellToBigCell(nextSubCell);
+            //if (newBigCell != _currentHeadCell)
+            //{
+            //    // 跨越大格边界，执行大格逻辑移动
+            //    if (AdvanceHeadTo(newBigCell))
+            //    {
+            //        _currentHeadCell = newBigCell;
+            //    }
+            //    else
+            //    {
+            //        // 如果大格移动失败，回退小格位置
+            //        _currentHeadSubCell = SubGridHelper.BigCellToCenterSubCell(_currentHeadCell);
+            //    }
+            //}
+            return true;
+        }
+
+        // *** SubGrid 改动：小格尾部移动方法 ***
+        void AdvanceTailToSubCell(Vector2Int nextSubCell)
+        {
+            _currentTailSubCell = nextSubCell;
+
+            // 检查是否跨越了大格边界
+            var newBigCell = SubGridHelper.SubCellToBigCell(nextSubCell);
+            if (newBigCell != _currentTailCell)
+            {
+                // 跨越大格边界，执行大格逻辑移动
+                if (AdvanceTailTo(newBigCell))
+                {
+                    _currentTailCell = newBigCell;
+                }
+                else
+                {
+                    // 如果大格移动失败，回退小格位置
+                    _currentTailSubCell = SubGridHelper.BigCellToCenterSubCell(_currentTailCell);
+                }
+            }
+        }
+
+        // *** SubGrid 改动：获取Grid配置的公共方法 ***
+        public GridConfig GetGrid()
+        {
+            return _grid;
+        }
+        void TestSnapSubCellsToGrid()
+        {
+            var subcelllist = _subBodyCells[0];
+
+            subcelllist.Clear();
+            subcelllist.AddLast(new Vector2Int(4, 2));
+            subcelllist.AddLast(new Vector2Int(3, 2));
+            subcelllist.AddLast(new Vector2Int(2, 2));
+            subcelllist.AddLast(new Vector2Int(2, 3));
+            subcelllist.AddLast(new Vector2Int(2, 4));
+
+
+            SnapSubCellsToGrid();
+        }
+        // *** SubGrid 改动：小格对齐到网格中心 ***
+        void SnapSubCellsToGrid()
+        {
+            if (_subBodyCells == null)
+                return;
+            if (_subBodyCells.Count == 0)
+                return;
+
+
+            // 基于离散cells统一吸附
+            int i = 0;
+            foreach (var kv in _subBodyCells)
+            {
+                if (i >= _subSegments.Count) break;
+                int j = 0;
+                foreach(var cell in kv.Value)
+                {
+                    if (j >= _subSegments[i].Count) break;
+
+                    var rt = _subSegments[i][j].GetComponent<RectTransform>();
+                    if (rt != null)
+                    {
+                        var worldPos = SubGridHelper.SubCellToWorld(cell, _grid);
+                        rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                    }
+
+                    j++;
+                }
+                i++;
+            }
+            _currentHeadSubCell = _subBodyCells[0].First.Value;
+            _currentTailSubCell = _subBodyCells[_subBodyCells.Count - 1].Last.Value;
+        }
+
+        // *** SubGrid 改动：小格视觉更新方法 ***
+        public void UpdateSubGridVisuals()
+        {
+            if (!EnableSubGridMovement)
+                return;
+
+            // 直接更新原有的大段身体位置，让它们跟随小格位置
+            UpdateMainSegmentPositionsFromSubCells();
+
+            // 如果启用了子段渲染且有资源，也更新子段
+            if (_bodySpriteManager != null && _bodySpriteManager.EnableSubSegmentRendering)
+            {
+                UpdateSubSegmentPositions();
+            }
+        }
+
+        // *** SubGrid 改动：更新主要身体段位置（基于小格） ***
+        void UpdateMainSegmentPositionsFromSubCells()
+        {
+            // 清理已销毁的组件
+            CleanupCachedComponents();
+
+            if (_cachedRectTransforms.Count == 0 || _bodyCells.Count == 0)
+                return;
+
+            int segmentIndex = 0;
+            foreach (var bigCell in _bodyCells)
+            {
+                if (segmentIndex >= _cachedRectTransforms.Count)
+                    break;
+
+                var rt = _cachedRectTransforms[segmentIndex];
+                if (rt == null)
+                {
+                    segmentIndex++;
+                    continue;
+                }
+
+                Vector3 worldPos;
+
+                if (segmentIndex == 0) // 头部
+                {
+                    // 头部使用当前头部小格的世界位置
+                    worldPos = SubGridHelper.SubCellToWorld(_currentHeadSubCell, _grid);
+                }
+                else if (segmentIndex == _bodyCells.Count - 1) // 尾部
+                {
+                    // 尾部使用当前尾部小格的世界位置
+                    worldPos = SubGridHelper.SubCellToWorld(_currentTailSubCell, _grid);
+                }
+                else // 身体
+                {
+                    // 身体节点使用大格中心位置（保持稳定）
+                    worldPos = _grid.CellToWorld(bigCell);
+                }
+
+                // 更新RectTransform位置
+                rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                segmentIndex++;
+            }
+        }
+
+        // *** SubGrid 改动：更新子段位置（当有子段资源时） ***
+        void UpdateSubSegmentPositions()
+        {
+            // 为每个身体节点计算5个子段的位置
+            int segmentIndex = 0;
+            foreach (var bigCell in _bodyCells)
+            {
+                Vector2Int[] subCellPositions = new Vector2Int[SubGridHelper.SUB_DIV];
+
+                if (segmentIndex == 0) // 头部
+                {
+                    // 头部使用当前头部小格位置
+                    var headSubCellLocal = SubGridHelper.GetSubCellLocalPos(_currentHeadSubCell);
+                    var headBigCellFirstSub = SubGridHelper.BigCellToCenterSubCell(bigCell);
+
+                    for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                    {
+                        // 头部5个子段沿Y轴排列，中心对齐头部小格位置
+                        subCellPositions[i] = new Vector2Int(
+                            headBigCellFirstSub.x + headSubCellLocal.x,
+                            headBigCellFirstSub.y + i
+                        );
+                    }
+                }
+                else if (segmentIndex == _bodyCells.Count - 1) // 尾部
+                {
+                    // 尾部使用当前尾部小格位置
+                    var tailSubCellLocal = SubGridHelper.GetSubCellLocalPos(_currentTailSubCell);
+                    var tailBigCellFirstSub = SubGridHelper.BigCellToFirstSubCell(bigCell);
+
+                    for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                    {
+                        // 尾部5个子段沿Y轴排列，中心对齐尾部小格位置
+                        subCellPositions[i] = new Vector2Int(
+                            tailBigCellFirstSub.x + tailSubCellLocal.x,
+                            tailBigCellFirstSub.y + i
+                        );
+                    }
+                }
+                else // 身体
+                {
+                    // 身体节点使用大格中心对齐的5个子段
+                    var centerSubCell = SubGridHelper.BigCellToCenterSubCell(bigCell);
+                    var bigCellFirstSub = SubGridHelper.BigCellToFirstSubCell(bigCell);
+
+                    for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                    {
+                        // 身体5个子段沿Y轴排列，居中对齐
+                        subCellPositions[i] = new Vector2Int(
+                            bigCellFirstSub.x + SubGridHelper.SUB_DIV / 2,
+                            bigCellFirstSub.y + i
+                        );
+                    }
+                }
+
+                // 更新子段位置
+                _bodySpriteManager.UpdateSubSegmentPositions(segmentIndex, subCellPositions);
+                segmentIndex++;
+            }
+        }
+
+        // *** SubGrid 改动：小格拖拽视觉更新（平滑插值） ***
+        void UpdateSubGridDragVisuals()
+        {
+            if (!EnableSubGridMovement || _cachedRectTransforms.Count == 0 || _bodyCells.Count == 0 || _subCellPathQueue.Count == 0)
+                return;
+
+            // 计算插值系数（基于小格移动累积器）
+            float frac = Mathf.Clamp01(_subCellMoveAccumulator);
+
+
+            if (_dragFromHead)
+            {
+
+                Vector3 headSubVisual;
+
+                // 获取当前鼠标/手指位置
+                Vector3 fingerWorld = ScreenToWorld(Input.mousePosition);
+                Vector2Int fingerSubCell = SubGridHelper.WorldToSubCell(fingerWorld, _grid);
+
+                // 跨格移动：按速度限制线性移动
+                var nextSubCell = _subCellPathQueue.First.Value;
+                var currentSubCellWorld = SubGridHelper.SubCellToWorld(_currentHeadSubCell, _grid);
+                var nextSubCellWorld = SubGridHelper.SubCellToWorld(nextSubCell, _grid);
+                headSubVisual = Vector3.Lerp(currentSubCellWorld, nextSubCellWorld, frac);
+
+                // 更新蛇头视觉位置
+                var headRt = _cachedRectTransforms[0];
+                if (headRt != null)
+                {
+                    headRt.anchoredPosition = new Vector2(headSubVisual.x, headSubVisual.y);
+                }
+
+                /// 更新身体部分：每一节都跟随前一节移动
+                // 应用插值并更新视觉位置
+                for (int i = 1; i < _bodyCells.Count && i < _cachedRectTransforms.Count; i++)
+                {
+                    Vector3 currentBodyPos = _grid.CellToWorld(_bodyCells.ElementAt(i));
+                    Vector3 targetBodyPos;
+                    if (i == 1)
+                    {
+                        targetBodyPos = _grid.CellToWorld(_currentHeadCell);
+                    }
+                    else
+                    {
+                        // 其他身体节跟随后一节的当前逻辑位置
+                        int nextIndex = i - 1;
+                        if (nextIndex < _bodyCells.Count)
+                        {
+                            targetBodyPos = _grid.CellToWorld(_bodyCells.ElementAt(nextIndex));
+                        }
+                        else
+                        {
+                            continue; // 跳过无效的索引
+                        }
+                    }
+                    Vector3 bodyVisual = Vector3.Lerp(currentBodyPos, targetBodyPos, frac);
+
+                    var bodyRt = _cachedRectTransforms[i];
+                    if (bodyRt != null)
+                    {
+                        bodyRt.anchoredPosition = new Vector2(bodyVisual.x, bodyVisual.y);
+                    }
+                }
+
+            }
+
+
+            //**************************
+            /*
+            // 获取当前鼠标/手指位置
+            Vector3 fingerWorld = ScreenToWorld(Input.mousePosition);
+            Vector2Int fingerSubCell = SubGridHelper.WorldToSubCell(fingerWorld, _grid);
+
+            int segmentIndex = 0;
+            foreach (var bigCell in _bodyCells)
+            {
+                if (segmentIndex >= _cachedRectTransforms.Count)
+                    break;
+
+                var rt = _cachedRectTransforms[segmentIndex];
+                if (rt == null)
+                {
+                    segmentIndex++;
+                    continue;
+                }
+
+                Vector3 currentPos = new Vector2(rt.anchoredPosition.x, rt.anchoredPosition.y);
+                Vector3 targetPos = currentPos;
+
+                if (segmentIndex == 0 && _dragFromHead) // 拖拽头部
+                {
+                    // 头部在小格路径中时的目标位置
+                    if (_subCellPathQueue.Count > 0)
+                    {
+                        var nextSubCell = _subCellPathQueue.First.Value;
+                        var currentSubCellWorld = SubGridHelper.SubCellToWorld(_currentHeadSubCell, _grid);
+                        var nextSubCellWorld = SubGridHelper.SubCellToWorld(nextSubCell, _grid);
+                        targetPos = Vector3.Lerp(currentSubCellWorld, nextSubCellWorld, frac);
+                    }
+                    else
+                    {
+                        // 没有路径时，头部可以自由跟随手指在当前大格内移动
+                        var currentBigCell = SubGridHelper.SubCellToBigCell(_currentHeadSubCell);
+                        var fingerBigCell = SubGridHelper.SubCellToBigCell(fingerSubCell);
+
+                        if (currentBigCell == fingerBigCell)
+                        {
+                            // 在同一大格内，可以自由移动
+                            targetPos = SubGridHelper.SubCellToWorld(fingerSubCell, _grid);
+                        }
+                        else
+                        {
+                            // 不在同一大格，保持当前小格位置
+                            targetPos = SubGridHelper.SubCellToWorld(_currentHeadSubCell, _grid);
+                        }
+                    }
+                }
+                else if (segmentIndex == _bodyCells.Count - 1 && !_dragFromHead) // 拖拽尾部
+                {
+                    // 尾部在小格路径中时的目标位置
+                    if (_subCellPathQueue.Count > 0)
+                    {
+                        var nextSubCell = _subCellPathQueue.First.Value;
+                        var currentSubCellWorld = SubGridHelper.SubCellToWorld(_currentTailSubCell, _grid);
+                        var nextSubCellWorld = SubGridHelper.SubCellToWorld(nextSubCell, _grid);
+                        targetPos = Vector3.Lerp(currentSubCellWorld, nextSubCellWorld, frac);
+                    }
+                    else
+                    {
+                        // 没有路径时，尾部可以自由跟随手指在当前大格内移动
+                        var currentBigCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
+                        var fingerBigCell = SubGridHelper.SubCellToBigCell(fingerSubCell);
+
+                        if (currentBigCell == fingerBigCell)
+                        {
+                            // 在同一大格内，可以自由移动
+                            targetPos = SubGridHelper.SubCellToWorld(fingerSubCell, _grid);
+                        }
+                        else
+                        {
+                            // 不在同一大格，保持当前小格位置
+                            targetPos = SubGridHelper.SubCellToWorld(_currentTailSubCell, _grid);
+                        }
+                    }
+                }
+                else
+                {
+                    // 身体部分保持在大格中心（稳定）
+                    targetPos = _grid.CellToWorld(bigCell);
+                }
+
+                // 应用平滑插值
+                Vector3 smoothPos = Vector3.Lerp(currentPos, targetPos, 0.8f);
+                rt.anchoredPosition = new Vector2(smoothPos.x, smoothPos.y);
+
+                segmentIndex++;
+            }
+            */
+        }
+
+        void ContinueLegacyMovement()
+        {
             // 洞检测：若拖动端在洞位置或临近洞，且颜色匹配，触发吞噬
             var hole = FindHoleAtOrAdjacent(_dragFromHead ? _currentHeadCell : _currentTailCell);
             if (hole != null && hole.CanInteractWithSnake(this))
@@ -272,7 +1140,6 @@ namespace ReGecko.SnakeSystem
                 _consumeCoroutine ??= StartCoroutine(CoConsume(hole, _dragFromHead));
                 return;
             }
-
 
             if (_pathQueue.Count > 0)
             {
@@ -393,11 +1260,22 @@ namespace ReGecko.SnakeSystem
                     {
                         _dragging = true;
                         _dragStartCell = _grid.WorldToCell(world);
-                        _pathQueue.Clear();
-                        _lastSampledCell = _dragFromHead ? _currentHeadCell : _currentTailCell;
-                        _moveAccumulator = 0f;
-                        _dragAxis = DragAxis.None;
 
+                        // *** SubGrid 改动：初始化小格拖拽 ***
+                        if (EnableSubGridMovement)
+                        {
+                            _subCellPathQueue.Clear();
+                            _lastSampledSubCell = _dragFromHead ? _currentHeadSubCell : _currentTailSubCell;
+                            _subCellMoveAccumulator = 0f;
+                        }
+                        else
+                        {
+                            _pathQueue.Clear();
+                            _lastSampledCell = _dragFromHead ? _currentHeadCell : _currentTailCell;
+                            _moveAccumulator = 0f;
+                        }
+
+                        _dragAxis = DragAxis.None;
                     }
                 }
 
@@ -411,8 +1289,18 @@ namespace ReGecko.SnakeSystem
 
                     if (_startMove)
                     {
-                        _pathQueue.Clear();
-                        SnapToGrid();
+                        TestSnapSubCellsToGrid();
+                        // *** SubGrid 改动：小格或大格对齐 ***
+                        if (EnableSubGridMovement)
+                        {
+                            _subCellPathQueue.Clear();
+                            SnapSubCellsToGrid();
+                        }
+                        else
+                        {
+                            _pathQueue.Clear();
+                            SnapToGrid();
+                        }
                         _startMove = false;
                     }
 
@@ -919,10 +1807,11 @@ namespace ReGecko.SnakeSystem
                 {
                     Vector3 currentBodyPos = _grid.CellToWorld(_bodyCells.ElementAt(i));
                     Vector3 targetBodyPos;
-                    if(i == 1)
+                    if (i == 1)
                     {
                         targetBodyPos = _grid.CellToWorld(_currentHeadCell);
-                    }else
+                    }
+                    else
                     {
                         // 其他身体节跟随后一节的当前逻辑位置
                         int nextIndex = i - 1;
