@@ -37,22 +37,22 @@ namespace ReGecko.Grid.Entities
 		/// <summary>
 		/// 尝试触发吞噬逻辑
 		/// </summary>
-		public void TryTriggerConsume(SnakeController snake, bool dragOnHead)
+		public void TryTriggerConsume(BaseSnake snake, bool dragOnHead)
 		{
-			// 检查蛇是否邻近洞
-			if (!IsAdjacent(dragOnHead ? snake.GetHeadCell() : snake.GetTailCell())) return;
-			
-			// 检查颜色是否匹配
-			if (!CanInteractWithSnake(snake))
-			{
-				Debug.Log($"蛇 {snake.SnakeId} ({snake.ColorType.GetDisplayName()}) 无法与洞 ({ColorType.GetDisplayName()}) 交互：颜色不匹配");
-				return;
-			}
-			
-			Debug.Log($"蛇 {snake.SnakeId} ({snake.ColorType.GetDisplayName()}) 开始被洞 ({ColorType.GetDisplayName()}) 吞噬");
-			
-			// 颜色匹配，启动吞噬协程
-			snake.StartCoroutine(snake.CoConsume(this, dragOnHead));
+			//// 检查蛇是否邻近洞
+			//if (!IsAdjacent(dragOnHead ? snake.GetHeadCell() : snake.GetTailCell())) return;
+			//
+			//// 检查颜色是否匹配
+			//if (!CanInteractWithSnake(snake))
+			//{
+			//	Debug.Log($"蛇 {snake.SnakeId} ({snake.ColorType.GetDisplayName()}) 无法与洞 ({ColorType.GetDisplayName()}) 交互：颜色不匹配");
+			//	return;
+			//}
+			//
+			//Debug.Log($"蛇 {snake.SnakeId} ({snake.ColorType.GetDisplayName()}) 开始被洞 ({ColorType.GetDisplayName()}) 吞噬");
+			//
+			//// 颜色匹配，启动吞噬协程
+			//snake.StartCoroutine(snake.CoConsume(this, dragOnHead));
 		}
 
 		/// <summary>

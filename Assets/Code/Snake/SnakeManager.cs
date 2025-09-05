@@ -5,6 +5,7 @@ using UnityEngine;
 using ReGecko.GridSystem;
 using ReGecko.Grid.Entities;
 using ReGecko.Levels;
+using ReGecko.HingeJointSnake;
 
 namespace ReGecko.SnakeSystem
 {
@@ -84,15 +85,27 @@ namespace ReGecko.SnakeSystem
                 snakeGo.AddComponent<RectTransform>();
             }
 
-            // 根据配置选择蛇的类型，目前只有SnakeController
-            BaseSnake snake = snakeGo.AddComponent<SnakeController>();
+            // 根据配置选择蛇的类型，使用新的HingeJointSnakeController
+            HingeJointSnakeController hingeSnake = snakeGo.AddComponent<HingeJointSnakeController>();
+            BaseSnake snake = hingeSnake;
             
             // 设置蛇的属性
             ConfigureSnake(snake, snakeConfig, snakeId);
             
+            // 设置初始身体格子配置
+            if (snakeConfig.BodyCells != null && snakeConfig.BodyCells.Length > 0)
+            {
+                hingeSnake.SetInitialBodyCells(snakeConfig.BodyCells);
+            }
+            else
+            {
+                // 根据HeadCell和Length生成默认身体格子
+                Vector2Int[] defaultBodyCells = GenerateDefaultBodyCells(snakeConfig.HeadCell, snakeConfig.Length);
+                hingeSnake.SetInitialBodyCells(defaultBodyCells);
+            }
+            
             // 初始化蛇
             snake.Initialize(_gridConfig, _entityManager, this);
-            snake.ForceRefreshAllSprites();
             
             // 添加到管理列表
             _snakes.Add(snake);
@@ -114,8 +127,6 @@ namespace ReGecko.SnakeSystem
             snake.BodyColor = config.Color;
             snake.ColorType = config.ColorType; // 设置颜色类型
             snake.Length = Mathf.Max(1, config.Length);
-            snake.HeadCell = config.HeadCell;
-            snake.InitialBodyCells = config.BodyCells;
             snake.MoveSpeedCellsPerSecond = config.MoveSpeed > 0 ? config.MoveSpeed : 16f;
             snake.IsControllable = config.IsControllable;
             
@@ -134,6 +145,46 @@ namespace ReGecko.SnakeSystem
                 newId = $"{baseId}_{counter}";
             }
             return newId;
+        }
+
+        /// <summary>
+        /// 根据头部位置和长度生成默认身体格子
+        /// </summary>
+        private Vector2Int[] GenerateDefaultBodyCells(Vector2Int headCell, int length)
+        {
+            Vector2Int[] bodyCells = new Vector2Int[length];
+            
+            // 蛇头在第一个位置
+            bodyCells[0] = headCell;
+            
+            // 身体向下延伸
+            for (int i = 1; i < length; i++)
+            {
+                bodyCells[i] = headCell + Vector2Int.down * i;
+            }
+            
+            // 确保所有格子都在网格范围内
+            for (int i = 0; i < length; i++)
+            {
+                bodyCells[i] = ClampCellToGrid(bodyCells[i]);
+            }
+            
+            return bodyCells;
+        }
+
+        /// <summary>
+        /// 将格子坐标限制在网格范围内
+        /// </summary>
+        private Vector2Int ClampCellToGrid(Vector2Int cell)
+        {
+            if (_gridConfig.IsValid())
+            {
+                return new Vector2Int(
+                    Mathf.Clamp(cell.x, 0, _gridConfig.Width - 1),
+                    Mathf.Clamp(cell.y, 0, _gridConfig.Height - 1)
+                );
+            }
+            return cell;
         }
 
         /// <summary>
@@ -285,94 +336,11 @@ namespace ReGecko.SnakeSystem
         }
 
 
-        /// <summary>
-        /// 获取所有蛇占用的格子
-        /// </summary>
-        public HashSet<Vector2Int> GetAllSnakeOccupiedCells()
-        {
-            var occupiedCells = new HashSet<Vector2Int>();
-            foreach (var snake in _snakes)
-            {
-                if (snake != null && snake.IsAlive())
-                {
-                    var bodyCells = snake.GetBodyCells();
-                    foreach (var cell in bodyCells)
-                    {
-                        occupiedCells.Add(cell);
-                    }
-                }
-            }
-            return occupiedCells;
-        }
-
-        /// <summary>
-        /// 检查指定格子是否被任何蛇占用
-        /// </summary>
-        public bool IsCellOccupiedByAnySnake(Vector2Int cell)
-        {
-            foreach (var snake in _snakes)
-            {
-                if (snake != null && snake.IsAlive())
-                {
-                    var bodyCells = snake.GetBodyCells();
-                    foreach (var bodyCell in bodyCells)
-                    {
-                        if (bodyCell == cell) return true;
-                    }
-                }
-            }
-            return false;
-        }
 
         // 缓存所有蛇的占用格子，避免重复计算
         private HashSet<Vector2Int> _cachedOccupiedCells = new HashSet<Vector2Int>();
         private Dictionary<BaseSnake, HashSet<Vector2Int>> _snakeOccupiedCells = new Dictionary<BaseSnake, HashSet<Vector2Int>>();
         private bool _occupiedCellsCacheValid = false;
-
-        /// <summary>
-        /// 检查指定格子是否被指定蛇以外的其他蛇占用（优化版本）
-        /// </summary>
-        public bool IsCellOccupiedByOtherSnakes(Vector2Int cell, BaseSnake excludeSnake)
-        {
-            UpdateOccupiedCellsCache();
-            
-            foreach (var kvp in _snakeOccupiedCells)
-            {
-                if (kvp.Key != excludeSnake && kvp.Key != null && kvp.Key.IsAlive())
-                {
-                    if (kvp.Value.Contains(cell))
-                        return true;
-                }
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// 更新占用格子缓存
-        /// </summary>
-        private void UpdateOccupiedCellsCache()
-        {
-            if (_occupiedCellsCacheValid) return;
-
-            _cachedOccupiedCells.Clear();
-            _snakeOccupiedCells.Clear();
-
-            foreach (var snake in _snakes)
-            {
-                if (snake != null && snake.IsAlive())
-                {
-                    var snakeCells = new HashSet<Vector2Int>();
-                    var bodyCells = snake.GetBodyCells();
-                    foreach (var cell in bodyCells)
-                    {
-                        snakeCells.Add(cell);
-                        _cachedOccupiedCells.Add(cell);
-                    }
-                    _snakeOccupiedCells[snake] = snakeCells;
-                }
-            }
-            _occupiedCellsCacheValid = true;
-        }
 
         /// <summary>
         /// 标记占用格子缓存为无效（当蛇移动后调用）
