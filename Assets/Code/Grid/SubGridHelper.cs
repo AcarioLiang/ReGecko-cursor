@@ -88,8 +88,8 @@ namespace ReGecko.GridSystem
             int subY = subCell.y % SUB_DIV;
 
             // 小格偏移量：从大格中心算起，范围是[-0.4, -0.2, 0, 0.2, 0.4]
-            float offsetX = (subX - CENTER_INDEX) * SUB_CELL_SIZE;
-            float offsetY = (subY - CENTER_INDEX) * SUB_CELL_SIZE;
+            float offsetX = (subX - CENTER_INDEX) * SUB_CELL_SIZE * grid.CellSize;
+            float offsetY = (subY - CENTER_INDEX) * SUB_CELL_SIZE * grid.CellSize;
 
             return bigCellWorld + new Vector3(offsetX, offsetY, 0f);
         }

@@ -13,8 +13,8 @@ namespace ReGecko.GameCore.Flow
 		public static GameObject PreloadedUIPrefab_GameMain; // 预加载的UI预制体
 		public static GameObject PreloadedUIPrefab_GameFaild; // 预加载的UI预制体
 		public static GameObject PreloadedUIPrefab_GameSuccess; // 预加载的UI预制体
-		public static GameObject PreloadedUIPrefab_GameSetting; // todo
-		public static GameObject PreloadedUIPrefab_Lobby; // todo
+		public static GameObject PreloadedUIPrefab_GameSetting; // 
+		public static GameObject PreloadedUIPrefab_Lobby; // 
 	}
 }
 

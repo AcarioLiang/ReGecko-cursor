@@ -31,7 +31,9 @@ namespace ReGecko.SnakeSystem
         private Dictionary<int, List<GameObject>> _subSegments = new Dictionary<int, List<GameObject>>();// 每段的5个小段
         private Queue<GameObject> _subSegmentPool = new Queue<GameObject>();
 
-        protected readonly Dictionary<int, LinkedList<Vector2Int>> _subBodyCells = new Dictionary<int, LinkedList<Vector2Int>>(); // 离散身体占用格，头在First
+        protected readonly LinkedList<Vector2Int> _subBodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
+
+        private readonly Dictionary<int, List<RectTransform>> _cachedSubRectTransforms = new Dictionary<int, List<RectTransform>>();
 
         // 小格移动相关
         private Vector2Int _currentHeadSubCell;
@@ -47,7 +49,7 @@ namespace ReGecko.SnakeSystem
         RectTransform _headRt;
         RectTransform _tailRt;
 
-
+                                                                  
         // 性能优化缓存
         private readonly List<RectTransform> _cachedRectTransforms = new List<RectTransform>();
         private readonly List<Vector3> _tempPolylinePoints = new List<Vector3>(); // 复用的折线点列表
@@ -213,7 +215,8 @@ namespace ReGecko.SnakeSystem
             var go = new GameObject("SubSegment");
             go.transform.SetParent(transform);
             var image = go.AddComponent<Image>();
-            //image.sprite = VerticalBodySprite;
+            image.sprite = BodySprite;
+            image.color = BodyColor;
             var rt = go.GetComponent<RectTransform>();
             rt.sizeDelta = new Vector2(_grid.CellSize, SubGridHelper.SUB_CELL_SIZE * _grid.CellSize); // 转换为UI单位
             return go;
@@ -247,6 +250,8 @@ namespace ReGecko.SnakeSystem
             var bodyCells = GetBodyCells();
             if (bodyCells == null) return;
 
+            _cachedSubRectTransforms.Clear();
+            RectTransform rt = null;
             int segmentIndex = 0;
             foreach (var cell in bodyCells)
             {
@@ -256,8 +261,21 @@ namespace ReGecko.SnakeSystem
                     var subSegment = GetSubSegmentFromPool();
                     subSegment.name = ($"SubSegment_{segmentIndex}_{i}");
                     subSegmentList.Add(subSegment);
+                    rt = subSegment.GetComponent<RectTransform>();
                 }
+                if(!_subSegments.ContainsKey(segmentIndex))
+                {
+                    _subSegments.Add(segmentIndex, new List<GameObject>());
+                }
+
                 _subSegments[segmentIndex] = subSegmentList;
+
+                if(!_cachedSubRectTransforms.ContainsKey(segmentIndex))
+                {
+                    _cachedSubRectTransforms.Add(segmentIndex, new List<RectTransform>());
+                }
+
+                _cachedSubRectTransforms[segmentIndex].Add(rt);
                 segmentIndex++;
             }
         }
@@ -295,12 +313,12 @@ namespace ReGecko.SnakeSystem
                 {
                     // 初始状态：所有子段沿Y轴排列，居中对齐
                     subCellPositions[i] = new Vector2Int(
-                        bigCellFirstSub.x + SubGridHelper.SUB_DIV / 2,
+                        bigCellFirstSub.x,
                         bigCellFirstSub.y + i
                     );
 
                     // 同步到链表与可视
-                    _subBodyCells[segmentIndex].AddLast(subCellPositions[i]);
+                    _subBodyCells.AddLast(subCellPositions[i]);
                 }
 
                 // 更新子段位置
@@ -310,8 +328,8 @@ namespace ReGecko.SnakeSystem
                 segmentIndex++;
             }
 
-            _currentHeadSubCell = _subBodyCells[0].First.Value;
-            _currentTailSubCell = _subBodyCells[_subBodyCells.Count - 1].Last.Value;
+            _currentHeadSubCell = _subBodyCells.First.Value;
+            _currentTailSubCell = _subBodyCells.Last.Value;
             _lastSampledSubCell = _currentHeadSubCell;
 
         }
@@ -330,23 +348,16 @@ namespace ReGecko.SnakeSystem
             var subSegmentList = _subSegments[segmentIndex];
             var grid = GetGrid();
 
-            float maxOffset = grid.CellSize * 0.5f;
 
             for (int i = 0; i < Mathf.Min(subSegmentList.Count, subCellPositions.Length); i++)
             {
-                var worldPos = SubGridHelper.SubCellToWorld(subCellPositions[i], grid);
-                // 小段沿大段方向线性分布
-                float t = (float)i / (SubGridHelper.SUB_DIV - 1); // 0, 0.25, 0.5, 0.75, 1
-                float offset = (t - 0.5f) * maxOffset * 2f; // 在 ±maxOffset 范围内分布
-                Vector3 pos = worldPos + Vector3.up * offset;
+                var cell = subCellPositions[i];
+                var worldPos = SubGridHelper.SubCellToWorld(cell, _grid);
 
                 var rt = subSegmentList[i].GetComponent<RectTransform>();
                 if (rt != null)
                 {
-                    // 小段跟随大段位置
-                    rt.anchoredPosition = new Vector2(pos.x, pos.y);
-
-                    // 直线状态下不旋转
+                    rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                     rt.rotation = Quaternion.Euler(0, 0, 0f);
                 }
             }
@@ -733,43 +744,25 @@ namespace ReGecko.SnakeSystem
             // 使用与IsPathBlocked相同的阻挡检测逻辑，支持颜色匹配
             if (IsPathBlocked(nextBigCell)) return false;
             // 占用校验：允许进入原尾
-            var tailCell = _bodyCells.Last.Value;
+            var tailCell = _subBodyCells.Last.Value;
             if (IsOccupiedBySelf(nextBigCell) && nextBigCell != tailCell) return false;
-            /*
+            
 
             // 更新身体
-            _bodyCells.AddFirst(nextCell);
-            _bodyCells.RemoveLast();
-            _currentHeadCell = nextCell;
-            _currentTailCell = _bodyCells.Last.Value;
+            _subBodyCells.AddFirst(nextSubCell);
+            _subBodyCells.RemoveLast();
+            _currentHeadSubCell = nextSubCell;
+            _currentTailSubCell = _subBodyCells.Last.Value;
 
             // 同步HashSet缓存
-            SyncBodyCellsSet();
+            //SyncBodyCellsSet();
 
             // 移动完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
                 _bodySpriteManager.OnSnakeMoved();
             }
-
-
-            _currentHeadSubCell = nextSubCell;
-            */
-            //// 检查是否跨越了大格边界
-            //var newBigCell = SubGridHelper.SubCellToBigCell(nextSubCell);
-            //if (newBigCell != _currentHeadCell)
-            //{
-            //    // 跨越大格边界，执行大格逻辑移动
-            //    if (AdvanceHeadTo(newBigCell))
-            //    {
-            //        _currentHeadCell = newBigCell;
-            //    }
-            //    else
-            //    {
-            //        // 如果大格移动失败，回退小格位置
-            //        _currentHeadSubCell = SubGridHelper.BigCellToCenterSubCell(_currentHeadCell);
-            //    }
-            //}
+                        
             return true;
         }
 
@@ -802,16 +795,36 @@ namespace ReGecko.SnakeSystem
         }
         void TestSnapSubCellsToGrid()
         {
-            var subcelllist = _subBodyCells[0];
+            //var subcelllist = _subBodyCells[0];
+            //
+            //subcelllist.Clear();
+            //subcelllist.AddLast(new Vector2Int(4, 2));
+            //subcelllist.AddLast(new Vector2Int(3, 2));
+            //subcelllist.AddLast(new Vector2Int(2, 2));
+            //subcelllist.AddLast(new Vector2Int(2, 3));
+            //subcelllist.AddLast(new Vector2Int(2, 4));
 
-            subcelllist.Clear();
-            subcelllist.AddLast(new Vector2Int(4, 2));
-            subcelllist.AddLast(new Vector2Int(3, 2));
-            subcelllist.AddLast(new Vector2Int(2, 2));
-            subcelllist.AddLast(new Vector2Int(2, 3));
-            subcelllist.AddLast(new Vector2Int(2, 4));
-
-
+            /*
+             * if(i == 0)
+                        {
+                            if (j == 0)
+                            {
+                                rt.rotation = Quaternion.Euler(0, 0, 90);
+                            }
+                            if (j == 1)
+                            {
+                                rt.rotation = Quaternion.Euler(0, 0, 67.5f);
+                            }
+                            if (j == 2)
+                            {
+                                rt.rotation = Quaternion.Euler(0, 0, 45);
+                            }
+                            if (j == 3)
+                            {
+                                rt.rotation = Quaternion.Euler(0, 0, 22.5f);
+                            }
+                        }
+             * */
             SnapSubCellsToGrid();
         }
         // *** SubGrid 改动：小格对齐到网格中心 ***
@@ -823,29 +836,82 @@ namespace ReGecko.SnakeSystem
                 return;
 
 
-            // 基于离散cells统一吸附
             int i = 0;
-            foreach (var kv in _subBodyCells)
+            foreach (var cell in _subBodyCells)
             {
                 if (i >= _subSegments.Count) break;
-                int j = 0;
-                foreach(var cell in kv.Value)
-                {
-                    if (j >= _subSegments[i].Count) break;
 
+                for (int j = 0; j < 5; j++)
+                {
                     var rt = _subSegments[i][j].GetComponent<RectTransform>();
                     if (rt != null)
                     {
                         var worldPos = SubGridHelper.SubCellToWorld(cell, _grid);
                         rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
-                    }
 
-                    j++;
+                    }
                 }
+
                 i++;
+                if (i == 5) 
+                {
+                    i = 0;
+                }
             }
-            _currentHeadSubCell = _subBodyCells[0].First.Value;
-            _currentTailSubCell = _subBodyCells[_subBodyCells.Count - 1].Last.Value;
+
+
+            _currentHeadSubCell = _subBodyCells.First.Value;
+            _currentTailSubCell = _subBodyCells.Last.Value;
+        }
+
+
+        void SnapSubCellsToBigCells()
+        {
+            if (_bodyCells == null)
+                return;
+            if (_bodyCells.Count == 0)
+                return;
+
+
+            // 基于离散cells统一吸附
+            int index = 0;
+            foreach (var cell in _bodyCells)
+            {
+                if (index >= _segments.Count) break;
+
+                var rt = _segments[index].GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    var worldPos = _grid.CellToWorld(cell);
+                    rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+                }
+
+                index++;
+            }
+            _currentHeadCell = _bodyCells.First.Value;
+            _currentTailCell = _bodyCells.Last.Value;
+
+
+            int bigCellIndex = 0;
+            foreach (var cell in _bodyCells)
+            {
+                if (bigCellIndex >= _subSegments.Count) break;
+
+                for (int j = 0; j < SubGridHelper.SUB_DIV; j++)
+                {
+                    //小格对齐到大格
+                    var rt = _subSegments[bigCellIndex][j].GetComponent<RectTransform>();
+                    if (rt != null) 
+                    {
+                        var worldPos = SubGridHelper.SubCellToWorld(cell, _grid);
+                        rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
+
+                    }
+                }
+
+                bigCellIndex++;
+            }
+
         }
 
         // *** SubGrid 改动：小格视觉更新方法 ***
@@ -867,6 +933,7 @@ namespace ReGecko.SnakeSystem
         // *** SubGrid 改动：更新主要身体段位置（基于小格） ***
         void UpdateMainSegmentPositionsFromSubCells()
         {
+            return;
             // 清理已销毁的组件
             CleanupCachedComponents();
 
@@ -974,7 +1041,7 @@ namespace ReGecko.SnakeSystem
         // *** SubGrid 改动：小格拖拽视觉更新（平滑插值） ***
         void UpdateSubGridDragVisuals()
         {
-            if (!EnableSubGridMovement || _cachedRectTransforms.Count == 0 || _bodyCells.Count == 0 || _subCellPathQueue.Count == 0)
+            if (!EnableSubGridMovement || _cachedSubRectTransforms.Count == 0 || _subBodyCells.Count == 0 || _subCellPathQueue.Count == 0)
                 return;
 
             // 计算插值系数（基于小格移动累积器）
@@ -997,43 +1064,49 @@ namespace ReGecko.SnakeSystem
                 headSubVisual = Vector3.Lerp(currentSubCellWorld, nextSubCellWorld, frac);
 
                 // 更新蛇头视觉位置
-                var headRt = _cachedRectTransforms[0];
-                if (headRt != null)
+                var subHeadRt = _cachedSubRectTransforms[0][0];
+                if (subHeadRt != null)
                 {
-                    headRt.anchoredPosition = new Vector2(headSubVisual.x, headSubVisual.y);
+                    subHeadRt.anchoredPosition = new Vector2(headSubVisual.x, headSubVisual.y);
                 }
 
                 /// 更新身体部分：每一节都跟随前一节移动
                 // 应用插值并更新视觉位置
-                for (int i = 1; i < _bodyCells.Count && i < _cachedRectTransforms.Count; i++)
+                int i = 0, j = 0, lastindex = 0;
+                foreach(var kv in _cachedSubRectTransforms)
                 {
-                    Vector3 currentBodyPos = _grid.CellToWorld(_bodyCells.ElementAt(i));
-                    Vector3 targetBodyPos;
-                    if (i == 1)
+                    var cachedSubRectTransforms = kv.Value;
+                    for (j = 0;  j < cachedSubRectTransforms.Count; j++)
                     {
-                        targetBodyPos = _grid.CellToWorld(_currentHeadCell);
-                    }
-                    else
-                    {
-                        // 其他身体节跟随后一节的当前逻辑位置
-                        int nextIndex = i - 1;
-                        if (nextIndex < _bodyCells.Count)
+                        lastindex = i * 5 + j;
+                        Vector3 currentBodyPos = SubGridHelper.SubCellToWorld(_subBodyCells.ElementAt(lastindex), _grid);
+                        Vector3 targetBodyPos;
+                        if(lastindex == 0)
                         {
-                            targetBodyPos = _grid.CellToWorld(_bodyCells.ElementAt(nextIndex));
+                            //头部已处理
+                        }
+                        if (lastindex == 1)
+                        {
+                            //第一段身体
+                            targetBodyPos = SubGridHelper.SubCellToWorld(_currentHeadSubCell, _grid);
                         }
                         else
                         {
-                            continue; // 跳过无效的索引
+                            // 其他身体节跟随后一节的当前逻辑位置
+                            int nextIndex = lastindex - 1;
+                            targetBodyPos = SubGridHelper.SubCellToWorld(_subBodyCells.ElementAt(lastindex), _grid);
+                        }
+                        Vector3 bodyVisual = Vector3.Lerp(currentBodyPos, targetBodyPos, frac);
+
+                        var bodyRt = _cachedSubRectTransforms[i][j];
+                        if (bodyRt != null)
+                        {
+                            bodyRt.anchoredPosition = new Vector2(bodyVisual.x, bodyVisual.y);
                         }
                     }
-                    Vector3 bodyVisual = Vector3.Lerp(currentBodyPos, targetBodyPos, frac);
-
-                    var bodyRt = _cachedRectTransforms[i];
-                    if (bodyRt != null)
-                    {
-                        bodyRt.anchoredPosition = new Vector2(bodyVisual.x, bodyVisual.y);
-                    }
+                    i++;
                 }
+               
 
             }
 
@@ -1287,9 +1360,9 @@ namespace ReGecko.SnakeSystem
                     // 手指松开时，记录最终路径并移动到目标位置
                     //RecordFinalPathOnRelease();
 
+                    //TestSnapSubCellsToGrid();
                     if (_startMove)
                     {
-                        TestSnapSubCellsToGrid();
                         // *** SubGrid 改动：小格或大格对齐 ***
                         if (EnableSubGridMovement)
                         {
@@ -2372,18 +2445,42 @@ namespace ReGecko.SnakeSystem
         bool TryPickHeadOrTail(Vector3 world, out bool onHead)
         {
             onHead = false;
-            if (_segments.Count == 0) return false;
+            if(EnableSubGridMovement)
+            {
+                //小格移动逻辑
+                if (_subSegments.Count == 0) return false;
 
-            Vector3 head, tail;
+                var curMouseBigCell = _grid.WorldToCell(world);
+                if(curMouseBigCell == SubGridHelper.SubCellToBigCell(_currentHeadSubCell))
+                {
+                    onHead = true;
+                    return true;
+                }
+                if (curMouseBigCell == SubGridHelper.SubCellToBigCell(_currentTailSubCell))
+                {
 
-            head = new Vector3(_headRt.anchoredPosition.x, _headRt.anchoredPosition.y, 0f);
-            tail = new Vector3(_tailRt.anchoredPosition.x, _tailRt.anchoredPosition.y, 0f);
+                    onHead = false;
+                    return true;
+                }
+                return false;
+            }
+            else
+            {
+                //大格移动逻辑
+                if (_segments.Count == 0) return false;
 
-            float headDist = Vector3.Distance(world, head);
-            float tailDist = Vector3.Distance(world, tail);
-            if (Mathf.Min(headDist, tailDist) > _grid.CellSize * 0.8f) return false;
-            onHead = headDist <= tailDist;
-            return true;
+                Vector3 head, tail;
+
+                head = new Vector3(_headRt.anchoredPosition.x, _headRt.anchoredPosition.y, 0f);
+                tail = new Vector3(_tailRt.anchoredPosition.x, _tailRt.anchoredPosition.y, 0f);
+
+                float headDist = Vector3.Distance(world, head);
+                float tailDist = Vector3.Distance(world, tail);
+                if (Mathf.Min(headDist, tailDist) > _grid.CellSize * 0.8f) return false;
+                onHead = headDist <= tailDist;
+                return true;
+            }
+            
         }
 
         Vector3 ScreenToWorld(Vector3 screen)
@@ -2477,6 +2574,18 @@ namespace ReGecko.SnakeSystem
                 if (_cachedRectTransforms[i] == null)
                 {
                     _cachedRectTransforms.RemoveAt(i);
+                }
+            }
+
+            foreach(var kv in _cachedSubRectTransforms)
+            {
+                var cachedRectTransforms = kv.Value;
+                for (int i = cachedRectTransforms.Count - 1; i >= 0; i--)
+                {
+                    if (cachedRectTransforms[i] == null)
+                    {
+                        cachedRectTransforms.RemoveAt(i);
+                    }
                 }
             }
         }
