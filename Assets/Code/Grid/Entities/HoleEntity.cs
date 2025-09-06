@@ -51,8 +51,8 @@ namespace ReGecko.Grid.Entities
 			
 			Debug.Log($"蛇 {snake.SnakeId} ({snake.ColorType.GetDisplayName()}) 开始被洞 ({ColorType.GetDisplayName()}) 吞噬");
 			
-			// 颜色匹配，启动吞噬协程
-			snake.StartCoroutine(snake.CoConsume(this, dragOnHead));
+			// 颜色匹配，启动吞噬协程todo
+			//snake.StartCoroutine(snake.CoConsume(this, dragOnHead));
 		}
 
 		/// <summary>

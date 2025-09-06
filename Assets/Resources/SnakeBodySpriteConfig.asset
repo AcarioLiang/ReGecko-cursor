@@ -15,7 +15,7 @@ MonoBehaviour:
   VerticalHeadSprite: {fileID: 21300000, guid: d00699eed58bdef4e87254db2ed95e69, type: 3}
   VerticalTailSprite: {fileID: 21300000, guid: 01e8eb23ed32363408a501128068f2c0, type: 3}
   VerticalBodySprite: {fileID: 21300000, guid: 6b29cc4e9d5523e4290117245c7eb16d, type: 3}
-  LTurnBodySprite: {fileID: 21300000, guid: 1958cbb0a7834fc4680aca8ccce2cbda, type: 3}
+  LTurnBodySprite: {fileID: 0}
   RotationAngle: 90
   Scale: 1
   TintColor: {r: 1, g: 1, b: 1, a: 1}

@@ -12,6 +12,7 @@ namespace ReGecko.SnakeSystem
     /// </summary>
     public class SnakeBodySpriteManager : MonoBehaviour
     {
+        /*
         [Header("蛇身体图片资源")]
         [Tooltip("竖直方向的蛇头图片")]
         public Sprite VerticalHeadSprite;
@@ -615,6 +616,7 @@ namespace ReGecko.SnakeSystem
         }
 
         // *** SubGrid 改动：子段管理方法结束 ***
-
+        
+        */
     }
 }

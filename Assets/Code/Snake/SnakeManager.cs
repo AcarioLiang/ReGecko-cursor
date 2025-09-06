@@ -92,7 +92,6 @@ namespace ReGecko.SnakeSystem
             
             // 初始化蛇
             snake.Initialize(_gridConfig, _entityManager, this);
-            snake.ForceRefreshAllSprites();
             
             // 添加到管理列表
             _snakes.Add(snake);
@@ -114,7 +113,7 @@ namespace ReGecko.SnakeSystem
             snake.BodyColor = config.Color;
             snake.ColorType = config.ColorType; // 设置颜色类型
             snake.Length = Mathf.Max(1, config.Length);
-            snake.HeadCell = config.HeadCell;
+            snake.InitialHeadCell = config.HeadCell;
             snake.InitialBodyCells = config.BodyCells;
             snake.MoveSpeedCellsPerSecond = config.MoveSpeed > 0 ? config.MoveSpeed : 16f;
             snake.IsControllable = config.IsControllable;
@@ -284,7 +283,7 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-
+        /*todo
         /// <summary>
         /// 获取所有蛇占用的格子
         /// </summary>
@@ -323,7 +322,7 @@ namespace ReGecko.SnakeSystem
             }
             return false;
         }
-
+        */
         // 缓存所有蛇的占用格子，避免重复计算
         private HashSet<Vector2Int> _cachedOccupiedCells = new HashSet<Vector2Int>();
         private Dictionary<BaseSnake, HashSet<Vector2Int>> _snakeOccupiedCells = new Dictionary<BaseSnake, HashSet<Vector2Int>>();
@@ -352,6 +351,7 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         private void UpdateOccupiedCellsCache()
         {
+            /*
             if (_occupiedCellsCacheValid) return;
 
             _cachedOccupiedCells.Clear();
@@ -372,6 +372,7 @@ namespace ReGecko.SnakeSystem
                 }
             }
             _occupiedCellsCacheValid = true;
+            */
         }
 
         /// <summary>
