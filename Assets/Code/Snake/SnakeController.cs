@@ -35,6 +35,11 @@ namespace ReGecko.SnakeSystem
         {
             return _subBodyCells;
         }
+
+        public override List<GameObject> GetSegments()
+        {
+            return _subSegments;
+        }
         // 小格移动相关
         private Vector2Int _currentHeadCell;
         private Vector2Int _currentTailCell;
@@ -78,7 +83,15 @@ namespace ReGecko.SnakeSystem
                 InitializeSubSegmentPositions();
 
                 LoadSpritesFromConfig();
-                UpdateAllSegmentSprites();
+
+                if (EnableBodySpriteManagement)
+                {
+                    InitializeBodySpriteManager();
+                }
+                else
+                {
+                    UpdateAllSegmentSprites();
+                }
             }
         }
 
@@ -94,12 +107,12 @@ namespace ReGecko.SnakeSystem
                 Config = GameContext.SnakeBodyConfig;
 
             // 从配置文件加载图片
-            if (Config.VerticalHeadSprite != null)
-                VerticalHeadSprite = Config.VerticalHeadSprite;
-            if (Config.VerticalTailSprite != null)
-                VerticalTailSprite = Config.VerticalTailSprite;
-            if (Config.VerticalBodySprite != null)
-                VerticalBodySprite = Config.VerticalBodySprite;
+            //if (Config.VerticalHeadSprite != null)
+            //    VerticalHeadSprite = Config.VerticalHeadSprite;
+            //if (Config.VerticalTailSprite != null)
+            //    VerticalTailSprite = Config.VerticalTailSprite;
+            //if (Config.VerticalBodySprite != null)
+            //    VerticalBodySprite = Config.VerticalBodySprite;
 
         }
 
@@ -617,11 +630,16 @@ namespace ReGecko.SnakeSystem
             // 如果没有预制体，创建一个基本的Image对象
             var go = new GameObject("SubSegment");
             go.transform.SetParent(transform);
+
             var image = go.AddComponent<Image>();
-            image.sprite = BodySprite;
+            image.sprite = null;// BodySprite;
             image.color = BodyColor;
+            if (EnableBodySpriteManagement)
+            {
+                image.enabled = false;
+            }
             var rt = go.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, SubGridHelper.SUB_CELL_SIZE * _grid.CellSize); // 转换为UI单位
+            rt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, SubGridHelper.SUB_CELL_SIZE * _grid.CellSize + 5); // 转换为UI单位
             return go;
         }
 
@@ -663,11 +681,22 @@ namespace ReGecko.SnakeSystem
                     _cachedSubRectTransforms.Add(rt);
                     _segmentImages.Add(img);
                     _subSegments.Add(subSegment);
+
+                    
                 }
-      
+
 
             }
-            
+
+            if(_cachedSubRectTransforms.Count > 0)
+            {
+                var headRt = _cachedSubRectTransforms[0];
+                headRt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, _grid.CellSize * 0.8f);
+                var tailRt = _cachedSubRectTransforms[_cachedSubRectTransforms.Count - 1];
+                tailRt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, _grid.CellSize * 0.8f);
+            }
+
+
         }
 
         /// <summary>
@@ -864,8 +893,20 @@ namespace ReGecko.SnakeSystem
                     return;
                 }
 
+
                 //更新身体图片
-                UpdateAllSegmentSprites();
+                if (EnableBodySpriteManagement)
+                {
+                    if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                    {
+                        _bodySpriteManager.OnSnakeMoved();
+                    }
+                }
+                else
+                {
+                    UpdateAllSegmentSprites();
+                }
+
             }
         }
 
@@ -1153,6 +1194,36 @@ namespace ReGecko.SnakeSystem
 
             return true;
         }
+
+
+        bool AdvanceHeadToSubCellCoConsume(Vector2Int nextSubCell)
+        {
+            if (_subBodyCells == null || _subBodyCells.Count == 0) return true;
+
+            var newHeadSubCell = nextSubCell;
+
+            if (_subBodyCells.Count == 1)
+            {
+                _subBodyCells.First.Value = newHeadSubCell;
+            }
+            else
+            {
+                // 整条蛇朝尾部方向移动：在尾部添加新位置，移除头部
+                _subBodyCells.AddFirst(newHeadSubCell);
+                _subBodyCells.RemoveLast();
+
+            }
+
+
+            // 5) 刷新缓存
+            _currentHeadSubCell = _subBodyCells.First.Value;
+            _currentTailSubCell = _subBodyCells.Last.Value;
+            _currentHeadCell = SubGridHelper.SubCellToBigCell(_currentHeadSubCell);
+            _currentTailCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
+            UpdateCachedSubRectTransformsFromSubBodyCells();
+
+            return true;
+        }
         /// <summary>
         /// 获取指定索引的身体格子
         /// </summary>
@@ -1253,7 +1324,7 @@ namespace ReGecko.SnakeSystem
                 return;
 
             // 遍历身体节点和对应的RectTransform
-            for (int segmentIndex = 0; segmentIndex < _cachedSubRectTransforms.Count; segmentIndex++)
+            for (int segmentIndex = 0; segmentIndex < _subBodyCells.Count; segmentIndex++)
             {
                 var rt = _cachedSubRectTransforms[segmentIndex];
                 if (rt != null)
@@ -1271,8 +1342,6 @@ namespace ReGecko.SnakeSystem
         // *** SubGrid 改动：小格尾部移动方法 ***
         bool AdvanceTailToSubCell(Vector2Int nextSubCell)
         {
-
-
             // 1) 取出首元素作为新头
             var newHeadSubCell = nextSubCell;
 
@@ -1342,6 +1411,35 @@ namespace ReGecko.SnakeSystem
             _currentTailCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
             UpdateCachedSubRectTransformsFromSubBodyCells();
 
+
+            return true;
+        }
+
+        bool AdvanceTailToSubCellCoConsume(Vector2Int nextSubCell)
+        {
+            if (_subBodyCells == null || _subBodyCells.Count == 0) return true;
+
+            var newHeadSubCell = nextSubCell;
+
+            if (_subBodyCells.Count == 1)
+            {
+                _subBodyCells.First.Value = newHeadSubCell;
+            }
+            else
+            {
+                // 整条蛇朝尾部方向移动：在尾部添加新位置，移除头部
+                _subBodyCells.AddLast(newHeadSubCell);
+                _subBodyCells.RemoveFirst();
+
+            }
+
+
+            // 5) 刷新缓存
+            _currentHeadSubCell = _subBodyCells.First.Value;
+            _currentTailSubCell = _subBodyCells.Last.Value;
+            _currentHeadCell = SubGridHelper.SubCellToBigCell(_currentHeadSubCell);
+            _currentTailCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
+            UpdateCachedSubRectTransformsFromSubBodyCells();
 
             return true;
         }
@@ -1506,8 +1604,10 @@ namespace ReGecko.SnakeSystem
             _consuming = true;
             _dragging = false; // 脱离手指控制
             Vector3 holeCenter = _grid.CellToWorld(hole.Cell);
+            var holeCenterSubCell = SubGridHelper.BigCellToCenterSubCell(hole.Cell);
 
             LinkedList<GameObject> allegments = new LinkedList<GameObject>();
+            Transform segmentToConsume = null;
 
             foreach (var gameObject in _subSegments)
             {
@@ -1515,54 +1615,121 @@ namespace ReGecko.SnakeSystem
                     allegments.AddLast(gameObject);
             }
 
+            LinkedList<Vector2Int> pathList = new LinkedList<Vector2Int>();
             // 逐段进入洞并消失，保持身体连续性
             while (_subBodyCells.Count > 0)
             {
-                Transform segmentToConsume = null;
-                Vector2Int consumedCell;
-
                 if (fromHead)
                 {
-                    consumedCell = _subBodyCells.First.Value;
-                    _subBodyCells.RemoveFirst();
-                    if (allegments.Count > 0)
+                    while (Manhattan(_currentHeadSubCell, holeCenterSubCell) != 1)
                     {
-                        segmentToConsume = allegments.First.Value.transform;
-                        allegments.RemoveFirst();
+                        pathList.Clear();
+                        EnqueueSubCellPath(_currentHeadSubCell, holeCenterSubCell, pathList);
+
+                        if(pathList.Count > 0)
+                        {
+                            AdvanceHeadToSubCellCoConsume(pathList.First.Value);
+                            pathList.Clear();
+                        }
+                        else
+                        {
+                            _consuming = false;
+                            _consumeCoroutine = null;
+                            Debug.LogError("CoConsume error! can not find path to hole!");
+                            yield break;
+                        }
+
+                        //更新身体图片
+                        if (EnableBodySpriteManagement)
+                        {
+                            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                            {
+                                _bodySpriteManager.OnSnakeMoved();
+                            }
+                        }
+                        else
+                        {
+                            UpdateAllSegmentSprites();
+                        }
+
+                        yield return new WaitForSeconds(hole.ConsumeInterval);
                     }
-                }
-                else
-                {
-                    consumedCell = _subBodyCells.Last.Value;
+
+
+
                     _subBodyCells.RemoveLast();
-                    int last = allegments.Count - 1;
-                    if (last >= 0)
+                    _subSegments.RemoveAt(_subSegments.Count - 1);
+
+                    if (allegments.Count > 0)
                     {
                         segmentToConsume = allegments.Last.Value.transform;
                         allegments.RemoveLast();
+
+                        Destroy(segmentToConsume.gameObject);
                     }
-                }
 
-                // 更新当前头尾缓存，防止空引用
-                if (_subBodyCells.Count > 0)
-                {
-                    _currentHeadSubCell = _subBodyCells.First.Value;
-                    _currentTailSubCell = _subBodyCells.Last.Value;
-                }
-
-                // 启动消费动画和身体跟随移动
-                if (segmentToConsume != null)
-                {
-                    var consumeCoroutine = StartCoroutine(MoveToHoleAndDestroy(segmentToConsume, holeCenter, hole.ConsumeInterval * 0.8f));
-                    var followCoroutine = StartCoroutine(MoveRemainingBodyTowardHole(consumedCell, hole.Cell, hole.ConsumeInterval * 0.8f, fromHead));
-
-                    // 等待消费完成
-                    yield return consumeCoroutine;
+                    // 更新当前头尾缓存，防止空引用
+                    if (_subBodyCells.Count > 0)
+                    {
+                        _currentHeadSubCell = _subBodyCells.First.Value;
+                        _currentTailSubCell = _subBodyCells.Last.Value;
+                    }
                 }
                 else
                 {
-                    yield return new WaitForSeconds(hole.ConsumeInterval);
+                    while (Manhattan(_currentTailSubCell, holeCenterSubCell) != 1)
+                    {
+                        pathList.Clear();
+                        EnqueueSubCellPath(_currentTailSubCell, holeCenterSubCell, pathList);
+
+                        if (pathList.Count > 0)
+                        {
+                            AdvanceTailToSubCellCoConsume(pathList.First.Value);
+                            pathList.Clear();
+                        }
+                        else
+                        {
+                            _consuming = false;
+                            _consumeCoroutine = null;
+                            Debug.LogError("CoConsume error! can not find path to hole!");
+                            yield break;
+                        }
+
+                        //更新身体图片
+                        if (EnableBodySpriteManagement)
+                        {
+                            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                            {
+                                _bodySpriteManager.OnSnakeMoved();
+                            }
+                        }
+                        else
+                        {
+                            UpdateAllSegmentSprites();
+                        }
+
+                        yield return new WaitForSeconds(hole.ConsumeInterval);
+                    }
+
+                    _subBodyCells.RemoveLast();
+                    _subSegments.RemoveAt(_subSegments.Count - 1);
+
+                    if (allegments.Count > 0)
+                    {
+                        segmentToConsume = allegments.Last.Value.transform;
+                        allegments.RemoveLast();
+
+                        Destroy(segmentToConsume.gameObject);
+                    }
+
+                    // 更新当前头尾缓存，防止空引用
+                    if (_subBodyCells.Count > 0)
+                    {
+                        _currentHeadSubCell = _subBodyCells.First.Value;
+                        _currentTailSubCell = _subBodyCells.Last.Value;
+                    }
                 }
+                    
             }
 
             _consuming = false;

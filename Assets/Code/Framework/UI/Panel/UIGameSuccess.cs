@@ -85,13 +85,11 @@ public class UIGameSuccess : MonoBehaviour
     }
     void OnAdButtonClicked()
     {
-        UIManager.Instance.CloseAll();
         GameContext.NextLoadIsPlayer = true; // 进入关卡加载
         ReGecko.Framework.Scene.SceneManager.Instance.LoadLoadingScene();
     }
     void OnNormalButtonClicked()
     {
-        UIManager.Instance.CloseAll();
         GameContext.NextLoadIsPlayer = true; // 进入关卡加载
         ReGecko.Framework.Scene.SceneManager.Instance.LoadLoadingScene();
     }

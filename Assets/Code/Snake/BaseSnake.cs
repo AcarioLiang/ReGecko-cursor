@@ -6,6 +6,7 @@ using ReGecko.Grid.Entities;
 using ReGecko.Game;
 using System.Collections;
 using ReGecko.GameCore.Flow;
+using ReGecko.Framework.Resources;
 
 namespace ReGecko.SnakeSystem
 {
@@ -59,6 +60,7 @@ namespace ReGecko.SnakeSystem
         protected GridConfig _grid;
         protected GridEntityManager _entityManager;
         protected SnakeManager _snakeManager; // 蛇管理器引用，用于碰撞检测
+        protected SnakeBodySpriteManager _bodySpriteManager;
 
         protected bool _consuming; // 洞吞噬中
         
@@ -75,9 +77,26 @@ namespace ReGecko.SnakeSystem
         public bool IsConsuming() => _consuming;
 
         public virtual LinkedList<Vector2Int> GetBodyCells() => null;
+        public virtual List<GameObject> GetSegments() => null;
 
         // 抽象方法，子类必须实现
         public abstract void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null);
+
+        protected virtual void InitializeBodySpriteManager()
+        {
+            if (!EnableBodySpriteManagement) return;
+
+            var bodySpriteGo = new GameObject("BodySpriteManager");
+            bodySpriteGo.transform.SetParent(transform, false);
+            _bodySpriteManager = bodySpriteGo.AddComponent<SnakeBodySpriteManager>();
+            // SnakeBodySpriteManager会通过GetComponent获取SnakeController
+
+            Material newMaterial = new Material(Shader.Find("Sprites/Default"));
+            newMaterial.mainTexture = ResourceManager.LoadPNG(ResourceDefine.Path_PNG_Snake_Body).texture;
+            _bodySpriteManager.BodyLineMaterial = newMaterial;
+
+        }
+
         public abstract void UpdateMovement();
 
         // 虚方法，子类可以重写

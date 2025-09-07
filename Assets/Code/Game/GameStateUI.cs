@@ -145,7 +145,10 @@ namespace ReGecko.Framework.UI
                     else
                     {
                         UIManager.Instance.Show("GameFaild", GameContext.PreloadedUIPrefab_GameFaild);
-
+                        if(_snakeManager != null)
+                        {
+                            _snakeManager.ClearAllSnakes();
+                        }
                     }
                     break;
             }

@@ -50,6 +50,8 @@ namespace ReGecko.Framework.UI
 
             var canvas = canvasGo.AddComponent<Canvas>();
             canvas.overrideSorting = false; // 不覆盖排序，使用父Canvas的设置
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = Camera.main;
 
             // 设置为填充父容器 (GameRenderArea)
             var rt = canvasGo.GetComponent<RectTransform>();

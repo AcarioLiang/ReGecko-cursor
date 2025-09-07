@@ -44,6 +44,9 @@ namespace ReGecko.Framework.Resources
         public static string Path_UI_Prefab_GameSetting = "Perfab/UI_Panel_GameSetting";
 
 
+        public static string Path_PNG_Snake_Body = "UI/Snake/Game_Snake_body02_type1";
+
+
     }
 
 }

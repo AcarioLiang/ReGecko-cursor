@@ -49,16 +49,10 @@ public class UIGameFaild : MonoBehaviour
             }
 
 
-            var Btn_reward_ad_Transform = _UIRoot.transform.Find("Panel/BottomArea/Btn_reward_ad");
+            var Btn_reward_ad_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_reward_ad");
             if (Btn_reward_ad_Transform != null)
             {
                 _Btn_reward_ad = Btn_reward_ad_Transform.GetComponent<Button>();
-            }
-
-            var Btn_reward_normal_Transform = _UIRoot.transform.Find("Panel/BottomArea/Btn_reward_coin");
-            if (Btn_reward_normal_Transform != null)
-            {
-                _Btn_reward_normal = Btn_reward_normal_Transform.GetComponent<Button>();
             }
         }
 

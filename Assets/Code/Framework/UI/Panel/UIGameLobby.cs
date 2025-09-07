@@ -106,7 +106,6 @@ public class UIGameLobby : MonoBehaviour
     {
         GameContext.NextLoadIsPlayer = false; // 进入关卡加载
         ReGecko.Framework.Scene.SceneManager.Instance.LoadLoadingScene();
-        UIManager.Instance.CloseAll();
     }
     void OnShopButtonClicked()
     {
