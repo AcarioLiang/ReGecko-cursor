@@ -74,6 +74,8 @@ namespace ReGecko.SnakeSystem
         public bool IsDead() => _state == SnakeState.Dead;
         public bool IsConsuming() => _consuming;
 
+        public virtual LinkedList<Vector2Int> GetBodyCells() => null;
+
         // 抽象方法，子类必须实现
         public abstract void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null);
         public abstract void UpdateMovement();

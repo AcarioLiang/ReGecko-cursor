@@ -93,7 +93,6 @@ namespace ReGecko.GridSystem
 
             return bigCellWorld + new Vector3(offsetX, offsetY, 0f);
         }
-
         /// <summary>
         /// 将世界坐标转换为小格坐标
         /// 始终返回中线上的小格坐标，必须是(2,x)或(x,2)的形式
@@ -103,29 +102,30 @@ namespace ReGecko.GridSystem
         /// <returns>小格坐标（在中线上）</returns>
         public static Vector2Int WorldToSubCell(Vector3 world, GridConfig grid)
         {
-            // 先转换到大格坐标
+            // 先转换到大格坐标（大格中心）
             Vector2Int bigCell = grid.WorldToCell(world);
             Vector3 bigCellWorld = grid.CellToWorld(bigCell);
 
-            // 计算在大格内的偏移
+            // 大格内偏移（世界单位）
             Vector3 offset = world - bigCellWorld;
 
-            // 计算X和Y方向的偏移量
-            float xOffset = offset.x / SUB_CELL_SIZE;
-            float yOffset = offset.y / SUB_CELL_SIZE;
+            // 每个小格的世界尺寸
+            float unit = SUB_CELL_SIZE * grid.CellSize; // = grid.CellSize / 5f
 
-            // 判断哪个方向更接近中线，选择该方向的中线
-            if (Mathf.Abs(xOffset) <= Mathf.Abs(yOffset))
+            // 将偏移换算成“小格单位”（中心为0，范围约[-2,2]）
+            float xUnits = offset.x / unit;
+            float yUnits = offset.y / unit;
+
+            // 判断更靠近哪条中线：若更靠近竖直中线 → 返回(2, y)，否则返回(x, 2)
+            if (Mathf.Abs(xUnits) <= Mathf.Abs(yUnits))
             {
-                // X方向更接近中线，使用X方向的中线坐标 (2, y)
-                int subY = Mathf.RoundToInt(yOffset + CENTER_INDEX);
+                int subY = Mathf.RoundToInt(CENTER_INDEX + yUnits);
                 subY = Mathf.Clamp(subY, 0, SUB_DIV - 1);
                 return new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + subY);
             }
             else
             {
-                // Y方向更接近中线，使用Y方向的中线坐标 (x, 2)
-                int subX = Mathf.RoundToInt(xOffset + CENTER_INDEX);
+                int subX = Mathf.RoundToInt(CENTER_INDEX + xUnits);
                 subX = Mathf.Clamp(subX, 0, SUB_DIV - 1);
                 return new Vector2Int(bigCell.x * SUB_DIV + subX, bigCell.y * SUB_DIV + CENTER_INDEX);
             }

@@ -283,7 +283,7 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        /*todo
+        /*
         /// <summary>
         /// 获取所有蛇占用的格子
         /// </summary>
@@ -346,12 +346,44 @@ namespace ReGecko.SnakeSystem
             return false;
         }
 
+
+
+        /// <summary>
+        /// 检查指定格子是否被指定蛇以外的其他蛇占用（优化版本）
+        /// </summary>
+        public bool IsCellOccupiedBySelfSnakes(Vector2Int cell, BaseSnake Snake)
+        {
+            UpdateOccupiedCellsCache();
+
+            foreach (var kvp in _snakeOccupiedCells)
+            {
+                if (kvp.Key == Snake && kvp.Key != null && kvp.Key.IsAlive())
+                {
+                    if (kvp.Value.Contains(cell))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取所有蛇占用的格子
+        /// </summary>
+        public HashSet<Vector2Int> GetSnakeOccupiedCells(BaseSnake Snake)
+        {
+            var occupiedCells = new HashSet<Vector2Int>();
+
+            _snakeOccupiedCells.TryGetValue(Snake, out occupiedCells);
+            return occupiedCells;
+        }
+
+
         /// <summary>
         /// 更新占用格子缓存
         /// </summary>
         private void UpdateOccupiedCellsCache()
         {
-            /*
+            
             if (_occupiedCellsCacheValid) return;
 
             _cachedOccupiedCells.Clear();
@@ -362,17 +394,19 @@ namespace ReGecko.SnakeSystem
                 if (snake != null && snake.IsAlive())
                 {
                     var snakeCells = new HashSet<Vector2Int>();
-                    var bodyCells = snake.GetBodyCells();
-                    foreach (var cell in bodyCells)
+                    var bodyCells = snake.GetBodyCells().ToList();
+                    for (int i = 0; i < bodyCells.Count; )
                     {
-                        snakeCells.Add(cell);
-                        _cachedOccupiedCells.Add(cell);
+                        var bigcell = SubGridHelper.SubCellToBigCell(bodyCells[i]);
+                        snakeCells.Add(bigcell);
+                        _cachedOccupiedCells.Add(bigcell);
+                        i += 5;
                     }
                     _snakeOccupiedCells[snake] = snakeCells;
                 }
             }
             _occupiedCellsCacheValid = true;
-            */
+            
         }
 
         /// <summary>

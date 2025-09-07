@@ -31,6 +31,10 @@ namespace ReGecko.SnakeSystem
         private readonly List<RectTransform> _cachedSubRectTransforms = new List<RectTransform>();
         private List<Image> _segmentImages = new List<Image>();
 
+        public override LinkedList<Vector2Int> GetBodyCells()
+        {
+            return _subBodyCells;
+        }
         // 小格移动相关
         private Vector2Int _currentHeadCell;
         private Vector2Int _currentTailCell;
@@ -216,6 +220,8 @@ namespace ReGecko.SnakeSystem
                     {
                         //全部在大格里
 
+                        var tailOffset = 0f;
+                        bool isTail = false;
                         Vector2Int[] fivecells = new Vector2Int[5];
                         for (int step = 0; step < SubGridHelper.SUB_DIV; step++)
                         {
@@ -225,59 +231,64 @@ namespace ReGecko.SnakeSystem
                         var startAngle = 0;
                         var offsetAngle = -SubRotationAngle;
                         var dir = GetFiveSubTurnDirection8(fivecells);
-                        if(dir == TurnDirection8.RightToUp)
+            
+                        if (dir == TurnDirection8.RightToUp)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 180f;
                         }
                         else if (dir == TurnDirection8.RightToDown)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = -SubRotationAngle;
+                            tailOffset = 180f;
                         }
                         else if (dir == TurnDirection8.LeftToUp)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = -SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.LeftToDown)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.UpToRight)
                         {
                             ///*
                             startAngle = 0;
-                            offsetAngle = -SubRotationAngle;
+                            offsetAngle = -SubRotationAngle; 
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.UpToLeft)
                         {
                             ///*
                             startAngle = 0;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.DownToRight)
                         {
                             ///*
                             startAngle = 0;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 180f;
                         }
                         else if (dir == TurnDirection8.DownToLeft)
                         {
                             ///*
                             startAngle = 0;
-                            offsetAngle = -SubRotationAngle;
+                            offsetAngle = -SubRotationAngle; 
+                            tailOffset = 180f;
                         }
-                        if(segmentIndex == 1)
-                        {
-                            Debug.Log("1=========dir ==> " + dir);
-                        }
-
+  
                         for (int step = 0; step < SubGridHelper.SUB_DIV; step++)
                         {
                             if (segmentIndex + step >= _subSegments.Count) break;
@@ -289,12 +300,16 @@ namespace ReGecko.SnakeSystem
                             {
                                 //蛇尾
                                 image.sprite = VerticalTailSprite;
+                                isTail = true;
                             }
                             else
+                            {
                                 image.sprite = VerticalBodySprite;
+                                isTail = false;
+                            }
 
 
-                            rt.rotation = Quaternion.Euler(0, 0, startAngle + step * offsetAngle);
+                            rt.rotation = Quaternion.Euler(0, 0, (startAngle + step * offsetAngle) + (isTail ? tailOffset : 0f));
 
                         }
 
@@ -302,63 +317,82 @@ namespace ReGecko.SnakeSystem
                     else
                     {
                         //不够五小段
+                        var tailOffset = 0f;
                         var lastSegmentsCount = _subSegments.Count - segmentIndex;
                         Vector2Int[] fivecells = new Vector2Int[lastSegmentsCount];
+                        bool islast = false;
+                        bool isTail = false;
                         for (int step = 0; step < lastSegmentsCount; step++)
                         {
                             fivecells[step] = bodyCellsList[segmentIndex + step];
+                            if(segmentIndex + step == 24)
+                            {
+                                islast = true;
+                            }
                         }
 
                         var startAngle = 0;
                         var offsetAngle = -SubRotationAngle;
                         var dir = GetFiveSubTurnDirection8(fivecells);
+                        if (islast)
+                        {
+                            Debug.Log("=============>" + dir);
+                        }
                         if (dir == TurnDirection8.RightToUp)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 180f;
                         }
                         else if (dir == TurnDirection8.RightToDown)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = -SubRotationAngle;
+                            tailOffset = 180f;
                         }
                         else if (dir == TurnDirection8.LeftToUp)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = -SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.LeftToDown)
                         {
                             ///*
                             startAngle = 90;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.UpToRight)
                         {
                             ///*
                             startAngle = 0;
                             offsetAngle = -SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.UpToLeft)
                         {
                             ///*
                             startAngle = 0;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 0f;
                         }
                         else if (dir == TurnDirection8.DownToRight)
                         {
                             ///*
                             startAngle = 0;
                             offsetAngle = SubRotationAngle;
+                            tailOffset = 180f;
                         }
                         else if (dir == TurnDirection8.DownToLeft)
                         {
                             ///*
                             startAngle = 0;
                             offsetAngle = -SubRotationAngle;
+                            tailOffset = 180f;
                         }
         
 
@@ -373,12 +407,16 @@ namespace ReGecko.SnakeSystem
                             {
                                 //蛇尾
                                 image.sprite = VerticalTailSprite;
+                                isTail = true;
                             }
                             else
+                            {
                                 image.sprite = VerticalBodySprite;
+                                isTail = false;
+                            }
 
 
-                            rt.rotation = Quaternion.Euler(0, 0, startAngle + step * offsetAngle);
+                            rt.rotation = Quaternion.Euler(0, 0, (startAngle + step * offsetAngle) + (isTail ? tailOffset : 0f));
 
                         }
 
@@ -389,6 +427,7 @@ namespace ReGecko.SnakeSystem
                 }
                 else if (isSameX)
                 {
+                    var tailOffset = 0f;
                     // 五小段均为直线：使用竖直身体图片
                     for (int step = 0; step < SubGridHelper.SUB_DIV; step++)
                     {
@@ -401,15 +440,31 @@ namespace ReGecko.SnakeSystem
                         {
                             //蛇尾
                             image.sprite = VerticalTailSprite;
-                        }else
-                            image.sprite = VerticalBodySprite;
 
-                        // 水平方向：
-                        rt.rotation = Quaternion.identity; 
+                            var nextrt = _subSegments[segmentIndex].GetComponent<RectTransform>();
+                            if(nextrt != null && nextrt.position.y > rt.position.y)
+                            {
+                                tailOffset = 180f;
+                            }
+                            else
+                            {
+                                tailOffset = 0f;
+                            }
+                        }
+                        else
+                        {
+                            image.sprite = VerticalBodySprite;
+                            tailOffset = 0f;
+
+                        }
+
+                        // 竖直方向：
+                        rt.rotation = Quaternion.Euler(0, 0, tailOffset); 
                     }
                 }
                 else if (isSameY)
                 {
+                    var tailOffset = 0f;
                     // 五小段均为直线：使用竖直身体图片旋转90度
                     for (int step = 0; step < SubGridHelper.SUB_DIV; step++)
                     {
@@ -422,17 +477,37 @@ namespace ReGecko.SnakeSystem
                         {
                             //蛇尾
                             image.sprite = VerticalTailSprite;
+
+
+                            var nextrt = _subSegments[segmentIndex].GetComponent<RectTransform>();
+                            if (nextrt != null && nextrt.position.x < rt.position.x)
+                            {
+                                tailOffset = -180f;
+                            }
+                            else
+                            {
+                                tailOffset = 0f;
+                            }
                         }
                         else
+                        {
                             image.sprite = VerticalBodySprite;
+                            tailOffset = 0f;
+                        }
 
                         // 水平方向：旋转90度
-                        rt.rotation = Quaternion.Euler(0, 0, RotationAngle);
+                        rt.rotation = Quaternion.Euler(0, 0, RotationAngle + tailOffset);
                     }
                 }
 
-
-                segmentIndex += 5;
+                if(!isSameX && !isSameY)
+                {
+                    segmentIndex += 5;
+                }
+                else
+                {
+                    segmentIndex += 1;
+                }
             }
 
             
@@ -641,6 +716,9 @@ namespace ReGecko.SnakeSystem
             _currentTailSubCell = _subBodyCells.Last.Value;
             _lastSampledSubCell = _currentHeadSubCell;
 
+            _currentHeadCell = SubGridHelper.SubCellToBigCell(_currentHeadSubCell);
+            _currentTailCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
+
         }
 
 
@@ -713,13 +791,16 @@ namespace ReGecko.SnakeSystem
             // 采样当前手指所在小格，扩充小格路径队列
             var world = ScreenToWorld(Input.mousePosition);
             var targetSubCell = SubGridHelper.WorldToSubCell(world, _grid);
-            if (targetSubCell != _lastSampledSubCell)
+            if (targetSubCell.x < 0 || targetSubCell.y < 0)
+                return;
+
+            //if (targetSubCell != _lastSampledSubCell)
             {
                 // 更新主方向：按更大位移轴确定
                 var delta = targetSubCell - (_dragFromHead ? _currentHeadSubCell : _currentTailSubCell);
                 _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
 
-                EnqueueSubCellPath(_lastSampledSubCell, targetSubCell, _subCellPathQueue);
+                EnqueueSubCellPath(_dragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetSubCell, _subCellPathQueue);
                 _lastSampledSubCell = targetSubCell;
             }
 
@@ -732,6 +813,7 @@ namespace ReGecko.SnakeSystem
                 _subCellMoveAccumulator += subCellSpeed * Time.deltaTime;
 
                 var nextSubCell = _subCellPathQueue.First.Value;
+                _subCellPathQueue.Clear();
 
                 // 检查目标点合法性
                 if (!CheckNextCell(nextSubCell))
@@ -741,11 +823,35 @@ namespace ReGecko.SnakeSystem
 
                 if (_dragFromHead)
                 {
-                    AdvanceHeadToSubCell(nextSubCell);
+                    var nextBigBody = GetBodyCellsNextBigCell(_dragFromHead);
+                    var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
+                    if (nextbigcell == nextBigBody)
+                    {
+                        // 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
+                        //TryReverseOneStep();
+                        return;
+                    }
+                    else
+                    {
+                        AdvanceHeadToSubCell(nextSubCell);
+                    }
+
                 }
                 else
                 {
-                    AdvanceTailToSubCell(nextSubCell);
+                    var nextBigBody = GetBodyCellsNextBigCell(_dragFromHead);
+                    var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
+                    if (nextbigcell == nextBigBody)
+                    {
+                        // 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
+                        //TryReverseOneStep();
+                        return;
+                    }
+                    else
+                    {
+                        AdvanceTailToSubCell(nextSubCell);
+                    }
+
                 }
 
 
@@ -763,11 +869,73 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        bool IsOccupiedBySelf(Vector2Int cell)
+        {
+            if (_snakeManager == null )
+            {
+                return false;
+            }
+
+
+            var cellset = _snakeManager.GetSnakeOccupiedCells(this);
+            cellset.Remove(_currentHeadCell);
+
+            if (cellset.Contains(cell))
+                return true;
+
+            return false;
+        }
+
+        Vector2Int GetBodyCellsNextBigCell(bool fromHead)
+        {
+            if (_subBodyCells == null || _subBodyCells.Count == 0)
+                return Vector2Int.zero;
+
+            if(fromHead)
+            {
+                bool isFrist = true;
+                foreach (var subCell in _subBodyCells)
+                {
+                    if (isFrist)
+                    {
+                        isFrist = false;
+                        continue;
+                    }
+
+                    var bigcell = SubGridHelper.SubCellToBigCell(subCell);
+                    if (bigcell != _currentHeadCell)
+                    {
+                        return bigcell;
+                    }
+                }
+            }
+            else
+            {
+                bool isFrist = true;
+                foreach (var subCell in _subBodyCells.Reverse())
+                {
+                    if (isFrist)
+                    {
+                        isFrist = false;
+                        continue;
+                    }
+
+                    var bigcell = SubGridHelper.SubCellToBigCell(subCell);
+                    if (bigcell != _currentTailCell)
+                    {
+                        return bigcell;
+                    }
+                }
+
+            }
+            
+            return Vector2Int.zero;
+        }
 
         bool CheckNextCell(Vector2Int nextSubCell)
         {
 
-            if (!EnableSubGridMovement || _cachedSubRectTransforms.Count == 0 || _subBodyCells.Count == 0 || _subCellPathQueue.Count == 0)
+            if (!EnableSubGridMovement || _cachedSubRectTransforms.Count == 0 || _subBodyCells.Count == 0 )
                 return false;
 
             Vector2Int curCheckSubCell = _currentHeadSubCell;
@@ -786,14 +954,23 @@ namespace ReGecko.SnakeSystem
             }
 
             // 必须相邻
-            if (Manhattan(curHeadBigCell, nextBigCell) != 1) return false;
+            if (Manhattan(curCheckSubCell, nextSubCell) != 1) return false;
             // 检查网格边界
             if (!_grid.IsInside(nextBigCell)) return false;
             // 使用与IsPathBlocked相同的阻挡检测逻辑，支持颜色匹配
-            if (IsPathBlocked(nextBigCell)) return false;
-            // 占用校验：允许进入原尾 todo
-            //var tailCell = _subBodyCells.Last.Value;
-            //if (IsOccupiedBySelf(nextBigCell) && nextBigCell != tailCell) return false;
+            if (IsPathBlocked(nextSubCell)) return false;
+            if (IsOccupiedBySelf(nextBigCell)) return false;
+            // 占用校验：允许进入原尾
+            if(_dragFromHead)
+            {
+                if (nextSubCell == _subBodyCells.First.Next.Value)
+                    return false;
+            }
+            else
+            {
+                if (nextSubCell == _subBodyCells.Last.Previous.Value)
+                    return false;
+            }
 
             return true;
         }
@@ -906,15 +1083,8 @@ namespace ReGecko.SnakeSystem
         }
         bool AdvanceHeadToSubCell(Vector2Int nextSubCell)
         {
-            if (_subCellPathQueue.Count == 0)
-            {
-                Debug.LogWarning("SubCell path queue is empty");
-                return false;
-            }
-
             // 1) 取出首元素作为新头
-            var newHeadSubCell = _subCellPathQueue.First.Value;
-            _subCellPathQueue.RemoveFirst();
+            var newHeadSubCell = nextSubCell;
 
             // 2) 需要能够访问原身体第六格（索引5）
             if (_subBodyCells.Count < 6)
@@ -965,9 +1135,12 @@ namespace ReGecko.SnakeSystem
             if(_headCellToBodyPathQueue.Count >= 5)
             {
                 var newBody = _headCellToBodyPathQueue.ElementAt(4);
-
-                InsertAtPosition(_subBodyCells, 4, newBody);
-                _subBodyCells.RemoveLast();
+                var oldBody = _subBodyCells.ElementAt(5);
+                if(newBody != oldBody)
+                {
+                    InsertAtPosition(_subBodyCells, 6, newBody);
+                    _subBodyCells.RemoveLast();
+                }
             }
 
 
@@ -1028,6 +1201,7 @@ namespace ReGecko.SnakeSystem
 
             // 在当前节点后插入新元素
             list.AddAfter(currentNode, newValue);
+
         }
 
 
@@ -1097,16 +1271,10 @@ namespace ReGecko.SnakeSystem
         // *** SubGrid 改动：小格尾部移动方法 ***
         bool AdvanceTailToSubCell(Vector2Int nextSubCell)
         {
-            if (_subCellPathQueue.Count == 0)
-            {
-                Debug.LogWarning("SubCell path queue is empty");
-                return false;
-            }
 
-            
+
             // 1) 取出首元素作为新头
-            var newHeadSubCell = _subCellPathQueue.First.Value;
-            _subCellPathQueue.RemoveFirst();
+            var newHeadSubCell = nextSubCell;
 
             // 2) 需要能够访问原身体第六格（索引5）
             if (_subBodyCells.Count < 6)
@@ -1157,9 +1325,13 @@ namespace ReGecko.SnakeSystem
             if (_headCellToBodyPathQueue.Count >= 5)
             {
                 var newBody = _headCellToBodyPathQueue.ElementAt(4);
+                var oldBody = _subBodyCells.ElementAt(_subBodyCells.Count - 1 - 5);
+                if (newBody != oldBody)
+                {
+                    InsertAtPosition(_subBodyCells, _subBodyCells.Count - 1 - 3, newBody);
+                    _subBodyCells.RemoveFirst();
+                }
 
-                InsertAtPosition(_subBodyCells, _subBodyCells.Count - 4, newBody);
-                _subBodyCells.RemoveFirst();
             }
 
 
@@ -1723,12 +1895,13 @@ namespace ReGecko.SnakeSystem
             return path;
         }
 
-        bool IsPathBlocked(Vector2Int cell)
+        bool IsPathBlocked(Vector2Int subCell)
         {
+            var bigCell = SubGridHelper.SubCellToBigCell(subCell);
             // 检查是否被实体阻挡
             if (_entityManager != null)
             {
-                var entities = _entityManager.GetAt(cell);
+                var entities = _entityManager.GetAt(bigCell);
                 if (entities != null)
                 {
                     foreach (var entity in entities)
@@ -1740,7 +1913,7 @@ namespace ReGecko.SnakeSystem
                         else if (entity is HoleEntity holeEntity)
                         {
                             // 洞的阻挡取决于颜色匹配
-                            if (holeEntity.IsBlockingCell(cell, this))
+                            if (holeEntity.IsBlockingCell(bigCell, this))
                             {
                                 return true; // 颜色不匹配，洞算作阻挡物
                             }
@@ -1749,11 +1922,11 @@ namespace ReGecko.SnakeSystem
                 }
             }
 
-            // 检查是否被其他蛇阻挡todo
-            //if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(cell, this))
-            //{
-            //    return true;
-            //}
+            // 检查是否被其他蛇阻挡
+            if (_snakeManager != null && _snakeManager.IsCellOccupiedByOtherSnakes(bigCell, this))
+            {
+                return true;
+            }
 
             return false;
         }
