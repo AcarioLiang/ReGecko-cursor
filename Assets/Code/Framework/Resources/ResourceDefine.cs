@@ -38,6 +38,7 @@ namespace ReGecko.Framework.Resources
         public static string Game_Grid_tile_m = "UI/Game_Grid_tile_midlle";
 
 
+        public static string Path_UI_Prefab_Loading = "Perfab/UI_Panel_Loading";
         public static string Path_UI_Prefab_Lobby = "Perfab/UI_Panel_Lobby";
         public static string Path_UI_Prefab_GameFaild = "Perfab/UI_Panel_GameFaild";
         public static string Path_UI_Prefab_GameSuccess = "Perfab/UI_Panel_GameSuccess";

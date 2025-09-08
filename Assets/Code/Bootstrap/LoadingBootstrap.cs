@@ -162,11 +162,13 @@ namespace ReGecko.Bootstrap
         {
             var canvasGo = new GameObject("Canvas");
             var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.worldCamera = Camera.main;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f; // 0偏向宽度，1偏向高度，0.5平衡
             canvasGo.AddComponent<GraphicRaycaster>();
 
             // 确保有EventSystem来处理UI事件
@@ -183,6 +185,7 @@ namespace ReGecko.Bootstrap
             var bgImg = bgGo.AddComponent<Image>();
             bgImg.sprite = BackgroundSprite;
             bgImg.preserveAspect = true;
+            bgImg.type = Image.Type.Tiled;
             var bgRt = bgGo.GetComponent<RectTransform>();
             bgRt.anchorMin = Vector2.zero;
             bgRt.anchorMax = Vector2.one;

@@ -58,7 +58,7 @@ namespace ReGecko.SnakeSystem
 
         // 拖动优化：减少更新频率
         private float _lastDragUpdateTime = 0f;
-        private const float DRAG_UPDATE_INTERVAL = 0.016f; // 约60FPS更新频率
+        private const float DRAG_UPDATE_INTERVAL = 0.008f; // 约120FPS更新频率
 
         // 路径队列优化
         private const int MAX_PATH_QUEUE_SIZE = 10; // 路径队列最大长度
@@ -817,6 +817,12 @@ namespace ReGecko.SnakeSystem
         // *** SubGrid 改动：新的小格移动逻辑 ***
         void UpdateSubGridMovement()
         {
+            // 智能更新频率控制
+            if (!ShouldUpdateDragVisuals())
+            {
+                return;
+            }
+
             // 采样当前手指所在小格，扩充小格路径队列
             var world = ScreenToWorld(Input.mousePosition);
             var targetSubCell = SubGridHelper.WorldToSubCell(world, _grid);
@@ -829,7 +835,7 @@ namespace ReGecko.SnakeSystem
                 var delta = targetSubCell - (_dragFromHead ? _currentHeadSubCell : _currentTailSubCell);
                 _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
 
-                EnqueueSubCellPath(_dragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetSubCell, _subCellPathQueue);
+                EnqueueSubCellPath(_dragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetSubCell, _subCellPathQueue, 1);
                 _lastSampledSubCell = targetSubCell;
             }
 
@@ -908,6 +914,26 @@ namespace ReGecko.SnakeSystem
                 }
 
             }
+        }
+
+
+        /// <summary>
+        /// 智能判断是否需要更新拖动视觉效果
+        /// </summary>
+        bool ShouldUpdateDragVisuals()
+        {
+            float currentTime = Time.time;
+            float timeSinceLastUpdate = currentTime - _lastDragUpdateTime;
+
+            // 基本频率限制
+            if (timeSinceLastUpdate < DRAG_UPDATE_INTERVAL)
+            {
+                return false;
+            }
+
+            // 正常情况下的更新
+            _lastDragUpdateTime = currentTime;
+            return true;
         }
 
         bool IsOccupiedBySelf(Vector2Int cell)
@@ -1015,8 +1041,7 @@ namespace ReGecko.SnakeSystem
 
             return true;
         }
-
-        void EnqueueSubCellPath(Vector2Int fromSubCell, Vector2Int toSubCell, LinkedList<Vector2Int> pathList)
+        void EnqueueSubCellPath(Vector2Int fromSubCell, Vector2Int toSubCell, LinkedList<Vector2Int> pathList, int maxPathCount = 10)
         {
             if (pathList == null) return;
             pathList.Clear();
@@ -1032,13 +1057,15 @@ namespace ReGecko.SnakeSystem
             }
 
             // 2) 最短中线路径（仅在 x%5==2 的竖线和 y%5==2 的横线行走）
-            // 核心思想：最多一次转向（L型），必要时两段直线组合；全程在中线网格上，长度等于曼哈顿距离。
             Vector2Int cur = fromSubCell;
 
-            bool fromOnVertical = (fromSubCell.x % SubGridHelper.SUB_DIV) == SubGridHelper.CENTER_INDEX;
-            bool fromOnHorizontal = (fromSubCell.y % SubGridHelper.SUB_DIV) == SubGridHelper.CENTER_INDEX;
-            bool toOnVertical = (toSubCell.x % SubGridHelper.SUB_DIV) == SubGridHelper.CENTER_INDEX;
-            bool toOnHorizontal = (toSubCell.y % SubGridHelper.SUB_DIV) == SubGridHelper.CENTER_INDEX;
+            // 使用非负取模的局部坐标判定在横/竖中线
+            var fromLocal = SubGridHelper.GetSubCellLocalPos(fromSubCell);
+            var toLocal = SubGridHelper.GetSubCellLocalPos(toSubCell);
+            bool fromOnVertical = (fromLocal.x == SubGridHelper.CENTER_INDEX);
+            bool fromOnHorizontal = (fromLocal.y == SubGridHelper.CENTER_INDEX);
+            bool toOnVertical = (toLocal.x == SubGridHelper.CENTER_INDEX);
+            bool toOnHorizontal = (toLocal.y == SubGridHelper.CENTER_INDEX);
 
             // 局部函数：按轴追加（包含终点），逐格入队，保证连续性与合法性
             void AppendVertical(int yTarget)
@@ -1047,13 +1074,13 @@ namespace ReGecko.SnakeSystem
                 while (cur.y != yTarget)
                 {
                     var next = new Vector2Int(cur.x, cur.y + step);
-                    // 安全校验（理论上总为真）
                     if (!SubGridHelper.IsValidSubCell(next) || !SubGridHelper.IsSubCellInside(next, _grid))
                     {
                         Debug.LogError($"EnqueueSubCellPath: 竖向越界/非法 next={next}");
                         break;
                     }
                     pathList.AddLast(next);
+                    if (pathList.Count > maxPathCount) return;
                     cur = next;
                 }
             }
@@ -1063,16 +1090,19 @@ namespace ReGecko.SnakeSystem
                 while (cur.x != xTarget)
                 {
                     var next = new Vector2Int(cur.x + step, cur.y);
-                    // 安全校验（理论上总为真）
                     if (!SubGridHelper.IsValidSubCell(next) || !SubGridHelper.IsSubCellInside(next, _grid))
                     {
                         Debug.LogError($"EnqueueSubCellPath: 横向越界/非法 next={next}");
                         break;
                     }
                     pathList.AddLast(next);
+                    if (pathList.Count > maxPathCount) return;
                     cur = next;
                 }
             }
+
+            int HorCenter(int y) => (y / SubGridHelper.SUB_DIV) * SubGridHelper.SUB_DIV + SubGridHelper.CENTER_INDEX;
+            int VerCenter(int x) => (x / SubGridHelper.SUB_DIV) * SubGridHelper.SUB_DIV + SubGridHelper.CENTER_INDEX;
 
             // 同线直走（无需拐弯）
             if (fromSubCell.x == toSubCell.x && fromOnVertical && toOnVertical)
@@ -1085,43 +1115,61 @@ namespace ReGecko.SnakeSystem
             }
             else
             {
-                // 需要一次转向：
-                // 情况A：起点在竖线 → 先竖后横（若终点在竖线，再补一段竖）
-                if (fromOnVertical)
+                // 需要一次转向
+                if (fromOnVertical && toOnHorizontal)
                 {
-                    // 选用的横线：若终点在横线，则用终点所在横线；否则用终点所在大格的中横线
-                    int yPivot = toOnHorizontal ? toSubCell.y : (toSubCell.y / SubGridHelper.SUB_DIV) * SubGridHelper.SUB_DIV + SubGridHelper.CENTER_INDEX;
-                    AppendVertical(yPivot);
-                    // 横向走到终点所在竖线（无论终点在横线或竖线，都直接走到 to.x）
-                    AppendHorizontal(toSubCell.x);
-                    // 若终点在竖线，还需竖向对齐 y
-                    if (toOnVertical && cur != toSubCell)
-                        AppendVertical(toSubCell.y);
-                }
-                // 情况B：起点在横线 → 先横后竖（若终点在横线，再补一段横）
-                else if (fromOnHorizontal)
-                {
-                    // 选用的竖线：若终点在竖线，则用终点所在竖线；否则用终点所在大格的中竖线
-                    int xPivot = toOnVertical ? toSubCell.x : (toSubCell.x / SubGridHelper.SUB_DIV) * SubGridHelper.SUB_DIV + SubGridHelper.CENTER_INDEX;
-                    AppendHorizontal(xPivot);
-                    // 竖向走到终点所在横线（无论终点在横线或竖线，都直接走到 to.y）
+                    // 一竖一横：交点( from.x, to.y )
                     AppendVertical(toSubCell.y);
-                    // 若终点在横线，还需横向对齐 x
-                    if (toOnHorizontal && cur != toSubCell)
-                        AppendHorizontal(toSubCell.x);
+                    if (pathList.Count > maxPathCount) return;
+                    AppendHorizontal(toSubCell.x);
+                }
+                else if (fromOnHorizontal && toOnVertical)
+                {
+                    // 一横一竖：交点( to.x, from.y )
+                    AppendHorizontal(toSubCell.x);
+                    if (pathList.Count > maxPathCount) return;
+                    AppendVertical(toSubCell.y);
+                }
+                else if (fromOnVertical && toOnVertical)
+                {
+                    // 同为竖线：选择更优的水平中线作为转折（最短）
+                    int yA = HorCenter(fromSubCell.y);
+                    int yB = HorCenter(toSubCell.y);
+                    int distA = Mathf.Abs(fromSubCell.y - yA) + Mathf.Abs(toSubCell.y - yA);
+                    int distB = Mathf.Abs(fromSubCell.y - yB) + Mathf.Abs(toSubCell.y - yB);
+                    int yPivot = distA <= distB ? yA : yB;
+
+                    AppendVertical(yPivot);
+                    if (pathList.Count > maxPathCount) return;
+                    AppendHorizontal(toSubCell.x);
+                    if (pathList.Count > maxPathCount) return;
+                    if (cur != toSubCell) AppendVertical(toSubCell.y);
+                }
+                else if (fromOnHorizontal && toOnHorizontal)
+                {
+                    // 同为横线：选择更优的竖直中线作为转折（最短）
+                    int xA = VerCenter(fromSubCell.x);
+                    int xB = VerCenter(toSubCell.x);
+                    int distA = Mathf.Abs(fromSubCell.x - xA) + Mathf.Abs(toSubCell.x - xA);
+                    int distB = Mathf.Abs(fromSubCell.x - xB) + Mathf.Abs(toSubCell.x - xB);
+                    int xPivot = distA <= distB ? xA : xB;
+
+                    AppendHorizontal(xPivot);
+                    if (pathList.Count > maxPathCount) return;
+                    AppendVertical(toSubCell.y);
+                    if (pathList.Count > maxPathCount) return;
+                    if (cur != toSubCell) AppendHorizontal(toSubCell.x);
                 }
                 else
                 {
-                    // 理论上不会到这：from 不在任何中线（已在前面校验过）
                     Debug.LogError($"EnqueueSubCellPath: 起点不在中线 from={fromSubCell}");
                 }
             }
 
-            // 3) 返回列表不包含终点（与示例一致）
-            //if (pathList.Count > 0 && pathList.Last.Value == toSubCell)
-            //    pathList.RemoveLast();
-
+            // 返回列表可包含终点；若有需要可去掉末尾 toSubCell
+            // if (pathList.Count > 0 && pathList.Last.Value == toSubCell) pathList.RemoveLast();
         }
+
         bool AdvanceHeadToSubCell(Vector2Int nextSubCell)
         {
             // 1) 取出首元素作为新头
@@ -1143,7 +1191,7 @@ namespace ReGecko.SnakeSystem
 
             // 3) 计算新头到原第六格的最短中线路径（列表不含终点，正好可取前4步）
             _headCellToBodyPathQueue.Clear();
-            EnqueueSubCellPath(newHeadSubCell, sixthBodyCell, _headCellToBodyPathQueue);
+            EnqueueSubCellPath(newHeadSubCell, sixthBodyCell, _headCellToBodyPathQueue, 6);
 
             // 4) 原地更新_subBodyCells：
             //    - 前5格：newHead + 路径前4步（路径不足则重复上一步以保持连续）
@@ -1361,7 +1409,7 @@ namespace ReGecko.SnakeSystem
 
             // 3) 计算新头到原第六格的最短中线路径（列表不含终点，正好可取前4步）
             _headCellToBodyPathQueue.Clear();
-            EnqueueSubCellPath(newHeadSubCell, sixthBodyCell, _headCellToBodyPathQueue);
+            EnqueueSubCellPath(newHeadSubCell, sixthBodyCell, _headCellToBodyPathQueue, 6);
 
             // 4) 原地更新_subBodyCells：
             //    - 前5格：newHead + 路径前4步（路径不足则重复上一步以保持连续）
@@ -1621,15 +1669,35 @@ namespace ReGecko.SnakeSystem
             {
                 if (fromHead)
                 {
-                    while (Manhattan(_currentHeadSubCell, holeCenterSubCell) != 1)
+                    while (_subBodyCells.Count > 0 && Manhattan(_currentTailSubCell, holeCenterSubCell) != 1)
                     {
                         pathList.Clear();
-                        EnqueueSubCellPath(_currentHeadSubCell, holeCenterSubCell, pathList);
+                        EnqueueSubCellPath(_currentHeadSubCell, holeCenterSubCell, pathList, 1);
 
                         if(pathList.Count > 0)
                         {
                             AdvanceHeadToSubCellCoConsume(pathList.First.Value);
                             pathList.Clear();
+
+                            //更新身体图片
+                            if (EnableBodySpriteManagement)
+                            {
+                                if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                                {
+                                    _bodySpriteManager.OnSnakeMoved();
+                                }
+                            }
+                            else
+                            {
+                                UpdateAllSegmentSprites();
+                            }
+
+                            yield return new WaitForSeconds(hole.ConsumeInterval);
+                        }
+                        else if(_currentHeadSubCell == holeCenterSubCell)
+                        {
+                            AdvanceHeadToSubCellCoConsume(holeCenterSubCell);
+                            break;
                         }
                         else
                         {
@@ -1639,23 +1707,7 @@ namespace ReGecko.SnakeSystem
                             yield break;
                         }
 
-                        //更新身体图片
-                        if (EnableBodySpriteManagement)
-                        {
-                            if (EnableBodySpriteManagement && _bodySpriteManager != null)
-                            {
-                                _bodySpriteManager.OnSnakeMoved();
-                            }
-                        }
-                        else
-                        {
-                            UpdateAllSegmentSprites();
-                        }
-
-                        yield return new WaitForSeconds(hole.ConsumeInterval);
                     }
-
-
 
                     _subBodyCells.RemoveLast();
                     _subSegments.RemoveAt(_subSegments.Count - 1);
@@ -1674,13 +1726,31 @@ namespace ReGecko.SnakeSystem
                         _currentHeadSubCell = _subBodyCells.First.Value;
                         _currentTailSubCell = _subBodyCells.Last.Value;
                     }
+
+                    //更新身体图片
+                    if (EnableBodySpriteManagement)
+                    {
+                        if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                        {
+                            _bodySpriteManager.OnSnakeMoved();
+                        }
+                    }
+                    else
+                    {
+                        UpdateAllSegmentSprites();
+                    }
+
+                    if (_subBodyCells.Count == 0)
+                        break;
+
+                    yield return new WaitForSeconds(hole.ConsumeInterval);
                 }
                 else
                 {
                     while (Manhattan(_currentTailSubCell, holeCenterSubCell) != 1)
                     {
                         pathList.Clear();
-                        EnqueueSubCellPath(_currentTailSubCell, holeCenterSubCell, pathList);
+                        EnqueueSubCellPath(_currentTailSubCell, holeCenterSubCell, pathList, 1);
 
                         if (pathList.Count > 0)
                         {

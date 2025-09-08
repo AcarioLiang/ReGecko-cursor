@@ -64,7 +64,7 @@ namespace ReGecko.SnakeSystem
             _line.alignment = LineAlignment.View;
             _line.textureMode = LineTextureMode.Stretch;
             _line.numCornerVertices = 0;
-            _line.numCapVertices = 4;
+            _line.numCapVertices = 2;
 
             _line.widthMultiplier = LineWidth;
 
