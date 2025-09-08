@@ -16,6 +16,7 @@ namespace ReGecko.SnakeSystem
         bool _startMove;
         bool _dragging;
         bool _dragFromHead;
+        bool _isReverse;
 
         // *** SubGrid 改动开始 ***
         [Header("SubGrid 小格移动系统")]
@@ -825,18 +826,22 @@ namespace ReGecko.SnakeSystem
 
             // 采样当前手指所在小格，扩充小格路径队列
             var world = ScreenToWorld(Input.mousePosition);
-            var targetSubCell = SubGridHelper.WorldToSubCell(world, _grid);
-            if (targetSubCell.x < 0 || targetSubCell.y < 0)
+
+            Vector2Int targetBigCell = _grid.WorldToCell(world);
+            if (targetBigCell.x < 0 || targetBigCell.y < 0)
+            {
+                Debug.LogError("UpdateSubGridMovement out grid size!");
                 return;
+            }
 
             //if (targetSubCell != _lastSampledSubCell)
             {
                 // 更新主方向：按更大位移轴确定
-                var delta = targetSubCell - (_dragFromHead ? _currentHeadSubCell : _currentTailSubCell);
+                var delta = targetBigCell - (_dragFromHead ? _currentHeadCell : _currentTailCell);
                 _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
 
-                EnqueueSubCellPath(_dragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetSubCell, _subCellPathQueue, 1);
-                _lastSampledSubCell = targetSubCell;
+                EnqueueBigCellPath(_dragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetBigCell, _subCellPathQueue, 1);
+                //_lastSampledSubCell = targetSubCell;
             }
 
 
@@ -853,18 +858,19 @@ namespace ReGecko.SnakeSystem
                 // 检查目标点合法性
                 if (!CheckNextCell(nextSubCell))
                 {
+                    Debug.LogError("CheckNextCell return!");
                     return;
                 }
 
                 if (_dragFromHead)
                 {
-                    var nextBigBody = GetBodyCellsNextBigCell(_dragFromHead);
-                    var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
-                    if (nextbigcell == nextBigBody)
+                    //var nextBigBody = GetBodyCellsNextBigCell(_dragFromHead);
+                    //var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
+                    if (nextSubCell == _subBodyCells.First.Next.Value)
                     {
+                        _isReverse = true;
                         // 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
-                        //TryReverseOneStep();
-                        return;
+                        TryReverseOneStep();
                     }
                     else
                     {
@@ -878,9 +884,8 @@ namespace ReGecko.SnakeSystem
                     var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
                     if (nextbigcell == nextBigBody)
                     {
-                        // 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
-                        //TryReverseOneStep();
-                        return;
+                        // 尾部倒车：若下一步将进入紧邻身体，则改为让头部前进一步
+                        TryReverseFromTail();
                     }
                     else
                     {
@@ -933,16 +938,43 @@ namespace ReGecko.SnakeSystem
             return true;
         }
 
-        bool IsOccupiedBySelf(Vector2Int cell)
+        bool CheckOccupiedBySelfForword(Vector2Int bigcell)
         {
             if (_snakeManager == null)
             {
                 return false;
             }
 
-            var cellset = _snakeManager.GetSnakeOccupiedCells(this);
             var exclude = _dragFromHead ? _currentHeadCell : _currentTailCell;
-            return cell != exclude && cellset.Contains(cell);
+            var exclude2 = GetBodyCellsNextBigCell(_dragFromHead);
+
+            if (bigcell == exclude || bigcell == exclude2)
+            {
+                return true;
+            }
+
+            var cellset = _snakeManager.GetSnakeOccupiedCells(this);
+            return !cellset.Contains(bigcell);
+        }
+
+
+        bool CheckOccupiedBySelfReverse(Vector2Int bigcell)
+        {
+            if (_snakeManager == null)
+            {
+                return false;
+            }
+
+            var exclude = _dragFromHead ? _currentTailCell : _currentHeadCell;
+            var exclude2 = GetBodyCellsNextBigCell(!_dragFromHead);
+
+            if (bigcell == exclude || bigcell == exclude2)
+            {
+                return true;
+            }
+
+            var cellset = _snakeManager.GetSnakeOccupiedCells(this);
+            return !cellset.Contains(bigcell);
         }
 
         Vector2Int GetBodyCellsNextBigCell(bool fromHead)
@@ -952,39 +984,13 @@ namespace ReGecko.SnakeSystem
 
             if (fromHead)
             {
-                bool isFrist = true;
-                for (var node = _subBodyCells.First; node != null; node = node.Next)
-                {
-                    if (isFrist)
-                    {
-                        isFrist = false;
-                        continue;
-                    }
-
-                    var bigcell = SubGridHelper.SubCellToBigCell(node.Value);
-                    if (bigcell != _currentHeadCell)
-                    {
-                        return bigcell;
-                    }
-                }
+                var nextcellsub = GetSubBodyCellAtIndex(5);
+                return SubGridHelper.SubCellToBigCell(nextcellsub);
             }
             else
             {
-                bool isFrist = true;
-                for (var node = _subBodyCells.Last; node != null; node = node.Previous)
-                {
-                    if (isFrist)
-                    {
-                        isFrist = false;
-                        continue;
-                    }
-
-                    var bigcell = SubGridHelper.SubCellToBigCell(node.Value);
-                    if (bigcell != _currentTailCell)
-                    {
-                        return bigcell;
-                    }
-                }
+                var nextcellsub = GetSubBodyCellAtIndex(_subBodyCells.Count - 1 - 5);
+                return SubGridHelper.SubCellToBigCell(nextcellsub);
             }
 
             return Vector2Int.zero;
@@ -1017,18 +1023,8 @@ namespace ReGecko.SnakeSystem
             if (!_grid.IsInside(nextBigCell)) return false;
             // 使用与IsPathBlocked相同的阻挡检测逻辑，支持颜色匹配
             if (IsPathBlocked(nextBigCell)) return false;
-            if (IsOccupiedBySelf(nextBigCell)) return false;
-            // 占用校验：允许进入原尾
-            if (_dragFromHead)
-            {
-                if (nextSubCell == _subBodyCells.First.Next.Value)
-                    return false;
-            }
-            else
-            {
-                if (nextSubCell == _subBodyCells.Last.Previous.Value)
-                    return false;
-            }
+            if (!CheckOccupiedBySelfForword(nextBigCell)) return false;
+
 
             return true;
         }
@@ -1161,6 +1157,13 @@ namespace ReGecko.SnakeSystem
             // if (pathList.Count > 0 && pathList.Last.Value == toSubCell) pathList.RemoveLast();
         }
 
+        void EnqueueBigCellPath(Vector2Int fromSubCell, Vector2Int toBigCell, LinkedList<Vector2Int> pathList, int maxPathCount = 10)
+        {
+            var toSubCell = SubGridHelper.BigCellToCenterSubCell(toBigCell);
+
+            EnqueueSubCellPath(fromSubCell, toSubCell, pathList, maxPathCount);
+        }
+
         bool AdvanceHeadToSubCell(Vector2Int nextSubCell)
         {
             // 1) 取出首元素作为新头
@@ -1239,6 +1242,40 @@ namespace ReGecko.SnakeSystem
             return true;
         }
 
+
+        bool TryReverseOneStep()
+        {
+            // 以尾部为基准，朝着与尾相邻段的反方向后退；若不可行，尝试左右方向
+            if (_subBodyCells.Last == null || _subBodyCells.Last.Previous == null) return false;
+            var tail = _currentTailCell;
+            var prevSub = GetSubBodyCellAtIndex(_subBodyCells.Count - 1 - 5);
+            var prev = SubGridHelper.SubCellToBigCell(prevSub); // 尾部相邻的身体
+            Vector2Int dir = tail - prev; // 远离身体方向
+            Vector2Int left = new Vector2Int(-dir.y, dir.x);
+            Vector2Int right = new Vector2Int(dir.y, -dir.x);
+            var candidates = new[] { dir, left, right };
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                var nextBig = tail + candidates[i];
+                if (!_grid.IsInside(nextBig)) continue;
+                if (IsPathBlocked(nextBig)) continue;
+                if (!CheckOccupiedBySelfReverse(nextBig)) continue;
+
+                EnqueueBigCellPath(_currentTailSubCell, nextBig, _subCellPathQueue, 1);
+
+                if (_subCellPathQueue.Count > 0)
+                {
+                    var nextSubCell = _subCellPathQueue.First.Value;
+                    return AdvanceTailToSubCell(nextSubCell);
+
+                }
+                else
+                {
+                    Debug.LogError("TryReverseOneStep error! can not find path");
+                }
+            }
+            return false;
+        }
 
         bool AdvanceHeadToSubCellCoConsume(Vector2Int nextSubCell)
         {
@@ -1465,6 +1502,41 @@ namespace ReGecko.SnakeSystem
             return true;
         }
 
+
+        bool TryReverseFromTail()
+        {
+            // 从尾部倒车：以头部为基准，朝着与头相邻段的反方向前进
+            if (_subBodyCells.First == null || _subBodyCells.First.Next == null) return false;
+            var head = _currentHeadCell;
+            var nextSub = GetSubBodyCellAtIndex(5);
+            var next = SubGridHelper.SubCellToBigCell(nextSub); // 头部相邻的身体
+            Vector2Int dir = head - next; // 远离身体方向
+            Vector2Int left = new Vector2Int(-dir.y, dir.x);
+            Vector2Int right = new Vector2Int(dir.y, -dir.x);
+            var candidates = new[] { dir, left, right };
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                var nextHeadBig = head + candidates[i];
+                if (!_grid.IsInside(nextHeadBig)) continue;
+                if (IsPathBlocked(nextHeadBig)) continue;
+                if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
+
+                EnqueueBigCellPath(_currentHeadSubCell, nextHeadBig, _subCellPathQueue, 1);
+
+                if (_subCellPathQueue.Count > 0)
+                {
+                    var nextSubCell = _subCellPathQueue.First.Value;
+                    return AdvanceHeadToSubCell(nextSubCell);
+
+                }
+                else
+                {
+                    Debug.LogError("TryReverseOneStep error! can not find path");
+                }
+            }
+            return false;
+
+        }
         bool AdvanceTailToSubCellCoConsume(Vector2Int nextSubCell)
         {
             if (_subBodyCells == null || _subBodyCells.Count == 0) return true;
@@ -1568,7 +1640,7 @@ namespace ReGecko.SnakeSystem
         {
             if (Input.GetMouseButtonDown(0))
             {
-                if (_lastMousePos != Input.mousePosition)
+                if (_lastMousePos != Input.mousePosition && !_dragging)
                 {
                     _lastMousePos = Input.mousePosition;
 
@@ -1610,6 +1682,7 @@ namespace ReGecko.SnakeSystem
                     }
 
                 }
+                _isReverse = false;
                 _dragging = false;
                 _dragAxis = DragAxis.None;
                 _lastMousePos = Vector3.zero;
@@ -1620,6 +1693,7 @@ namespace ReGecko.SnakeSystem
         {
             _consuming = true;
             _dragging = false; // 脱离手指控制
+            _isReverse = false;
             Vector3 holeCenter = _grid.CellToWorld(hole.Cell);
             var holeCenterSubCell = SubGridHelper.BigCellToCenterSubCell(hole.Cell);
 
