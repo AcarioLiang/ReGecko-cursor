@@ -63,6 +63,7 @@
     <Compile Include="Assets\Code\GameCore\Flow\GameContext.cs" />
     <Compile Include="Assets\Code\Framework\UI\GameRenderer.cs" />
     <Compile Include="Assets\Code\Snake\SnakeBodySpriteManager.cs" />
+    <Compile Include="Assets\Code\Menu\SnakeTextureProcessor.cs" />
     <Compile Include="Assets\Code\Framework\UI\Panel\UIGameSuccess.cs" />
     <Compile Include="Assets\Code\Game\GameStateUI.cs" />
     <Compile Include="Assets\Code\GameCore\Flow\FrameRateController.cs" />
@@ -97,6 +98,10 @@
     <Compile Include="Assets\Code\Framework\UI\Panel\UIGameSetting.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntity.cs" />
     <Compile Include="Assets\Code\Framework\UI\GameplayHUDBuilder.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\Resources\Shader\SpriteNineSlice-gpt.shader" />
+    <None Include="Assets\Resources\Shader\SpriteNineSlice-claude.shader" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

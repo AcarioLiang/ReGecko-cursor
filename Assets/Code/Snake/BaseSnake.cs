@@ -91,8 +91,11 @@ namespace ReGecko.SnakeSystem
             _bodySpriteManager = bodySpriteGo.AddComponent<SnakeBodySpriteManager>();
             // SnakeBodySpriteManager会通过GetComponent获取SnakeController
 
-            Material newMaterial = new Material(Shader.Find("Sprites/Default"));
-            newMaterial.mainTexture = ResourceManager.LoadPNG(ResourceDefine.Path_PNG_Snake_Body).texture;
+            //Material newMaterial = new Material(Shader.Find("Custom/SpriteNineSlice"));
+            //newMaterial.mainTexture = ResourceManager.LoadPNG(ResourceDefine.Path_PNG_Snake_Body).texture;
+            //newMaterial.color = Color.white;
+
+            Material newMaterial = Resources.Load<Material>("SnakeBody");
             _bodySpriteManager.BodyLineMaterial = newMaterial;
 
         }
