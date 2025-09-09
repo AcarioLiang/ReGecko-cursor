@@ -40,6 +40,8 @@ namespace ReGecko.Framework.Resources
 
         public static string Path_UI_Prefab_Loading = "Perfab/UI_Panel_Loading";
         public static string Path_UI_Prefab_Lobby = "Perfab/UI_Panel_Lobby";
+        public static string Path_UI_Prefab_Game = "Perfab/UI_Panel_Game";
+
         public static string Path_UI_Prefab_GameFaild = "Perfab/UI_Panel_GameFaild";
         public static string Path_UI_Prefab_GameSuccess = "Perfab/UI_Panel_GameSuccess";
         public static string Path_UI_Prefab_GameSetting = "Perfab/UI_Panel_GameSetting";

@@ -42,7 +42,7 @@ namespace ReGecko.Bootstrap
             // 显示预加载的UI并初始化游戏渲染
             if (GameContext.PreloadedUIPrefab_GameMain != null)
             {
-                var hudInstance = UIManager.Instance.Show("GameplayHUD", GameContext.PreloadedUIPrefab_GameMain);
+                var hudInstance = UIManager.Instance.Show("GameMain", GameContext.PreloadedUIPrefab_GameMain);
 
                 // 查找并初始化UI游戏管理器
                 var uiGameManager = hudInstance.GetComponentInChildren<UIGameManager>();
@@ -51,12 +51,6 @@ namespace ReGecko.Bootstrap
                     uiGameManager.Initialize(level);
                     uiGameManager.BuildGame();
                 }
-            }
-
-            if (FindObjectOfType<GameStateUI>() == null)
-            {
-                var gameStateUIGo = new GameObject("GameStateUI");
-                gameStateUIGo.AddComponent<GameStateUI>();
             }
         }
     }

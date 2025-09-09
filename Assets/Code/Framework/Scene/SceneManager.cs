@@ -106,14 +106,14 @@ namespace ReGecko.Framework.Scene
             if(withFade)
             {
                 LoadSceneAsyncWithFade(GameScenes.Loading, () => {
-                    UIManager.Instance.Destroy("GameplayHUD");
+                    UIManager.Instance.Destroy("GameMain");
                     UIManager.Instance.CloseAll();
                 });
             }
             else
             {
                 LoadSceneAsync(GameScenes.Loading, () => {
-                    UIManager.Instance.Destroy("GameplayHUD");
+                    UIManager.Instance.Destroy("GameMain");
                     UIManager.Instance.CloseAll();
                 });
             }

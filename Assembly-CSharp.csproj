@@ -65,7 +65,6 @@
     <Compile Include="Assets\Code\Snake\SnakeBodySpriteManager.cs" />
     <Compile Include="Assets\Code\Menu\SnakeTextureProcessor.cs" />
     <Compile Include="Assets\Code\Framework\UI\Panel\UIGameSuccess.cs" />
-    <Compile Include="Assets\Code\Game\GameStateUI.cs" />
     <Compile Include="Assets\Code\GameCore\Flow\FrameRateController.cs" />
     <Compile Include="Assets\Code\Levels\LevelConfig.cs" />
     <Compile Include="Assets\Code\Bootstrap\LobbyBootstrap.cs" />
@@ -73,6 +72,7 @@
     <Compile Include="Assets\Code\Grid\Entities\HoleEntity.cs" />
     <Compile Include="Assets\Code\Snake\BaseSnake.cs" />
     <Compile Include="Assets\Code\Framework\Resources\ResourceDefine.cs" />
+    <Compile Include="Assets\Code\Framework\UI\Panel\UIGameGameMain.cs" />
     <Compile Include="Assets\Code\Grid\Entities\WallEntity.cs" />
     <Compile Include="Assets\Code\Grid\Entities\GridEntityManager.cs" />
     <Compile Include="Assets\Code\Framework\UI\Panel\UIGameFaild.cs" />

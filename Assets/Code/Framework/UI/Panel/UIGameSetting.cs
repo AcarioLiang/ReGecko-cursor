@@ -70,7 +70,7 @@ public class UIGameSetting : MonoBehaviour
             _Btn_reward_ad.onClick.AddListener(OnAdButtonClicked);
 
         // UI”Œœ∑π‹¿Ì∆˜
-        var hudInstance = UIManager.Instance.FindUI("GameplayHUD");
+        var hudInstance = UIManager.Instance.FindUI("GameMain");
         if(hudInstance != null)
         {
             var gameManager = hudInstance.GetComponentInChildren<UIGameManager>();
@@ -102,7 +102,7 @@ public class UIGameSetting : MonoBehaviour
     {
         if (_gameStateController == null)
         {
-            var hudInstance = UIManager.Instance.FindUI("GameplayHUD");
+            var hudInstance = UIManager.Instance.FindUI("GameMain");
             if (hudInstance != null)
             {
                 var gameManager = hudInstance.GetComponentInChildren<UIGameManager>();

@@ -27,7 +27,6 @@ namespace ReGecko.Levels
 		[Header("行为设置")]
 		public float MoveSpeed = 16f; // 移动速度（格子/秒）
 		public bool IsControllable = true; // 是否可被玩家控制
-		public bool EnableAI = false; // 是否启用AI控制（预留）
 		
 		[Header("特殊属性")]
 		public bool CanEatOthers = false; // 是否可以吃其他蛇（预留）
@@ -51,8 +50,11 @@ namespace ReGecko.Levels
 
 	[Serializable]
 	public class LevelConfig
-	{
-		[Header("关卡配置")]
+    {
+		[Header("关卡信息")]
+		public int LV = 0;
+
+        [Header("关卡配置")]
 		public GridConfig Grid;
 		public SnakeInitConfig[] Snakes;
 		public GridEntityConfig[] Entities;
@@ -62,6 +64,8 @@ namespace ReGecko.Levels
 		public float GameTimeLimit = 0f; // 游戏时间限制
 		[Tooltip("是否启用时间限制")]
 		public bool EnableTimeLimit = false; // 是否启用时间限制
-	}
+
+
+    }
 }
 

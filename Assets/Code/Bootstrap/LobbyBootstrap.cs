@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using ReGecko.GameCore.Flow;
 using UnityEngine.EventSystems;
 using ReGecko.Framework.UI;
+using ReGecko.GameCore.Player;
 
 namespace ReGecko.Bootstrap
 {
@@ -11,8 +12,8 @@ namespace ReGecko.Bootstrap
 	{
 		public Sprite StartButtonSprite;
 
-		void Start()
-		{
+        void Start()
+        {
 			BuildUI();
 		}
 

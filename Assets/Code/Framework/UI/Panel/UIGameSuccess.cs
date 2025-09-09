@@ -1,5 +1,6 @@
 using ReGecko.Framework.UI;
 using ReGecko.GameCore.Flow;
+using ReGecko.GameCore.Player;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -14,6 +15,7 @@ public class UIGameSuccess : MonoBehaviour
 
     private Button _Btn_reward_ad;
     private Button _Btn_reward_normal;
+
 
     // Start is called before the first frame update
     void Start()

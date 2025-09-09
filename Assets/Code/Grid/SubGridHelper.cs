@@ -26,23 +26,35 @@ namespace ReGecko.GridSystem
         }
 
         /// <summary>
-        /// 将大格坐标转换为该大格内第一个小格的坐标（中线）
+        /// 将大格坐标转换为该大格内左侧中线的小格坐标（xLocal=0, yLocal=CENTER_INDEX）
         /// </summary>
-        /// <param name="bigCell">大格坐标</param>
-        /// <returns>该大格左下角中线小格的坐标</returns>
-        public static Vector2Int BigCellToFirstSubCell(Vector2Int bigCell)
+        public static Vector2Int BigCellToLeftSubCell(Vector2Int bigCell)
         {
-            return new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV);
+            return new Vector2Int(bigCell.x * SUB_DIV + 0, bigCell.y * SUB_DIV + CENTER_INDEX);
         }
 
         /// <summary>
-        /// 将大格坐标转换为该大格内最后一个小格的坐标（中线）
+        /// 将大格坐标转换为该大格内右侧中线的小格坐标（xLocal=SUB_DIV-1, yLocal=CENTER_INDEX）
         /// </summary>
-        /// <param name="bigCell">大格坐标</param>
-        /// <returns>该大格右上角中线小格的坐标</returns>
-        public static Vector2Int BigCellToLastSubCell(Vector2Int bigCell)
+        public static Vector2Int BigCellToRightSubCell(Vector2Int bigCell)
         {
             return new Vector2Int(bigCell.x * SUB_DIV + (SUB_DIV - 1), bigCell.y * SUB_DIV + CENTER_INDEX);
+        }
+
+        /// <summary>
+        /// 将大格坐标转换为该大格内竖直中线最上的小格坐标（xLocal=CENTER_INDEX, yLocal=SUB_DIV-1）
+        /// </summary>
+        public static Vector2Int BigCellToTopSubCell(Vector2Int bigCell)
+        {
+            return new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + (SUB_DIV - 1));
+        }
+
+        /// <summary>
+        /// 将大格坐标转换为该大格内竖直中线最下的小格坐标（xLocal=CENTER_INDEX, yLocal=0）
+        /// </summary>
+        public static Vector2Int BigCellToBottomSubCell(Vector2Int bigCell)
+        {
+            return new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + 0);
         }
 
         /// <summary>

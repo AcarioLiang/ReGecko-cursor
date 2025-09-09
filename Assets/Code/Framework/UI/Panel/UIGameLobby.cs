@@ -1,5 +1,7 @@
 using ReGecko.Framework.UI;
 using ReGecko.GameCore.Flow;
+using ReGecko.GameCore.Player;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -12,22 +14,35 @@ public class UIGameLobby : MonoBehaviour
     private Button _Btn_buy_tili;
     private Button _Btn_buy_coin;
 
-    private Button _Btn_play;
+    private Button _Btn_play1;
+    private Button _Btn_play2;
+    private Button _Btn_play3;
+
     private Button _Btn_shop;
     private Button _Btn_map;
     private Button _Btn_setting;
 
+
+    PlayerData _playerData;
+
     // Start is called before the first frame update
     void Start()
     {
+        _playerData = PlayerService.Get();
         InitializeUI();
-
+        InitData();
+        SubscribeToEvents();
     }
 
     // Update is called once per frame
     void Update()
     {
         
+    }
+
+    private void OnDestroy()
+    {
+        UnsubscribeFromEvents();
     }
 
     void InitializeUI()
@@ -38,10 +53,20 @@ public class UIGameLobby : MonoBehaviour
         if (_UIRoot != null)
         {
             // 查找CenterImage4Text组件
-            var Btn_Play_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_level");
-            if (Btn_Play_Transform != null)
+            var Btn_Play_Transform1 = _UIRoot.transform.Find("Panel/MiddleArea/Btn_level1");
+            if (Btn_Play_Transform1 != null)
             {
-                _Btn_play = Btn_Play_Transform.GetComponent<Button>();
+                _Btn_play1 = Btn_Play_Transform1.GetComponent<Button>();
+            }
+            var Btn_Play_Transform2 = _UIRoot.transform.Find("Panel/MiddleArea/Btn_level2");
+            if (Btn_Play_Transform2 != null)
+            {
+                _Btn_play2 = Btn_Play_Transform2.GetComponent<Button>();
+            }
+            var Btn_Play_Transform3 = _UIRoot.transform.Find("Panel/MiddleArea/Btn_level3");
+            if (Btn_Play_Transform3 != null)
+            {
+                _Btn_play3 = Btn_Play_Transform3.GetComponent<Button>();
             }
 
             var Btn_Buy_Tili_Transform = _UIRoot.transform.Find("Panel/TopArea/ui_item_tili/Btn_Buy_Tili");
@@ -83,8 +108,12 @@ public class UIGameLobby : MonoBehaviour
             _Btn_buy_tili.onClick.AddListener(OnTiliButtonClicked);
         if (_Btn_buy_coin != null)
             _Btn_buy_coin.onClick.AddListener(OnCoinButtonClicked);
-        if (_Btn_play != null)
-            _Btn_play.onClick.AddListener(OnPlayButtonClicked);
+        if (_Btn_play1 != null)
+            _Btn_play1.onClick.AddListener(OnPlayButtonClicked);
+        if (_Btn_play2 != null)
+            _Btn_play2.onClick.AddListener(OnPlayButtonClicked);
+        if (_Btn_play3 != null)
+            _Btn_play3.onClick.AddListener(OnPlayButtonClicked);
         if (_Btn_shop != null)
             _Btn_shop.onClick.AddListener(OnShopButtonClicked);
         if (_Btn_map != null)
@@ -93,6 +122,64 @@ public class UIGameLobby : MonoBehaviour
             _Btn_setting.onClick.AddListener(OnSettingButtonClicked);
 
     }
+
+    void InitData()
+    {
+        List<Button> levelBtns = new List<Button>();
+        levelBtns.Add(_Btn_play1);
+        levelBtns.Add(_Btn_play2);
+        levelBtns.Add(_Btn_play3);
+
+        for (int i = 0; i < levelBtns.Count; i++)
+        {
+            if(i == _playerData.Level - 1)
+            {
+                levelBtns[i].enabled = true;
+                levelBtns[i].transform.Find("lock").gameObject.SetActive(false);
+            }
+            else if(i < _playerData.Level - 1)
+            {
+                levelBtns[i].enabled = false;
+                levelBtns[i].transform.Find("lock").gameObject.SetActive(false);
+
+            }
+            else if (i > _playerData.Level - 1)
+            {
+                levelBtns[i].enabled = false;
+                levelBtns[i].transform.Find("lock").gameObject.SetActive(true);
+            }
+        }
+
+    }
+
+
+    /// <summary>
+    /// 订阅事件
+    /// </summary>
+    void SubscribeToEvents()
+    {
+        PlayerService.OnPlayerDataChanged += OnPlayerDataChanged;
+    }
+
+    /// <summary>
+    /// 取消订阅事件
+    /// </summary>
+    void UnsubscribeFromEvents()
+    {
+        PlayerService.OnPlayerDataChanged -= OnPlayerDataChanged;
+    }
+
+
+
+
+    /// <summary>
+    /// 游戏状态变化事件处理
+    /// </summary>
+    void OnPlayerDataChanged(object sender, EventArgs e)
+    {
+        InitData();
+    }
+
 
     void OnTiliButtonClicked()
     {

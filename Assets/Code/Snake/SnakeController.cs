@@ -689,13 +689,14 @@ namespace ReGecko.SnakeSystem
 
             }
 
-            if (_cachedSubRectTransforms.Count > 0)
-            {
-                var headRt = _cachedSubRectTransforms[0];
-                headRt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, _grid.CellSize * 0.8f);
-                var tailRt = _cachedSubRectTransforms[_cachedSubRectTransforms.Count - 1];
-                tailRt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, _grid.CellSize * 0.8f);
-            }
+            // 蛇头蛇尾占一大格
+            //if (_cachedSubRectTransforms.Count > 0)
+            //{
+            //    var headRt = _cachedSubRectTransforms[0];
+            //    headRt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, _grid.CellSize * 0.8f);
+            //    var tailRt = _cachedSubRectTransforms[_cachedSubRectTransforms.Count - 1];
+            //    tailRt.sizeDelta = new Vector2(_grid.CellSize * 0.8f, _grid.CellSize * 0.8f);
+            //}
 
 
         }
@@ -708,38 +709,179 @@ namespace ReGecko.SnakeSystem
             if (!EnableSubGridMovement)
                 return;
 
-            // 为每个身体节点初始化5个子段的位置
             var bodyCells = InitialBodyCells;
-            if (bodyCells == null) return;
-
-            var grid = GetGrid();
+            if (bodyCells == null || bodyCells.Length < 2) return;
 
             _subBodyCells.Clear();
 
-            int segmentIndex = 0;
-            foreach (var bigCell in bodyCells)
+            // 工具：方向与边的映射
+            Vector2Int DirToDelta(int dir)
             {
-                // 初始化时，所有子段都居中对齐到大格中心
-                var bigCellFirstSub = SubGridHelper.BigCellToFirstSubCell(bigCell);
-
-                Vector2Int[] subCellPositions = new Vector2Int[SubGridHelper.SUB_DIV];
-                for (int i = 0; i < SubGridHelper.SUB_DIV; i++)
+                switch (dir)
                 {
-                    // 初始状态：所有子段沿Y轴排列，居中对齐
-                    subCellPositions[i] = new Vector2Int(
-                        bigCellFirstSub.x,
-                        bigCellFirstSub.y + i
-                    );
+                    // 0:Left 1:Right 2:Down 3:Up
+                    case 0: return new Vector2Int(-1, 0);
+                    case 1: return new Vector2Int(1, 0);
+                    case 2: return new Vector2Int(0, -1);
+                    case 3: return new Vector2Int(0, 1);
+                    default: return Vector2Int.zero;
+                }
+            }
+            int DeltaToDir(Vector2Int d)
+            {
+                if (d == new Vector2Int(-1, 0)) return 0;
+                if (d == new Vector2Int(1, 0)) return 1;
+                if (d == new Vector2Int(0, -1)) return 2;
+                if (d == new Vector2Int(0, 1)) return 3;
+                return -1;
+            }
+            int Opposite(int dir)
+            {
+                if (dir == 0) return 1; // L->R
+                if (dir == 1) return 0; // R->L
+                if (dir == 2) return 3; // D->U
+                if (dir == 3) return 2; // U->D
+                return -1;
+            }
+            Vector2Int SideToEntrySub(Vector2Int bigCell, int side)
+            {
+                // side: 0-L 1-R 2-D 3-U
+                switch (side)
+                {
+                    case 0: return SubGridHelper.BigCellToLeftSubCell(bigCell);
+                    case 1: return SubGridHelper.BigCellToRightSubCell(bigCell);
+                    case 2: return SubGridHelper.BigCellToBottomSubCell(bigCell);
+                    case 3: return SubGridHelper.BigCellToTopSubCell(bigCell);
+                    default: return SubGridHelper.BigCellToCenterSubCell(bigCell);
+                }
+            }
+            Vector2Int[] BuildFiveSubCells(Vector2Int bigCell, int entrySide, int exitSide)
+            {
+                // 在该大格内，沿中线从 entry 边界走到 exit 边界，必经中心(2,2)，共4步=5点
+                var res = new Vector2Int[SubGridHelper.SUB_DIV];
+                // 入口点
+                res[0] = SideToEntrySub(bigCell, entrySide);
 
-                    // 同步到链表与可视
-                    _subBodyCells.AddLast(subCellPositions[i]);
+                // 目标“路标”：中心 + 出口边界点
+                var center = SubGridHelper.BigCellToCenterSubCell(bigCell);
+                var exit = SideToEntrySub(bigCell, exitSide);
+
+                // 在该大格内行走：先到中心，再到出口（每次一步，保证正好填满5个点）
+                Vector2Int cur = res[0];
+
+                // 步进到中心（最多2步）
+                while (cur != center && (res[1] == default || res[2] == default || res[3] == default || res[4] == default))
+                {
+                    if (cur.x != center.x)
+                    {
+                        int step = cur.x < center.x ? 1 : -1;
+                        cur = new Vector2Int(cur.x + step, cur.y);
+                    }
+                    else if (cur.y != center.y)
+                    {
+                        int step = cur.y < center.y ? 1 : -1;
+                        cur = new Vector2Int(cur.x, cur.y + step);
+                    }
+                    // 写入下一个空位
+                    for (int k = 1; k < SubGridHelper.SUB_DIV; k++)
+                    {
+                        if (res[k] == default)
+                        {
+                            res[k] = cur;
+                            break;
+                        }
+                    }
+                    if (res[SubGridHelper.SUB_DIV - 1] != default) break;
                 }
 
-                // 更新子段位置
+                // 如果还没填满，继续从中心到出口（最多2步）
+                while (cur != exit && res[SubGridHelper.SUB_DIV - 1] == default)
+                {
+                    if (cur.x != exit.x)
+                    {
+                        int step = cur.x < exit.x ? 1 : -1;
+                        cur = new Vector2Int(cur.x + step, cur.y);
+                    }
+                    else if (cur.y != exit.y)
+                    {
+                        int step = cur.y < exit.y ? 1 : -1;
+                        cur = new Vector2Int(cur.x, cur.y + step);
+                    }
+                    for (int k = 1; k < SubGridHelper.SUB_DIV; k++)
+                    {
+                        if (res[k] == default)
+                        {
+                            res[k] = cur;
+                            break;
+                        }
+                    }
+                }
+
+                // 兜底：若因极端情况未填满，剩余点重复最后一个，保证长度为5且连续
+                for (int k = 1; k < SubGridHelper.SUB_DIV; k++)
+                {
+                    if (res[k] == default) res[k] = res[k - 1];
+                }
+                return res;
+            }
+
+            // 为每个大格生成5个连续的小格，并写入链表与可视
+            int segmentIndex = 0;
+            for (int i = 0; i < bodyCells.Length; i++)
+            {
+                var curBig = bodyCells[i];
+
+                // 计算入/出边
+                int entrySide, exitSide;
+                if (i == 0)
+                {
+                    // 头：入口为反向边，出口为指向第二个格的边
+                    var dirToNext = DeltaToDir(bodyCells[1] - curBig);
+                    exitSide = dirToNext;
+                    entrySide = Opposite(exitSide);
+                }
+                else if (i == bodyCells.Length - 1)
+                {
+                    // 尾：入口为来自前一格的反向边，出口为其对边（形成封闭端）
+                    var dirFromPrev = DeltaToDir(curBig - bodyCells[i - 1]);
+                    entrySide = Opposite(dirFromPrev);
+                    exitSide = Opposite(entrySide);
+                }
+                else
+                {
+                    // 中间：入口=来自前一格的反向边，出口=指向下一格的边
+                    var dirFromPrev = DeltaToDir(curBig - bodyCells[i - 1]);
+                    var dirToNext = DeltaToDir(bodyCells[i + 1] - curBig);
+                    entrySide = Opposite(dirFromPrev);
+                    exitSide = dirToNext;
+                }
+
+                // 生成该段5个小格（沿中线，必经中心，最多一次转向）
+                var subCellPositions = BuildFiveSubCells(curBig, entrySide, exitSide);
+
+                // 同步到链表与显示
+                for (int k = 0; k < subCellPositions.Length; k++)
+                {
+                    _subBodyCells.AddLast(subCellPositions[k]);
+                }
                 UpdateSubSegmentPositions(segmentIndex, subCellPositions);
-
-
                 segmentIndex++;
+            }
+
+            // 连续性校验：所有小格必须两两相邻（曼哈顿距离=1）
+            var node = _subBodyCells.First;
+            var idx = 0;
+            while (node != null && node.Next != null)
+            {
+                var a = node.Value;
+                var b = node.Next.Value;
+                if (SubGridHelper.SubCellManhattan(a, b) != 1)
+                {
+                    Debug.LogError($"InitializeSubSegmentPositions: 小格不连续 at pair index {idx}->{idx + 1}, a={a}, b={b}");
+                    break;
+                }
+                node = node.Next;
+                idx++;
             }
 
             _currentHeadSubCell = _subBodyCells.First.Value;
@@ -748,7 +890,6 @@ namespace ReGecko.SnakeSystem
 
             _currentHeadCell = SubGridHelper.SubCellToBigCell(_currentHeadSubCell);
             _currentTailCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
-
         }
 
 
@@ -830,7 +971,6 @@ namespace ReGecko.SnakeSystem
             Vector2Int targetBigCell = _grid.WorldToCell(world);
             if (targetBigCell.x < 0 || targetBigCell.y < 0)
             {
-                Debug.LogError("UpdateSubGridMovement out grid size!");
                 return;
             }
 
@@ -1254,6 +1394,7 @@ namespace ReGecko.SnakeSystem
             Vector2Int left = new Vector2Int(-dir.y, dir.x);
             Vector2Int right = new Vector2Int(dir.y, -dir.x);
             var candidates = new[] { dir, left, right };
+            //先找大格后退目标
             for (int i = 0; i < candidates.Length; i++)
             {
                 var nextBig = tail + candidates[i];
@@ -1274,6 +1415,15 @@ namespace ReGecko.SnakeSystem
                     Debug.LogError("TryReverseOneStep error! can not find path");
                 }
             }
+            //大格没有后退位置，回到尾部中心
+            EnqueueBigCellPath(_currentTailSubCell, _currentTailCell, _subCellPathQueue, 1);
+            if (_subCellPathQueue.Count > 0)
+            {
+                var nextSubCell = _subCellPathQueue.First.Value;
+                return AdvanceTailToSubCell(nextSubCell);
+
+            }
+
             return false;
         }
 
@@ -1533,6 +1683,15 @@ namespace ReGecko.SnakeSystem
                 {
                     Debug.LogError("TryReverseOneStep error! can not find path");
                 }
+            }
+
+            //大格没有后退位置，回到头部中心
+            EnqueueBigCellPath(_currentHeadSubCell, _currentHeadCell, _subCellPathQueue, 1);
+            if (_subCellPathQueue.Count > 0)
+            {
+                var nextSubCell = _subCellPathQueue.First.Value;
+                return AdvanceHeadToSubCell(nextSubCell);
+
             }
             return false;
 

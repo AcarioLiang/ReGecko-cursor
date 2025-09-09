@@ -15,7 +15,17 @@ namespace ReGecko.GameCore.Player
 		const string StorageKey = "RG_PlayerData";
 		static PlayerData _cached;
 
-		public static PlayerData Get()
+
+
+        /// <summary>
+        /// 游戏状态变化事件
+        /// </summary>
+        public delegate void PlayerDataChangedEventHandler(object sender, EventArgs e);
+        // 事件
+        public static event PlayerDataChangedEventHandler OnPlayerDataChanged;
+
+
+        public static PlayerData Get()
 		{
 			if (_cached != null) return _cached;
 			if (PlayerPrefs.HasKey(StorageKey))
@@ -39,7 +49,20 @@ namespace ReGecko.GameCore.Player
 			PlayerPrefs.SetString(StorageKey, json);
 			PlayerPrefs.Save();
 		}
-	}
+
+
+        public static void ChangePlayerData(PlayerData newData)
+        {
+			if (_cached == null) _cached = new PlayerData();
+
+			_cached = newData;
+
+			Save();
+			// 触发事件
+			OnPlayerDataChanged?.Invoke(null, new EventArgs());
+        }
+
+    }
 }
 
 

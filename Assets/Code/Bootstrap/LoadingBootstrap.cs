@@ -25,14 +25,16 @@ namespace ReGecko.Bootstrap
         GameObject _progressBar;
         GameObject _startButton;
 
+        PlayerData _playerData;
+
         IEnumerator Start()
         {
             BuildUI();
+            _playerData = PlayerService.Get();
 
             // 加载玩家数据
             if (GameContext.NextLoadIsPlayer)
             {
-                var data = PlayerService.Get();
             }
             else
             {
@@ -41,7 +43,7 @@ namespace ReGecko.Bootstrap
                 SnakeBodySpriteConfig bodysprite;
                 if (provider != null)
                 {
-                    level = provider.GetLevel();
+                    level = provider.GetLevel(_playerData.Level);
                     bodysprite = provider.SnakeBodyConfig;
                 }
                 else
@@ -70,10 +72,11 @@ namespace ReGecko.Bootstrap
             if (GameContext.PreloadedUIPrefab_GameMain == null)
             {
                 uiNeedCount++;
-                // 用代码生成的是实例，不需要再Instantiate
-                loadedUIPrefab = ReGecko.Framework.UI.GameplayHUDBuilder.BuildPrefabTemplate();
-                loadedUIPrefab.SetActive(false); // 先隐藏，等到Game场景再显示
-                uiLoadedCount++;
+                StartCoroutine(ResourceManager.LoadPrefabAsync(ResourceDefine.Path_UI_Prefab_Game, prefab =>
+                {
+                    loadedUIPrefab = prefab;
+                    uiLoadedCount++;
+                }));
             }
 
             if (GameContext.PreloadedUIPrefab_GameSuccess == null)
@@ -122,27 +125,6 @@ namespace ReGecko.Bootstrap
             // 运行进度条，等待所有资源加载完成
             yield return StartCoroutine(RunFakeProgress(() => uiLoadedCount == uiNeedCount && otherResourcesLoaded));
 
-            // 将加载的UI保存到GameContext，并确保不会被场景切换销毁
-            if (loadedUIPrefab != null)
-            {
-                DontDestroyOnLoad(loadedUIPrefab);
-            }
-            //if (loadedUIPrefab_Panel_GameSuccess != null)
-            //{
-            //    DontDestroyOnLoad(loadedUIPrefab_Panel_GameSuccess);
-            //}
-            //if (loadedUIPrefab_Panel_GameFaild != null)
-            //{
-            //    DontDestroyOnLoad(loadedUIPrefab_Panel_GameFaild);
-            //}
-            //if (loadedUIPrefab_Panel_GameSetting != null)
-            //{
-            //    DontDestroyOnLoad(loadedUIPrefab_Panel_GameSetting);
-            //}
-            //if (loadedUIPrefab_Panel_Lobby != null)
-            //{
-            //    DontDestroyOnLoad(loadedUIPrefab_Panel_Lobby);
-            //}
 
             if (GameContext.PreloadedUIPrefab_GameMain == null)
                 GameContext.PreloadedUIPrefab_GameMain = loadedUIPrefab;
@@ -168,7 +150,7 @@ namespace ReGecko.Bootstrap
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080, 1920);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f; // 0偏向宽度，1偏向高度，0.5平衡
+            scaler.matchWidthOrHeight = 0f; // 0偏向宽度，1偏向高度，0.5平衡
             canvasGo.AddComponent<GraphicRaycaster>();
 
             // 确保有EventSystem来处理UI事件

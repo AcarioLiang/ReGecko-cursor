@@ -10,7 +10,7 @@ namespace ReGecko.Framework.UI
     {
         public static GameObject BuildPrefabTemplate()
         {
-            var root = new GameObject("GameplayHUD");
+            var root = new GameObject("GameMain");
             var rt = root.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0f, 0f);
             rt.anchorMax = new Vector2(1f, 1f);
