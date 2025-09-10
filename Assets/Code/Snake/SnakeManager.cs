@@ -26,7 +26,7 @@ namespace ReGecko.SnakeSystem
         // 私有字段
         private readonly Dictionary<string, BaseSnake> _snakeDict = new Dictionary<string, BaseSnake>();
         private LevelConfig _currentLevel;
-        private GridConfig _gridConfig;
+        private GridConfig _grid;
         private GridEntityManager _entityManager;
 
         // 属性
@@ -34,16 +34,23 @@ namespace ReGecko.SnakeSystem
         public int TotalSnakeCount => _snakes.Count;
         public int AliveSnakeCount => _snakes.Count(s => s != null && s.IsAlive());
 
+
+        //优化缓存
+        Vector3 _lastMousePos;
+        Canvas _parentCanvas;
+        bool _hasPackSnake = false;
+
         /// <summary>
         /// 初始化蛇管理器
         /// </summary>
         public void Initialize(LevelConfig levelConfig, GridConfig gridConfig, GridEntityManager entityManager = null, Transform container = null)
         {
             _currentLevel = levelConfig;
-            _gridConfig = gridConfig;
+            _grid = gridConfig;
             _entityManager = entityManager;
             SnakeContainer = container ?? transform;
-            
+            _parentCanvas = GetComponentInParent<Canvas>();
+
             ClearAllSnakes();
             CreateSnakesFromConfig();
         }
@@ -91,7 +98,7 @@ namespace ReGecko.SnakeSystem
             ConfigureSnake(snake, snakeConfig, snakeId);
             
             // 初始化蛇
-            snake.Initialize(_gridConfig, _entityManager, this);
+            snake.Initialize(_grid, _entityManager, this);
             
             // 添加到管理列表
             _snakes.Add(snake);
@@ -212,7 +219,7 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         public void UpdateGridConfig(GridConfig newGridConfig)
         {
-            _gridConfig = newGridConfig;
+            _grid = newGridConfig;
             
             foreach (var snake in _snakes)
             {
@@ -252,22 +259,13 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         private void Update()
         {
-            // 清理已销毁的蛇
-            for (int i = _snakes.Count - 1; i >= 0; i--)
-            {
-                if (_snakes[i] == null)
-                {
-                    _snakes.RemoveAt(i);
-                }
-            }
 
-            // 每帧开始时刷新碰撞缓存
-            InvalidateOccupiedCellsCache();
+            HandleInput();
 
             // 更新所有活着的蛇
             foreach (var snake in _snakes)
             {
-                if (snake != null && snake.IsAlive())
+                if (snake != null && snake.IsAlive() && snake.IsDragging)
                 {
                     snake.UpdateMovement();
                 }
@@ -283,6 +281,138 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        void HandleInput()
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                if (_lastMousePos != Input.mousePosition )
+                {
+                    _lastMousePos = Input.mousePosition;
+
+                    TryPickHeadOrTail(); 
+                }
+            }
+            else if (Input.GetMouseButtonUp(0))
+            {
+                foreach (var snake in _snakes)
+                {
+                    if (snake != null && snake.IsAlive() && snake.IsControllable && snake.IsDragging)
+                    {
+                        snake.IsDragging = false;
+                    }
+                }
+
+                _hasPackSnake = false;
+                _lastMousePos = Vector3.zero;
+            }
+        }
+
+        public void TryClearSnakes()
+        {
+            // 清理已销毁的蛇
+            for (int i = _snakes.Count - 1; i >= 0; i--)
+            {
+                if (_snakes[i] == null)
+                {
+                    _snakes.RemoveAt(i);
+                }
+            }
+        }
+
+        bool TryPickHeadOrTail()
+        {
+            if (_hasPackSnake)
+                return false;
+
+            var world = ScreenToWorld(Input.mousePosition);
+            var curMouseBigCell = _grid.WorldToCell(world);
+
+            BaseSnake bestSnake = null;
+            bool bestFromHead = true;
+            int bestDist = int.MaxValue;
+            float bestWorldDist = float.MaxValue;
+
+            foreach (var snake in _snakes)
+            {
+                if (snake == null || !snake.IsAlive() || snake.IsDragging || !snake.IsControllable)
+                    continue;
+
+                var ctl = (SnakeController)snake;
+                var headCell = ctl.GetHeadBigCell();
+                var tailCell = ctl.GetTailBigCell();
+
+                int dHead = Mathf.Abs(curMouseBigCell.x - headCell.x) + Mathf.Abs(curMouseBigCell.y - headCell.y);
+                int dTail = Mathf.Abs(curMouseBigCell.x - tailCell.x) + Mathf.Abs(curMouseBigCell.y - tailCell.y);
+
+                // 仅考虑“同格或相邻格”（≤1）
+                void TryUpdateCandidate(int dist, bool fromHead, Vector2Int refCell)
+                {
+                    if (dist > 1) return;
+
+                    // 主排序：更小的格距，其次：更小的世界距离
+                    var refWorld = _grid.CellToWorld(refCell);
+                    float wdist = Vector2.SqrMagnitude(new Vector2(world.x - refWorld.x, world.y - refWorld.y));
+
+                    if (dist < bestDist || (dist == bestDist && wdist < bestWorldDist))
+                    {
+                        bestDist = dist;
+                        bestWorldDist = wdist;
+                        bestSnake = snake;
+                        bestFromHead = fromHead;
+                    }
+                }
+
+                TryUpdateCandidate(dHead, true, headCell);
+                TryUpdateCandidate(dTail, false, tailCell);
+            }
+
+            if (bestSnake != null)
+            {
+                bestSnake.IsDragging = true;
+                bestSnake.DragFromHead = bestFromHead;
+                _hasPackSnake = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool IsAdjacent(Vector2Int other, Vector2Int Cell)
+        {
+            return Mathf.Abs(other.x - Cell.x) + Mathf.Abs(other.y - Cell.y) <= 1;
+        }
+
+        Vector3 ScreenToWorld(Vector3 screen)
+        {
+            // UI渲染模式：使用UI坐标转换
+            if (_parentCanvas != null)
+            {
+                var rect = transform.parent as RectTransform; // GridContainer
+                if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, _parentCanvas.worldCamera, out Vector2 localPoint))
+                {
+                    return new Vector3(localPoint.x, localPoint.y, 0f);
+                }
+            }
+            else
+            {
+                _parentCanvas = GetComponentInParent<Canvas>();
+                Debug.LogError("cache _parentCanvas error!!!");
+            }
+
+            // 最后的fallback：简单的比例转换
+            Vector2 screenSize = new Vector2(Screen.width, Screen.height);
+            Vector2 normalizedScreen = new Vector2(screen.x / screenSize.x, screen.y / screenSize.y);
+
+            // 假设网格居中在屏幕中，计算相对位置
+            float gridWidth = _grid.Width * _grid.CellSize;
+            float gridHeight = _grid.Height * _grid.CellSize;
+
+            float worldX = (normalizedScreen.x - 0.5f) * gridWidth;
+            float worldY = (normalizedScreen.y - 0.5f) * gridHeight;
+
+            return new Vector3(worldX, worldY, 0f);
+
+        }
         /*
         /// <summary>
         /// 获取所有蛇占用的格子

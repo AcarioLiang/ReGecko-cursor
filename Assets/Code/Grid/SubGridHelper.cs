@@ -136,6 +136,12 @@ namespace ReGecko.GridSystem
             }
         }
 
+        public static Vector2Int WorldToBigCell(Vector3 world, GridConfig grid)
+        {
+            var subcell = WorldToSubCell(world, grid);
+            return SubCellToBigCell(subcell);
+        }
+
         /// <summary>
         /// 检查小格是否在网格边界内（按大格边界判断）
         /// </summary>

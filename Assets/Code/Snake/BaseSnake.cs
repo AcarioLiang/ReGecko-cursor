@@ -70,6 +70,22 @@ namespace ReGecko.SnakeSystem
         // 公共属性
         public string Name { get; set; } = "Snake";
         public float MoveSpeed => MoveSpeedCellsPerSecond;
+
+
+        private bool _IsDragging = false;
+        public bool IsDragging
+        {
+            get { return _IsDragging; }
+            set { _IsDragging = value; }
+        }
+
+        private bool _dragFromHead = false;
+        public bool DragFromHead
+        {
+            get { return _dragFromHead; }
+            set { _dragFromHead = value; }
+        }
+
         public SnakeState State => _state;
 
         public bool IsAlive() => _state == SnakeState.Alive;

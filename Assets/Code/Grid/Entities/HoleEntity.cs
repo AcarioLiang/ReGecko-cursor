@@ -40,7 +40,7 @@ namespace ReGecko.Grid.Entities
 		public void TryTriggerConsume(SnakeController snake, bool dragOnHead)
 		{
 			// 检查蛇是否邻近洞
-			if (!IsAdjacent(dragOnHead ? snake.GetHeadCell() : snake.GetTailCell())) return;
+			if (!IsAdjacent(dragOnHead ? snake.GetHeadBigCell() : snake.GetTailBigCell())) return;
 			
 			// 检查颜色是否匹配
 			if (!CanInteractWithSnake(snake))
