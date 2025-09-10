@@ -108,16 +108,25 @@ namespace ReGecko.GridSystem
         }
 
         /// <summary>
-        /// 将世界坐标转换为小格坐标（始终返回中线上的小格坐标）
+        /// 将世界坐标转换为小格坐标（始终返回中线上的小格坐标，且所在大格被夹紧到地图范围内）
         /// </summary>
         public static Vector2Int WorldToSubCell(Vector3 world, GridConfig grid)
         {
-            Vector2Int bigCell = grid.WorldToCell(world);
-            Vector3 bigCellWorld = grid.CellToWorld(bigCell);
+            if (!grid.IsValid())
+                return Vector2Int.zero;
 
+            // 先得到大格，再夹紧到有效范围
+            Vector2Int bigCell = grid.WorldToCell(world);
+            bigCell = ClampBigCell(bigCell, grid);
+
+            // 使用夹紧后的大格中心计算偏移
+            Vector3 bigCellWorld = grid.CellToWorld(bigCell);
             Vector3 offset = world - bigCellWorld;
+
+            // 每个小格的世界尺寸
             float unit = SUB_CELL_SIZE * grid.CellSize; // = grid.CellSize / 5f
 
+            // 将偏移换算成“小格单位”（中心为0）
             float xUnits = offset.x / unit;
             float yUnits = offset.y / unit;
 
@@ -138,8 +147,11 @@ namespace ReGecko.GridSystem
 
         public static Vector2Int WorldToBigCell(Vector3 world, GridConfig grid)
         {
-            var subcell = WorldToSubCell(world, grid);
-            return SubCellToBigCell(subcell);
+            if (!grid.IsValid())
+                return Vector2Int.zero;
+
+            Vector2Int big = grid.WorldToCell(world);
+            return ClampBigCell(big, grid);
         }
 
         /// <summary>
@@ -229,11 +241,18 @@ namespace ReGecko.GridSystem
         }
 
         // --- 私有工具 ---
-
         private static int Mod(int a, int m)
         {
             int r = a % m;
             return r < 0 ? r + m : r;
+        }
+
+        // 将大格坐标夹紧到地图范围内
+        private static Vector2Int ClampBigCell(Vector2Int bigCell, GridConfig grid)
+        {
+            int x = Mathf.Clamp(bigCell.x, 0, Mathf.Max(0, grid.Width - 1));
+            int y = Mathf.Clamp(bigCell.y, 0, Mathf.Max(0, grid.Height - 1));
+            return new Vector2Int(x, y);
         }
 
         private static Vector2Int SnapToCenterLine(Vector2Int subCell)

@@ -336,24 +336,16 @@ namespace ReGecko.SnakeSystem
                         var tailOffset = 0f;
                         var lastSegmentsCount = _subSegments.Count - segmentIndex;
                         Vector2Int[] fivecells = new Vector2Int[lastSegmentsCount];
-                        bool islast = false;
                         bool isTail = false;
                         for (int step = 0; step < lastSegmentsCount; step++)
                         {
                             fivecells[step] = bodyCellsList[segmentIndex + step];
-                            if (segmentIndex + step == 24)
-                            {
-                                islast = true;
-                            }
                         }
 
                         var startAngle = 0;
                         var offsetAngle = -SubRotationAngle;
                         var dir = GetFiveSubTurnDirection8(fivecells);
-                        if (islast)
-                        {
-                            Debug.Log("=============>" + dir);
-                        }
+         
                         if (dir == TurnDirection8.RightToUp)
                         {
                             ///*
@@ -963,28 +955,45 @@ namespace ReGecko.SnakeSystem
         void UpdateSubGridMovement()
         {
             // 智能更新频率控制
-            if (!ShouldUpdateDragVisuals())
+            //if (!ShouldUpdateDragVisuals())
             {
-                return;
+                //return;
             }
 
             // 采样当前手指所在小格，扩充小格路径队列
             var world = ScreenToWorld(Input.mousePosition);
-
             Vector2Int targetBigCell = SubGridHelper.WorldToBigCell(world, _grid);
-            if (targetBigCell.x < 0 || targetBigCell.y < 0)
+
+            //判断地图边界
+            if (!_grid.IsInside(targetBigCell))
             {
                 return;
             }
 
+            //判断是否是蛇头蛇尾原点
+            Vector2Int targetSubCell = SubGridHelper.WorldToSubCell(world, _grid);
+            if(targetSubCell == (DragFromHead ? _currentHeadSubCell : _currentTailSubCell))
+            {
+                return;
+            }
+
+            _isReverse = false;
             //if (targetSubCell != _lastSampledSubCell)
             {
                 // 更新主方向：按更大位移轴确定
                 var delta = targetBigCell - (DragFromHead ? _currentHeadCell : _currentTailCell);
                 _dragAxis = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y) ? DragAxis.X : DragAxis.Y;
 
-                EnqueueBigCellPath(DragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetBigCell, _subCellPathQueue, 1);
-                //_lastSampledSubCell = targetSubCell;
+                if(GetBodyCellsNextBigCell(DragFromHead) == (DragFromHead ? _currentHeadCell : _currentTailCell))
+                {
+                    EnqueueBigCellPath(DragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetBigCell, _subCellPathQueue, 1);
+
+                }
+                else
+                {
+                    EnqueueSubCellPath(DragFromHead ? _currentHeadSubCell : _currentTailSubCell, targetSubCell, _subCellPathQueue, 1);
+                }
+                _lastSampledSubCell = targetSubCell;
             }
 
 
@@ -1001,40 +1010,57 @@ namespace ReGecko.SnakeSystem
                 // 检查目标点合法性
                 if (!CheckNextCell(nextSubCell))
                 {
-                    Debug.LogError("CheckNextCell return!");
+                    //Debug.LogError("CheckNextCell return!");
                     return;
                 }
 
-                if (DragFromHead)
+                if (CheckIfNeedReverse(nextSubCell, out nextSubCell)) 
                 {
-                    //var nextBigBody = GetBodyCellsNextBigCell(DragFromHead);
-                    //var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
-                    if (nextSubCell == _subBodyCells.First.Next.Value)
-                    {
-                        _isReverse = true;
-                        // 倒车：若下一步将进入紧邻身体，则改为让尾部后退一步
-                        TryReverseOneStep();
-                    }
-                    else
-                    {
-                        AdvanceHeadToSubCell(nextSubCell);
-                    }
-
+                    _isReverse = true;
                 }
                 else
                 {
-                    var nextBigBody = GetBodyCellsNextBigCell(DragFromHead);
-                    var nextbigcell = SubGridHelper.SubCellToBigCell(nextSubCell);
-                    if (nextbigcell == nextBigBody)
+                    //如果不能倒车，且坐标是倒车坐标，则返回
+                    if (nextSubCell == (DragFromHead ? _subBodyCells.First.Next.Value : _subBodyCells.Last.Previous.Value))
                     {
-                        // 尾部倒车：若下一步将进入紧邻身体，则改为让头部前进一步
-                        TryReverseFromTail();
+                        return;
+                    }
+                }
+
+                // 当移动累积器达到1.0时，表示应该移动到下一个格子
+                if (_subCellMoveAccumulator >= 1.0f)
+                {
+                    _subCellMoveAccumulator -= 1.0f; // 减去1.0，保留余数
+
+
+                    if (DragFromHead)
+                    {
+                        if (_isReverse)
+                        {
+                            AdvanceTailToSubCell(nextSubCell);
+                        }
+                        else
+                        {
+                            AdvanceHeadToSubCell(nextSubCell);
+                        }
+
                     }
                     else
                     {
-                        AdvanceTailToSubCell(nextSubCell);
-                    }
+                        if (_isReverse)
+                        {
+                            AdvanceHeadToSubCell(nextSubCell);
+                        }
+                        else
+                        {
+                            AdvanceTailToSubCell(nextSubCell);
+                        }
 
+                    }
+                }
+                else
+                {
+                    UpdateVisualsSmoothDragging(nextSubCell);
                 }
 
                 //刷新碰撞缓存
@@ -1050,7 +1076,7 @@ namespace ReGecko.SnakeSystem
                     }
                 }
                 {
-                    var hole = FindHoleAtOrAdjacentWithColor(_currentTailCell,ColorType);
+                    var hole = FindHoleAtOrAdjacentWithColor(_currentTailCell, ColorType);
                     if (hole != null)
                     {
                         _consumeCoroutine ??= StartCoroutine(CoConsume(hole, false));
@@ -1072,7 +1098,87 @@ namespace ReGecko.SnakeSystem
 
             }
         }
+        void UpdateVisualsSmoothDragging(Vector2Int nextSubCell)
+        {
+            // 仅做可视插值，不修改 _subBodyCells 与 _currentHead/TailSubCell
+            if (_subBodyCells == null || _subBodyCells.Count == 0 || _cachedSubRectTransforms.Count == 0) return;
 
+            _startMove = true;
+            float frac = Mathf.Clamp01(_subCellMoveAccumulator); // 0..1 插值因子
+
+            // 1) 拍快照，避免遍历时链表被改动造成闪烁（零分配复用）
+            int count = _subBodyCells.Count;
+            if (_tmpSubSnap == null || _tmpSubSnap.Length < count)
+            {
+                _tmpSubSnap = new Vector2Int[Mathf.NextPowerOfTwo(count)];
+            }
+            var node = _subBodyCells.First;
+            for (int i = 0; i < count; i++, node = node.Next)
+            {
+                _tmpSubSnap[i] = node.Value;
+            }
+
+            // 2) 定义“假想的新队列”取值（使用 _isReverse 与 DragFromHead）
+            // 统一约定：new 队列是在“迈出一小格后”的目标布局
+            Vector2Int GetNewAt(int j)
+            {
+                // 头前进：new[0]=next，new[j]=old[j-1] (j>=1)
+                if (DragFromHead && !_isReverse)
+                {
+                    if (j == 0) return nextSubCell;
+                    return _tmpSubSnap[j - 1];
+                }
+
+                // 头倒车：new[last]=next，new[j]=old[j+1] (j<=last-1)
+                if (DragFromHead && _isReverse)
+                {
+                    if (j == count - 1) return nextSubCell;
+                    return _tmpSubSnap[j + 1];
+                }
+
+                // 尾前进：new[last]=next，new[j]=old[j+1] (j<=last-1)
+                if (!DragFromHead && !_isReverse)
+                {
+                    if (j == count - 1) return nextSubCell;
+                    return _tmpSubSnap[j + 1];
+                }
+
+                // 尾倒车：new[0]=next，new[j]=old[j-1] (j>=1)
+                //（相当于整队向头侧回退一格）
+                if (!DragFromHead && _isReverse)
+                {
+                    if (j == 0) return nextSubCell;
+                    return _tmpSubSnap[j - 1];
+                }
+
+                // 兜底
+                return _tmpSubSnap[j];
+            }
+
+            // 3) 可视插值：old -> new 假想布局
+            for (int j = 0; j < count; j++)
+            {
+                Vector2Int oldSub = _tmpSubSnap[j];
+                Vector2Int newSub = GetNewAt(j);
+
+                Vector3 w0 = SubGridHelper.SubCellToWorld(oldSub, _grid);
+                Vector3 w1 = SubGridHelper.SubCellToWorld(newSub, _grid);
+                Vector3 w = Vector3.LerpUnclamped(w0, w1, frac);
+
+                if (j < _subSegments.Count)
+                {
+                    var rt = _subSegments[j].GetComponent<RectTransform>();
+                    if (rt != null)
+                    {
+                        rt.anchoredPosition = new Vector2(w.x, w.y);
+                        // 旋转保持不变，如需朝向可在此按 w1-w0 方向设置
+                    }
+                }
+            }
+        }
+
+        // 放在 SnakeController 字段区（避免频繁分配）
+        Vector2Int[] _tmpSubSnap;
 
         /// <summary>
         /// 智能判断是否需要更新拖动视觉效果
@@ -1149,6 +1255,128 @@ namespace ReGecko.SnakeSystem
             }
 
             return Vector2Int.zero;
+        }
+
+        bool CheckIfNeedReverse(Vector2Int nextSubCell, out Vector2Int newNextSubCell)
+        {
+            newNextSubCell = nextSubCell;
+            if (DragFromHead)
+            {
+                if (nextSubCell == _subBodyCells.First.Next.Value)
+                {
+                    // 以尾部为基准，朝着与尾相邻段的反方向后退；若不可行，尝试左右方向
+                    if (_subBodyCells.Last == null || _subBodyCells.Last.Previous == null)
+                    {
+                        return false;
+                    }
+                    var tail = _currentTailCell;
+                    var prevSub = GetSubBodyCellAtIndex(_subBodyCells.Count - 1 - 5);
+                    var prev = SubGridHelper.SubCellToBigCell(prevSub); // 尾部相邻的身体
+                    Vector2Int dir = tail - prev; // 远离身体方向
+                    Vector2Int left = new Vector2Int(-dir.y, dir.x);
+                    Vector2Int right = new Vector2Int(dir.y, -dir.x);
+                    var candidates = new[] { dir, left, right };
+                    //先找大格后退目标
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        var nextBig = tail + candidates[i];
+                        if (!_grid.IsInside(nextBig)) continue;
+                        if (IsPathBlocked(nextBig)) continue;
+                        if (!CheckOccupiedBySelfReverse(nextBig)) continue;
+
+                        EnqueueBigCellPath(_currentTailSubCell, nextBig, _subCellPathQueue, 1);
+
+                        if (_subCellPathQueue.Count > 0)
+                        {
+                            newNextSubCell = _subCellPathQueue.First.Value;
+                            return true;
+                        }
+                    }
+
+                    //再走小格
+                    tail = _currentTailSubCell;
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        var nextHeadSub = tail + candidates[i];
+                        var nextHeadBig = SubGridHelper.SubCellToBigCell(nextHeadSub);
+                        if (!_grid.IsInside(nextHeadBig)) continue;
+                        if (IsPathBlocked(nextHeadBig)) continue;
+                        if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
+                        if (!_grid.IsInsideSub(nextHeadSub)) continue;
+
+                        EnqueueSubCellPath(_currentTailSubCell, nextHeadSub, _subCellPathQueue, 1);
+
+                        if (_subCellPathQueue.Count > 0)
+                        {
+                            newNextSubCell = _subCellPathQueue.First.Value;
+                            return true;
+
+                        }
+                    }
+
+                    return false;
+                }
+            }
+            else
+            {
+                if (nextSubCell == _subBodyCells.Last.Previous.Value)
+                {
+                    // 从尾部倒车：以头部为基准，朝着与头相邻段的反方向前进
+                    if (_subBodyCells.First == null || _subBodyCells.First.Next == null)
+                    {
+                        return false;
+                    }
+                    var head = _currentHeadCell;
+                    var nextSub = GetSubBodyCellAtIndex(5);
+                    var next = SubGridHelper.SubCellToBigCell(nextSub); // 头部相邻的身体
+                    Vector2Int dir = head - next; // 远离身体方向
+                    Vector2Int left = new Vector2Int(-dir.y, dir.x);
+                    Vector2Int right = new Vector2Int(dir.y, -dir.x);
+                    var candidates = new[] { dir, left, right };
+                    
+                    //优先走大格
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        var nextHeadBig = head + candidates[i];
+                        if (!_grid.IsInside(nextHeadBig)) continue;
+                        if (IsPathBlocked(nextHeadBig)) continue;
+                        if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
+
+                        EnqueueBigCellPath(_currentHeadSubCell, nextHeadBig, _subCellPathQueue, 1);
+
+                        if (_subCellPathQueue.Count > 0)
+                        {
+                            newNextSubCell = _subCellPathQueue.First.Value;
+                            return true;
+
+                        }
+                    }
+
+                    //再走小格
+                    head = _currentHeadSubCell;
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        var nextHeadSub = head + candidates[i];
+                        var nextHeadBig = SubGridHelper.SubCellToBigCell(nextHeadSub);
+                        if (!_grid.IsInside(nextHeadBig)) continue;
+                        if (IsPathBlocked(nextHeadBig)) continue;
+                        if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
+                        if(!_grid.IsInsideSub(nextHeadSub)) continue;
+
+                        EnqueueSubCellPath(_currentHeadSubCell, nextHeadSub, _subCellPathQueue, 1);
+
+                        if (_subCellPathQueue.Count > 0)
+                        {
+                            newNextSubCell = _subCellPathQueue.First.Value;
+                            return true;
+
+                        }
+                    }
+
+
+                }
+            }
+            return false;
         }
 
         bool CheckNextCell(Vector2Int nextSubCell)
@@ -1401,7 +1629,10 @@ namespace ReGecko.SnakeSystem
         bool TryReverseOneStep()
         {
             // 以尾部为基准，朝着与尾相邻段的反方向后退；若不可行，尝试左右方向
-            if (_subBodyCells.Last == null || _subBodyCells.Last.Previous == null) return false;
+            if (_subBodyCells.Last == null || _subBodyCells.Last.Previous == null)
+            {
+                return false;
+            }
             var tail = _currentTailCell;
             var prevSub = GetSubBodyCellAtIndex(_subBodyCells.Count - 1 - 5);
             var prev = SubGridHelper.SubCellToBigCell(prevSub); // 尾部相邻的身体
@@ -1427,7 +1658,7 @@ namespace ReGecko.SnakeSystem
                 }
                 else
                 {
-                    Debug.LogError("TryReverseOneStep error! can not find path");
+                    //Debug.LogError("TryReverseOneStep error! can not find path");
                 }
             }
             //大格没有后退位置，回到尾部中心
@@ -1671,7 +1902,10 @@ namespace ReGecko.SnakeSystem
         bool TryReverseFromTail()
         {
             // 从尾部倒车：以头部为基准，朝着与头相邻段的反方向前进
-            if (_subBodyCells.First == null || _subBodyCells.First.Next == null) return false;
+            if (_subBodyCells.First == null || _subBodyCells.First.Next == null)
+            {
+                return false;
+            }
             var head = _currentHeadCell;
             var nextSub = GetSubBodyCellAtIndex(5);
             var next = SubGridHelper.SubCellToBigCell(nextSub); // 头部相邻的身体
@@ -1696,7 +1930,7 @@ namespace ReGecko.SnakeSystem
                 }
                 else
                 {
-                    Debug.LogError("TryReverseOneStep error! can not find path");
+                    //Debug.LogError("TryReverseOneStep error! can not find path");
                 }
             }
 
@@ -1708,6 +1942,7 @@ namespace ReGecko.SnakeSystem
                 return AdvanceHeadToSubCell(nextSubCell);
 
             }
+
             return false;
 
         }

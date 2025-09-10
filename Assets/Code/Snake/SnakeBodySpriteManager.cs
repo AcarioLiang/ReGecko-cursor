@@ -16,6 +16,7 @@ namespace ReGecko.SnakeSystem
         GridConfig _grid;
         LineRenderer _line;
         readonly List<Vector3> _posBuffer = new List<Vector3>(256);
+        readonly List<GameObject> _cacheNewBodyList = new List<GameObject>();
 
         void Awake()
         {
@@ -64,7 +65,7 @@ namespace ReGecko.SnakeSystem
             _line.alignment = LineAlignment.View;
             _line.textureMode = LineTextureMode.Stretch;
             _line.numCornerVertices = 0;
-            _line.numCapVertices = 2;
+            _line.numCapVertices = 0;
 
             _line.widthMultiplier = LineWidth;
 
@@ -120,12 +121,14 @@ namespace ReGecko.SnakeSystem
             EnsureLineCreated();
 
             _posBuffer.Clear();
+            _cacheNewBodyList.Clear();
+
+            _cacheNewBodyList.AddRange(body);
 
             //头部一个点，身体，尾部一个点
-            List<GameObject> newbodyList = new List<GameObject>(body);
-            EqualizeHeadAndTail(newbodyList);
+            EqualizeHeadAndTail(_cacheNewBodyList);
 
-            foreach (var node in newbodyList)
+            foreach (var node in _cacheNewBodyList)
             {
                 var p = node.transform.position;
                 p.z = 0f;
