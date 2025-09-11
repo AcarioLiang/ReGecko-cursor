@@ -24,6 +24,14 @@ namespace ReGecko.GridSystem
             Vector2Int localPos = GetSubCellLocalPos(subCell);
             return localPos.x == CENTER_INDEX || localPos.y == CENTER_INDEX;
         }
+        public static bool IsValidSubCellEx(Vector2Int subCell, GridConfig grid)
+        {
+            if(subCell.x < CENTER_INDEX || subCell.x >= (grid.Width * SUB_DIV) - CENTER_INDEX ||
+                subCell.y < CENTER_INDEX || subCell.y >= (grid.Height * SUB_DIV) - CENTER_INDEX)
+                return false;
+
+            return IsValidSubCell(subCell);
+        }
 
         /// <summary>
         /// 将大格坐标转换为该大格内左侧中线的小格坐标（xLocal=0, yLocal=CENTER_INDEX）
@@ -135,13 +143,24 @@ namespace ReGecko.GridSystem
             {
                 int subY = Mathf.RoundToInt(CENTER_INDEX + yUnits);
                 subY = Mathf.Clamp(subY, 0, SUB_DIV - 1);
-                return new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + subY);
+                Vector2Int fixres = new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + subY);
+                fixres.x = Math.Max(CENTER_INDEX, fixres.x);
+                fixres.x = Math.Min(fixres.x, grid.Width * SUB_DIV - CENTER_INDEX - 1);
+                fixres.y = Math.Max(CENTER_INDEX, fixres.y);
+                fixres.y = Math.Min(fixres.y, grid.Height * SUB_DIV - CENTER_INDEX - 1);
+                return fixres;
             }
             else
             {
                 int subX = Mathf.RoundToInt(CENTER_INDEX + xUnits);
                 subX = Mathf.Clamp(subX, 0, SUB_DIV - 1);
-                return new Vector2Int(bigCell.x * SUB_DIV + subX, bigCell.y * SUB_DIV + CENTER_INDEX);
+
+                Vector2Int fixres = new Vector2Int(bigCell.x * SUB_DIV + subX, bigCell.y * SUB_DIV + CENTER_INDEX);
+                fixres.x = Math.Max(CENTER_INDEX, fixres.x);
+                fixres.x = Math.Min(fixres.x, grid.Width * SUB_DIV - CENTER_INDEX - 1);
+                fixres.y = Math.Max(CENTER_INDEX, fixres.y);
+                fixres.y = Math.Min(fixres.y, grid.Height * SUB_DIV - CENTER_INDEX - 1);
+                return fixres;
             }
         }
 

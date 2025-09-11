@@ -25,7 +25,7 @@ namespace ReGecko.GridSystem
         public bool IsInsideSub(Vector2Int subCell)
         {
             return subCell.x >= 0 && subCell.x < Width * SubGridHelper.SUB_DIV && subCell.y >= 0 && subCell.y < Height * SubGridHelper.SUB_DIV &&
-                SubGridHelper.IsValidSubCell(subCell);
+                SubGridHelper.IsValidSubCellEx(subCell, this);
         }
 
         public bool IsInside(Vector2Int cell)
