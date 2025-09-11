@@ -1100,10 +1100,11 @@ namespace ReGecko.SnakeSystem
 
                 // 2.5 直接按新状态刷可视
                 ApplySmoothVisualsByPath();
-
                 AfterSmoothVisualsByPath();
                 _lastLeadTargetSubCell = Vector2Int.zero;
                 _isReverse = false; // 本帧倒车已处理
+                _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
+                _leadPos = ToWorldCenter(_leadCurrentSubCell);
                 return;
             }
 
@@ -1121,14 +1122,13 @@ namespace ReGecko.SnakeSystem
                 float step = _leadSpeedWorld * Time.deltaTime;
                 if (step >= dist)
                 {
-                    // 抵达目标小格中心
+                    // 到达目标小格中心
                     _leadPos = _leadTargetPos;
-
-                    // 提交方向：更新“拖动端当前小格”
                     _leadCurrentSubCell = _leadTargetSubCell;
 
-                    // 路径历史处理：前进→追加；倒车（回到最后一个点）→弹出
-                    if (_leadPathPoints.Count > 0 && (Vector2.Distance(_leadPathPoints[_leadPathPoints.Count - 1], _leadPos) <= EPS))
+                    // 路径历史：前进追加/回退弹出（保持现有）
+                    if (_leadPathPoints.Count > 0 &&
+                        Vector2.Distance(_leadPathPoints[_leadPathPoints.Count - 1], _leadPos) <= EPS)
                     {
                         _leadPathPoints.RemoveAt(_leadPathPoints.Count - 1);
                     }
@@ -1137,27 +1137,33 @@ namespace ReGecko.SnakeSystem
                         _leadPathPoints.Add(_leadPos);
                     }
 
-                    // 关键补交：同步真实链表，保持与拖动端一致
-                    if (!_isReverse) // 逆向在前面已另行处理并 return
+                    // 提交链表并“硬同步”，与倒车保持一致
+                    if (DragFromHead)
                     {
-                        if (DragFromHead)
-                        {
-                            AdvanceHeadToSubCell(_leadTargetSubCell);
-                            // 确保拖动端与链表一致
-                            _leadCurrentSubCell = _currentHeadSubCell;
-                            _leadPos = ToWorldCenter(_leadCurrentSubCell);
-                        }
-                        else
-                        {
-                            AdvanceTailToSubCell(_leadTargetSubCell);
-                            _leadCurrentSubCell = _currentTailSubCell;
-                            _leadPos = ToWorldCenter(_leadCurrentSubCell);
-                        }
-
-                        _snakeManager?.InvalidateOccupiedCellsCache();
+                        AdvanceHeadToSubCell(_leadTargetSubCell);
                     }
+                    else
+                    {
+                        AdvanceTailToSubCell(_leadTargetSubCell);
+                    }
+                    _snakeManager?.InvalidateOccupiedCellsCache();
+
+                    // 重建平滑路径并对齐端点与插值状态
+                    InitializeSmoothPathFromCurrentState();
+                    _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
+                    _leadPos = ToWorldCenter(_leadCurrentSubCell);
+                    _leadTargetSubCell = _leadCurrentSubCell;
+                    _leadTargetPos = _leadPos;
+                    _subCellMoveAccumulator = 0f;
+                    _subCellPathQueue?.Clear();
+
+                    ApplySmoothVisualsByPath();
+                    AfterSmoothVisualsByPath();
                     _lastLeadTargetSubCell = Vector2Int.zero;
-                    reachedThisFrame = true;
+
+                    _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
+                    _leadPos = ToWorldCenter(_leadCurrentSubCell);
+                    return; // 本帧结束，避免继续旧插值
                 }
                 else
                 {
