@@ -22,7 +22,7 @@ namespace ReGecko.SnakeSystem
         [Tooltip("是否启用小格移动系统")]
         public bool EnableSubGridMovement = true;
         [Tooltip("小格移动速度（小格/秒）")]
-        public float MoveSpeedSubCellsPerSecond = 55f; // 5倍于原来的大格速度
+        public float MoveSpeedSubCellsPerSecond = 20f; // 5倍于原来的大格速度
 
         private List<GameObject> _subSegments = new List<GameObject>();// 每段的5个小段
         private Queue<GameObject> _subSegmentPool = new Queue<GameObject>();
@@ -57,7 +57,6 @@ namespace ReGecko.SnakeSystem
         Vector3 _lastMousePos;
         Canvas _parentCanvas;
 
-
         // 拖动优化：减少更新频率
         private float _lastDragUpdateTime = 0f;
         private const float DRAG_UPDATE_INTERVAL = 0.008f; // 约120FPS更新频率
@@ -90,6 +89,9 @@ namespace ReGecko.SnakeSystem
         float _leadSpeedWorld;           // 拖动端线速度（世界单位/秒）
         const float EPS = 1e-3f;
         Vector2Int _lastLeadTargetSubCell = Vector2Int.zero;
+
+        float _cachedSpeedInput;
+        float _cachedCellSize;
 
 
         public override void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null)
@@ -991,60 +993,46 @@ namespace ReGecko.SnakeSystem
         // *** SubGrid 改动：恒定速度沿路径移动 ***
         void UpdateSubSmoothPathPointsMovement()
         {
-            // 1) 初始化（或切换拖动端时重建）
+            // 基础校验
+            if (_subBodyCells == null || _subBodyCells.Count == 0 || _cachedSubRectTransforms.Count == 0) return;
+
+            // 初始化/切换端
             if (!_smoothInited || _lastDragFromHead != DragFromHead)
             {
                 InitializeSmoothPathFromCurrentState();
                 _lastDragFromHead = DragFromHead;
             }
 
-            // 2) 基本参数（速度与间距，按“小格”为单位）
-            float unit = SubGridHelper.SUB_CELL_SIZE * _grid.CellSize; // 一个小格的世界距离
-            _segmentSpacing = unit;                                     // 身体间隔 = 1小格
-            _leadSpeedWorld = MoveSpeedSubCellsPerSecond * unit;
+            // 速度/间距（世界单位）
+            RefreshKinematicsIfNeeded();
 
-            if(_lastLeadTargetSubCell == Vector2Int.zero)
+            // 采样鼠标 → 期望小格（中线）
+            var world = ScreenToWorld(Input.mousePosition);
+            Vector2Int targetBigCell = SubGridHelper.WorldToBigCell(world, _grid);
+
+            //判断地图边界
+            if (!_grid.IsInside(targetBigCell))
             {
-
-                // 3) 采样目标小格（中线），并只取一步的“下一小格”为本帧目标
-                var world = ScreenToWorld(Input.mousePosition);
-
-                Vector2Int targetBigCell = SubGridHelper.WorldToBigCell(world, _grid);
-
-                //判断地图边界
-                if (!_grid.IsInside(targetBigCell))
-                {
-                    return;
-                }
-
-                //判断是否是蛇头蛇尾原点
-                var desiredSub = SubGridHelper.WorldToSubCell(world, _grid);
-                if (desiredSub == (DragFromHead ? _currentHeadSubCell : _currentTailSubCell))
-                {
-                    return;
-                }
-
-                // 从当前“拖动端”出发，取一步
-                Vector2Int fromSub = _leadCurrentSubCell;
-                if (_subCellPathQueue == null) _subCellPathQueue = new LinkedList<Vector2Int>();
-                _subCellPathQueue.Clear();
-                EnqueueSubCellPath(fromSub, desiredSub, _subCellPathQueue, 1);
-
-                // 若没有可走的一步，则直接刷新可视（停留原地的平滑）
-                if (_subCellPathQueue.Count == 0)
-                {
-                    ApplySmoothVisualsByPath();
-                    return;
-                }
-
-                _leadTargetSubCell = _subCellPathQueue.First.Value;
-            }
-            else
-            {
-                _leadTargetSubCell = _lastLeadTargetSubCell;
+                return;
             }
 
+            //判断是否是蛇头蛇尾原点
+            var desiredSub = SubGridHelper.WorldToSubCell(world, _grid);
+            if (desiredSub == (DragFromHead ? _currentHeadSubCell : _currentTailSubCell))
+            {
+                return;
+            }
 
+            // 取“一步”的目标格
+            _subCellPathQueue ??= new LinkedList<Vector2Int>();
+            _subCellPathQueue.Clear();
+            EnqueueSubCellPath(_leadCurrentSubCell, desiredSub, _subCellPathQueue, 1);
+            if (_subCellPathQueue.Count == 0)
+            {
+                ApplySmoothVisualsByPath();
+                return;
+            }
+            _leadTargetSubCell = _subCellPathQueue.First.Value;
 
             // 检查目标点合法性
             if (!CheckNextCell(_leadTargetSubCell))
@@ -1052,6 +1040,7 @@ namespace ReGecko.SnakeSystem
                 //Debug.LogError("CheckNextCell return!");
                 return;
             }
+
             // 倒车判定（你已有）
             if (CheckIfNeedReverse(_leadTargetSubCell, out _leadReverseSubCell))
             {
@@ -1108,19 +1097,16 @@ namespace ReGecko.SnakeSystem
                 return;
             }
 
-            bool reachedThisFrame = false;
 
-            _lastLeadTargetSubCell = _leadTargetSubCell;
-            // === 非倒车路径：正常做拖动端平滑前进 ===
+
+            // 正常前进：线性插值拖动端
             _leadTargetPos = ToWorldCenter(_leadTargetSubCell);
-
-            // 4) 拖动端沿目标移动（线性插值 by 速度）
-            var toTarget = _leadTargetPos - _leadPos;
+            Vector2 toTarget = _leadTargetPos - _leadPos;
             float dist = toTarget.magnitude;
             if (dist > EPS)
             {
                 float step = _leadSpeedWorld * Time.deltaTime;
-                if (step >= dist)
+                if (step + 1e-3f >= dist)
                 {
                     // 到达目标小格中心
                     _leadPos = _leadTargetPos;
@@ -1148,33 +1134,26 @@ namespace ReGecko.SnakeSystem
                     }
                     _snakeManager?.InvalidateOccupiedCellsCache();
 
-                    // 重建平滑路径并对齐端点与插值状态
-                    InitializeSmoothPathFromCurrentState();
-                    _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
-                    _leadPos = ToWorldCenter(_leadCurrentSubCell);
-                    _leadTargetSubCell = _leadCurrentSubCell;
-                    _leadTargetPos = _leadPos;
-                    _subCellMoveAccumulator = 0f;
-                    _subCellPathQueue?.Clear();
-
+                    HardSyncSmoothFromCurrentChain();
                     ApplySmoothVisualsByPath();
                     AfterSmoothVisualsByPath();
-                    _lastLeadTargetSubCell = Vector2Int.zero;
-
-                    _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
-                    _leadPos = ToWorldCenter(_leadCurrentSubCell);
                     return; // 本帧结束，避免继续旧插值
                 }
                 else
                 {
                     // 尚未抵达：沿方向移动
                     _leadPos += toTarget * (step / dist);
+
+                    //更新身体图片
+                    if (EnableBodySpriteManagement)
+                    {
+                        _bodySpriteManager?.OnSnakeMoved();
+                    }
+                    else
+                    {
+                        UpdateAllSegmentSprites();
+                    }
                 }
-            }
-            else
-            {
-                _lastLeadTargetSubCell = Vector2Int.zero;
-                reachedThisFrame = true;
             }
 
             // 5) 裁剪历史：只保留能覆盖全身的必要长度，避免无限增长
@@ -1183,13 +1162,29 @@ namespace ReGecko.SnakeSystem
             // 6) 根据“拖动端当前连续位置 + 历史路径”计算每个身体点的连续位置
             ApplySmoothVisualsByPath();
 
-            // 若本帧发生抵达（即发生过提交），保证拖动端与链表端一致
-            // （条件由你在上面设置一个 bool reachedThisFrame 控制）
-            if (reachedThisFrame)
+        }
+
+        void HardSyncSmoothFromCurrentChain()
+        {
+            InitializeSmoothPathFromCurrentState();
+            _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
+            _leadPos = ToWorldCenter(_leadCurrentSubCell);
+            _leadTargetSubCell = _leadCurrentSubCell;
+            _leadTargetPos = _leadPos;
+            _subCellPathQueue?.Clear();
+        }
+        // —— 工具与缓存 ——
+
+        // 速度/间距缓存
+        void RefreshKinematicsIfNeeded()
+        {
+            if (!Mathf.Approximately(_cachedSpeedInput, MoveSpeedSubCellsPerSecond) ||
+                !Mathf.Approximately(_cachedCellSize, _grid.CellSize))
             {
-                AfterSmoothVisualsByPath();
-                _leadCurrentSubCell = DragFromHead ? _currentHeadSubCell : _currentTailSubCell;
-                _leadPos = ToWorldCenter(_leadCurrentSubCell);
+                _cachedSpeedInput = MoveSpeedSubCellsPerSecond;
+                _cachedCellSize = _grid.CellSize;
+                _segmentSpacing = SubGridHelper.SUB_CELL_SIZE * _grid.CellSize;
+                _leadSpeedWorld = _cachedSpeedInput * _segmentSpacing;
             }
         }
 
