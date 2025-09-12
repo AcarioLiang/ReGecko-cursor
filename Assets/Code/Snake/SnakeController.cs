@@ -93,11 +93,25 @@ namespace ReGecko.SnakeSystem
 
         float _segmentSpacing;           // 每段身体之间固定间距（世界单位）
         float _leadSpeedWorld;           // 拖动端线速度（世界单位/秒）
-        const float EPS = 1e-3f;
+        const float EPS = 1e-4f;
         Vector2Int _lastLeadTargetSubCell = Vector2Int.zero;
 
         float _cachedSpeedInput;
         float _cachedCellSize;
+
+        // 平滑公共
+        bool _lastActiveFromHead;
+        bool _lastActiveReverse;
+
+        // 活动端（正向=拖动端；倒车时=对端）
+        Vector2 _activeLeadPos;
+        Vector2 _activeLeadTargetPos; // 仅调试显示用
+        List<Vector2> _activeLeadPath = new List<Vector2>(512);
+
+        // 扫描缓存
+        Vector2[] _tmpBodyPos;
+        float[] _distTargets;
+        Vector2Int[] _tmpSubSnap2;
 
 
         public override void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null)
@@ -994,11 +1008,11 @@ namespace ReGecko.SnakeSystem
             if (_subBodyCells == null || _subBodyCells.Count == 0 || _cachedSubRectTransforms.Count == 0) return;
 
             // 初始化/切换端
-            if (!_smoothInited || _lastDragFromHead != DragFromHead)
-            {
-                InitializeSmoothPathFromCurrentState();
-                _lastDragFromHead = DragFromHead;
-            }
+            //if (!_smoothInited || _lastDragFromHead != DragFromHead)
+            //{
+            //    InitializeSmoothPathFromCurrentState();
+            //    _lastDragFromHead = DragFromHead;
+            //}
 
             _isReverse = false;
 
@@ -1025,146 +1039,213 @@ namespace ReGecko.SnakeSystem
             }
 
             // 倒车判定
-            if (CheckIfNeedReverse(_leadTargetPos, out _leadReversePos))
+            //if (CheckIfNeedReverse(_leadTargetPos, out _leadReversePos))
+            //{
+            //    if(_leadReversePos == Vector2.zero)
+            //    {
+            //        return;
+            //    }
+            //    _isReverse = true;
+            //}
+
+            if (!_isReverse)
             {
-                if(_leadReversePos == Vector2.zero)
+                // 检查目标点合法性
+                if (!CheckNextCell(targetSubCell))
                 {
+                    //Debug.LogError("CheckNextCell return!");
                     return;
                 }
-                _isReverse = true;
             }
 
-            if(_isReverse)
-            {
-                //执行倒车逻辑
-                return;
-            }
+            Debug.Log("_isReverse:" + _isReverse);
+            // 1) 确定“活动端”：正向=DragFromHead；倒车时取相反端
+            bool activeFromHead = _isReverse ? !DragFromHead : DragFromHead;
 
-            // 检查目标点合法性
-            if (!CheckNextCell(targetSubCell))
-            {
-                //Debug.LogError("CheckNextCell return!");
-                return;
-            }
+            // 2) 初始化活动端的平滑状态（首次或切换端时）
+            EnsureActiveLeadInited(activeFromHead);
 
-            // 2) 拖动端沿目标插值
-            Vector2 dir = _leadTargetPos - _leadPos;
-            float dist = dir.magnitude;
-            if (dist > 1e-4f)
+            // 3) 目标点（连续世界坐标）
+            Vector2 targetPos;
+            if (_isReverse)
             {
-                float step = _leadSpeedWorld * Time.deltaTime;
-                if (step + 1e-3f >= dist) 
-                    _leadPos = _leadTargetPos;
-                else 
-                    _leadPos += dir * (step / dist);
-            }
-
-            // 3) 路径历史：每移动到达一定阈值才采样，降低抖动
-            if (_leadPathPoints.Count == 0)
-            {
-                _leadPathPoints.Add(_leadPos);
+                // 倒车：活动端朝 _leadReversePos
+                targetPos = _leadReversePos;
             }
             else
             {
-                var last = _leadPathPoints[_leadPathPoints.Count - 1];
-                if (Vector2.Distance(last, _leadPos) >= 0.25f * _segmentSpacing)
-                    _leadPathPoints.Add(_leadPos);
+                // 正向：活动端朝“鼠标投影到最近中线”的连续世界坐标
+                targetPos = ScreenToWorldCenter(Input.mousePosition);
             }
+            _activeLeadTargetPos = targetPos; // 仅用于调试可视
 
 
-            // 4) 裁剪历史：仅保留覆盖全身需要的长度
+            // 4) 活动端沿目标插值
+            Vector2 dir = targetPos - _activeLeadPos;
+            float dist = dir.magnitude;
+            if (dist > EPS)
             {
-                int n = _subBodyCells.Count;
-                if (n > 1)
-                {
-                    float need = (n - 1) * _segmentSpacing + 2f * _segmentSpacing;
-                    // 估算总长
-                    float total = 0f;
-                    Vector2 p = _leadPos;
-                    for (int i = _leadPathPoints.Count - 1; i >= 0; i--)
-                    {
-                        total += Vector2.Distance(p, _leadPathPoints[i]);
-                        p = _leadPathPoints[i];
-                    }
-                    float remove = total - need;
-                    while (_leadPathPoints.Count > 1 && remove > 0f)
-                    {
-                        var a = _leadPathPoints[0];
-                        var b = _leadPathPoints[1];
-                        float seg = Vector2.Distance(a, b);
-                        if (seg <= remove)
-                        {
-                            _leadPathPoints.RemoveAt(0);
-                            remove -= seg;
-                        }
-                        else break;
-                    }
-                }
+                float step = _leadSpeedWorld * Time.deltaTime;
+                if (step + 1e-3f >= dist) _activeLeadPos = targetPos;
+                else _activeLeadPos += dir * (step / dist);
             }
 
-            // 5) 生成整条蛇的连续位置（单调扫描，O(n)）
+
+            // 5) 路径历史：位移达阈值才采样，降低抖动
+            if (_activeLeadPath.Count == 0)
             {
-                int n = _subBodyCells.Count;
-
-                // 单调扫描游标：从 leadPos → lastHistory → ... → firstHistory
-                int idx = _leadPathPoints.Count - 1; // 指向当前段的“历史终点”
-                Vector2 cur = _leadPos;              // 段起点
-                Vector2 nxt = (idx >= 0) ? _leadPathPoints[idx] : _leadPos;
-                float seg = Vector2.Distance(cur, nxt);
-                float acc = 0f;                      // 已累计的路径长度（从 leadPos 起）
-
-                for (int i = 0; i < n; i++)
-                {
-                    float target = i * _segmentSpacing;
-
-                    // 推进游标直到覆盖 target
-                    while (acc + seg + 1e-6f < target && idx > 0)
-                    {
-                        // 前进到下一个历史段
-                        acc += seg;
-                        cur = nxt;
-                        idx--;
-                        nxt = _leadPathPoints[idx];
-                        seg = Vector2.Distance(cur, nxt);
-                    }
-
-                    Vector2 pos;
-                    if (seg <= 1e-6f)
-                    {
-                        // 没有可用段或段长为0：落在当前点
-                        pos = cur;
-                    }
-                    else
-                    {
-                        float need = Mathf.Clamp(target - acc, 0f, seg);
-                        float t = need / seg;
-                        pos = Vector2.LerpUnclamped(cur, nxt, t);
-                    }
-
-                    // 写入可视（拖头/拖尾映射）
-                    int visIndex = DragFromHead ? i : (n - 1 - i);
-                    if (visIndex < _cachedSubRectTransforms.Count)
-                    {
-                        var rt = _cachedSubRectTransforms[visIndex];
-                        rt.anchoredPosition = pos;
-                    }
-
-
-                    //更新身体图片
-                    if (EnableBodySpriteManagement)
-                    {
-                        _bodySpriteManager?.OnSnakeMoved();
-                    }
-                    else
-                    {
-                        UpdateAllSegmentSprites();
-                    }
-                }
+                _activeLeadPath.Add(_activeLeadPos);
             }
+            else
+            {
+                var last = _activeLeadPath[_activeLeadPath.Count - 1];
+                if (Vector2.Distance(last, _activeLeadPos) >= 0.10f * _segmentSpacing)
+                    _activeLeadPath.Add(_activeLeadPos);
+            }
+
+            // 6) 裁剪历史：仅保留覆盖全身需要的长度
+            PruneLeadPathHistory(_activeLeadPath);
+
+            // 7) 由“活动端当前位置+历史”生成整条蛇的连续位置并写入可视（单调扫描 O(n)）
+            ApplySmoothVisualsByPath(activeFromHead);
+
 
         }
 
         // —— 工具与缓存 ——
+        // —— 相关辅助（本方法内使用） ——
+
+        void EnsureActiveLeadInited(bool fromHead)
+        {
+            // 若首次或端发生切换，则重建历史并设置活动端初始位置
+            if (!_smoothInited || _lastActiveFromHead != fromHead || _lastActiveReverse!= _isReverse)
+            {
+                InitializeSmoothPathFromEnd(fromHead);
+                _lastActiveFromHead = fromHead;
+                _lastActiveReverse = _isReverse;
+                _smoothInited = true;
+            }
+        }
+
+        void InitializeSmoothPathFromEnd(bool fromHead)
+        {
+            _activeLeadPath.Clear();
+
+            // 活动端当前位置（用链表端的小格中心初始化）
+            Vector2Int endCell = fromHead ? GetHeadSubCell() : GetTailSubCell();
+            var w = SubGridHelper.SubCellToWorld(endCell, _grid);
+            _activeLeadPos = new Vector2(w.x, w.y);
+
+            // 用整条链表构造“活动端路径历史”（末尾靠近活动端）
+            int n = _subBodyCells.Count;
+            if (_tmpSubSnap2 == null || _tmpSubSnap2.Length < n) _tmpSubSnap2 = new Vector2Int[Mathf.NextPowerOfTwo(n)];
+            for (int i = 0; i < n; i++)
+                _tmpSubSnap2[i] = GetSubBodyCellAtIndex(i);
+
+            if (fromHead)
+            {
+                // 历史应为：靠尾的点在前，靠头的点在后；末尾一个就是“活动端上一格的中心”
+                for (int i = n - 1; i >= 1; i--) _activeLeadPath.Add(ToWorldCenter(_tmpSubSnap2[i]));
+            }
+            else
+            {
+                // 从尾侧开始：历史为靠头的点在前，靠尾的点在后；末尾一个是“活动端上一格的中心”
+                for (int i = 0; i < n - 1; i++) _activeLeadPath.Add(ToWorldCenter(_tmpSubSnap2[i]));
+            }
+
+            _activeLeadTargetPos = _activeLeadPos;
+        }
+
+        void PruneLeadPathHistory(List<Vector2> path)
+        {
+            int n = _subBodyCells.Count;
+            if (n <= 1 || path.Count == 0) return;
+
+            float need = (n - 1) * _segmentSpacing + 2f * _segmentSpacing;
+
+            // 估算总长度：活动端当前位置 → history[末] → ... → history[0]
+            float total = 0f;
+            Vector2 p = _activeLeadPos;
+            for (int i = path.Count - 1; i >= 0; i--)
+            {
+                total += Vector2.Distance(p, path[i]);
+                p = path[i];
+            }
+
+            float remove = total - need;
+            while (path.Count > 1 && remove > 0f)
+            {
+                var a = path[0];
+                var b = path[1];
+                float seg = Vector2.Distance(a, b);
+                if (seg <= remove)
+                {
+                    path.RemoveAt(0);
+                    remove -= seg;
+                }
+                else break;
+            }
+        }
+
+        void ApplySmoothVisualsByPath(bool activeFromHead)
+        {
+            int n = _subBodyCells.Count;
+            if (n == 0) return;
+
+            EnsureDistBuffer(n);
+            for (int i = 0; i < n; i++) _distTargets[i] = i * _segmentSpacing;
+
+            // 单调扫描：从活动端当前位置出发，沿“当前段→历史末→历史头”
+            int idx = _activeLeadPath.Count - 1;
+            Vector2 cur = _activeLeadPos;
+            Vector2 nxt = (idx >= 0) ? _activeLeadPath[idx] : _activeLeadPos;
+            float seg = Vector2.Distance(cur, nxt);
+            float acc = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                float target = _distTargets[i];
+
+                while (acc + seg + EPS < target && idx > 0)
+                {
+                    acc += seg;
+                    cur = nxt;
+                    idx--;
+                    nxt = _activeLeadPath[idx];
+                    seg = Vector2.Distance(cur, nxt);
+                }
+
+                Vector2 pos;
+                if (seg <= EPS) pos = cur;
+                else
+                {
+                    float need = Mathf.Clamp(target - acc, 0f, seg);
+                    float t = need / seg;
+                    pos = Vector2.LerpUnclamped(cur, nxt, t);
+                }
+
+                // 写入可视（由“活动端侧”映射）
+                int visIndex = activeFromHead ? i : (n - 1 - i);
+                if (visIndex < _cachedSubRectTransforms.Count)
+                {
+                    var rt = _cachedSubRectTransforms[visIndex];
+                    rt.anchoredPosition = pos;
+                }
+
+            }
+
+
+
+            //更新身体图片
+            if (EnableBodySpriteManagement)
+            {
+                _bodySpriteManager?.OnSnakeMoved();
+            }
+            else
+            {
+                UpdateAllSegmentSprites();
+            }
+        }
 
         // 速度/间距缓存
         void RefreshKinematicsIfNeeded()
@@ -1177,6 +1258,11 @@ namespace ReGecko.SnakeSystem
                 _segmentSpacing = SubGridHelper.SUB_CELL_SIZE * _grid.CellSize;
                 _leadSpeedWorld = _cachedSpeedInput * _segmentSpacing;
             }
+        }
+        void EnsureDistBuffer(int n)
+        {
+            if (_tmpBodyPos == null || _tmpBodyPos.Length < n) _tmpBodyPos = new Vector2[Mathf.NextPowerOfTwo(n)];
+            if (_distTargets == null || _distTargets.Length < n) _distTargets = new float[Mathf.NextPowerOfTwo(n)];
         }
 
         void InitializeSmoothPathFromCurrentState()
@@ -1348,7 +1434,7 @@ namespace ReGecko.SnakeSystem
             reversePos = Vector2.zero;
 
             //先检查是否达成倒车条件--检查是否是头尾两格范围内的点
-            var targetSubCell = SubGridHelper.WorldToSubCell(_leadTargetPos, _grid);
+            var targetSubCell = SubGridHelper.WorldToSubCell(targetPos, _grid);
             if (DragFromHead)
             {
                 var headsubcell = GetSubBodyCellAtIndex(0);
