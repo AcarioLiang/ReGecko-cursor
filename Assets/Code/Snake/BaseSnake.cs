@@ -124,6 +124,8 @@ namespace ReGecko.SnakeSystem
             _grid = newGrid;
         }
 
+        public abstract void SnapCellsToGrid();
+
         public virtual void SetState(SnakeState newState)
         {
             if (_state != newState)
