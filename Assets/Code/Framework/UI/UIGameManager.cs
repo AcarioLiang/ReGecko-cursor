@@ -28,7 +28,6 @@ namespace ReGecko.Framework.UI
         SnakeManager _snakeManager;
         GameStateController _gameStateController;
         readonly List<GridEntity> _entities = new List<GridEntity>();
-        GridEntityManager _entityManager;
 
         LevelConfig _currentLevel;
 
@@ -38,7 +37,6 @@ namespace ReGecko.Framework.UI
             SetupCanvases();
             SetupContainers();
             SetupEntityManager();
-            SetupSnakeManager();
             SetupGameStateController();
         }
 
@@ -134,19 +132,25 @@ namespace ReGecko.Framework.UI
 
         void SetupEntityManager()
         {
-            var entityManagerGo = new GameObject("EntityManager");
-            entityManagerGo.transform.SetParent(transform, false);
-            _entityManager = entityManagerGo.AddComponent<GridEntityManager>();
-            _entityManager.Grid = _currentLevel.Grid;
+            GridEntityManager.Instance.Init(_currentLevel.Grid);
         }
 
         void SetupSnakeManager()
         {
-            var snakeManagerGo = new GameObject("SnakeManager");
-            snakeManagerGo.transform.SetParent(transform, false);
-            _snakeManager = snakeManagerGo.AddComponent<SnakeManager>();
+            if (GridRenderer == null) return;
+
+            // 获取蛇容器
+            var snakeContainer = GridRenderer.GetGridContainer();
+            if (snakeContainer == null && GridCanvas != null)
+            {
+                snakeContainer = GridCanvas.transform;
+            }
 
             // 注意：蛇的实际创建延迟到网格构建完成后
+            // 现在网格已经构建完成，使用正确的配置初始化蛇管理器
+            SnakeManager.Instance.Init(_currentLevel, GridRenderer.Config, snakeContainer);
+
+            Debug.Log($"蛇管理器初始化完成，CellSize: {GridRenderer.Config.CellSize}, 蛇数量: {SnakeManager.Instance.GetStats().TotalCount}");
         }
 
         void SetupGameStateController()
@@ -293,7 +297,7 @@ namespace ReGecko.Framework.UI
                 rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
                 rt.sizeDelta = new Vector2(adaptiveCellSize, adaptiveCellSize);
 
-                _entityManager.Register(entity);
+                GridEntityManager.Instance.Register(entity);
                 _entities.Add(entity);
             }
         }
@@ -302,19 +306,7 @@ namespace ReGecko.Framework.UI
 
         void InitializeSnakesAfterGrid()
         {
-            if (_snakeManager == null || GridRenderer == null) return;
-
-            // 获取蛇容器
-            var snakeContainer = GridRenderer.GetGridContainer();
-            if (snakeContainer == null && GridCanvas != null)
-            {
-                snakeContainer = GridCanvas.transform;
-            }
-
-            // 现在网格已经构建完成，使用正确的配置初始化蛇管理器
-            _snakeManager.Initialize(_currentLevel, GridRenderer.Config, _entityManager, snakeContainer);
-
-            Debug.Log($"蛇管理器初始化完成，CellSize: {GridRenderer.Config.CellSize}, 蛇数量: {_snakeManager.GetStats().TotalCount}");
+            SetupSnakeManager();
 
             // 初始化完成后，开始游戏
             if (_gameStateController != null)
@@ -360,10 +352,6 @@ namespace ReGecko.Framework.UI
             }
         }
 
-
-        public GridEntityManager GetEntityManager() => _entityManager;
-        public SnakeManager GetSnakeManager() => _snakeManager;
-        public List<BaseSnake> GetSnakes() => _snakeManager?.GetAllSnakes() ?? new List<BaseSnake>();
         public GameStateController GetGameStateController() => _gameStateController;
 
         /// <summary>

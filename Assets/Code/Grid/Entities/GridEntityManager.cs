@@ -1,12 +1,28 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ReGecko.GridSystem;
+using ReGecko.Framework;
 
 namespace ReGecko.Grid.Entities
 {
-	public class GridEntityManager : MonoBehaviour
-	{
-		public GridConfig Grid;
+	public class GridEntityManager : BaseManager
+    {
+        static GridEntityManager _instance;
+        public static GridEntityManager Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    var go = new GameObject("GridEntityManager");
+                    DontDestroyOnLoad(go);
+                    _instance = go.AddComponent<GridEntityManager>();
+                }
+                return _instance;
+            }
+        }
+
+        private GridConfig _grid;
 		readonly Dictionary<Vector2Int, List<GridEntity>> _cellToEntities = new Dictionary<Vector2Int, List<GridEntity>>();
 		private List<GridEntity> _HoleEntities = new List<GridEntity>();
         private List<GridEntity> _WallEntities = new List<GridEntity>();
@@ -17,10 +33,12 @@ namespace ReGecko.Grid.Entities
         public List<GridEntity> WallEntities => _WallEntities;
         public List<GridEntity> ItemEntities => _ItemEntities;
 
-        private void Start()
+
+        public void Init(GridConfig grid)
         {
-			ClearAllEntities();
-		}
+            _grid = grid;
+            ClearAllEntities();
+        }
 
 		public void ClearAllEntities()
         {
@@ -38,7 +56,7 @@ namespace ReGecko.Grid.Entities
 			}
 			list.Add(entity);
             _RegisteredToList(entity);
-            entity.OnRegistered(Grid);
+            entity.OnRegistered(_grid);
 		}
 
 		public void Unregister(GridEntity entity)

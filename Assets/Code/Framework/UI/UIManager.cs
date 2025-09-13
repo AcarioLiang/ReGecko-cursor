@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace ReGecko.Framework.UI
 {
-    public class UIManager : MonoBehaviour
+    public class UIManager : BaseManager
     {
         static UIManager _instance;
         public static UIManager Instance

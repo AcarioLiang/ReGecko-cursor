@@ -27,29 +27,16 @@ namespace ReGecko.SnakeSystem
         [Tooltip("蛇身体图片配置文件（可选）")]
         public SnakeBodySpriteConfig Config;
 
-        [Header("图片设置")]
-        [Tooltip("图片旋转角度")]
-        public float RotationAngle = 90f;
-        public float SubRotationAngle = 22.5f;
-
-
-        [Header("蛇身体图片资源")]
-        [Tooltip("竖直方向的蛇头图片")]
-        public Sprite VerticalHeadSprite;
-        [Tooltip("竖直方向的蛇尾图片")]
-        public Sprite VerticalTailSprite;
-        [Tooltip("竖直方向的身体图片")]
-        public Sprite VerticalBodySprite;
 
         [Header("颜色配置")]
         [Tooltip("蛇的颜色类型，用于匹配洞的颜色")]
         public SnakeColorType ColorType = SnakeColorType.Red; // 蛇的颜色类型
         
         [Header("移动设置")]
-        public float MoveSpeedCellsPerSecond = 16f;
+        public float MoveSpeedCellsPerSecond = 40f;
         
         [Header("功能开关")]
-        public bool EnableBodySpriteManagement = true;
+        public bool EnableBodySpriteManagement = false;
         public bool IsControllable = true; // 是否可以被玩家控制
         
         [Header("调试选项")]
@@ -58,8 +45,6 @@ namespace ReGecko.SnakeSystem
 
         // 保护成员，子类可以访问
         protected GridConfig _grid;
-        protected GridEntityManager _entityManager;
-        protected SnakeManager _snakeManager; // 蛇管理器引用，用于碰撞检测
         protected SnakeBodySpriteManager _bodySpriteManager;
 
         protected bool _consuming; // 洞吞噬中
@@ -96,7 +81,7 @@ namespace ReGecko.SnakeSystem
         public virtual List<GameObject> GetSegments() => null;
 
         // 抽象方法，子类必须实现
-        public abstract void Initialize(GridConfig grid, GridEntityManager entityManager = null, SnakeManager snakeManager = null);
+        public abstract void Initialize(GridConfig grid);
 
         protected virtual void InitializeBodySpriteManager()
         {

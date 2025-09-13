@@ -5,14 +5,30 @@ using UnityEngine;
 using ReGecko.GridSystem;
 using ReGecko.Grid.Entities;
 using ReGecko.Levels;
+using ReGecko.Framework;
 
 namespace ReGecko.SnakeSystem
 {
     /// <summary>
     /// 蛇管理器 - 负责管理多条蛇的创建、更新和销毁
     /// </summary>
-    public class SnakeManager : MonoBehaviour
+    public class SnakeManager : BaseManager
     {
+        static SnakeManager _instance;
+        public static SnakeManager Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    var go = new GameObject("SnakeManager");
+                    DontDestroyOnLoad(go);
+                    _instance = go.AddComponent<SnakeManager>();
+                }
+                return _instance;
+            }
+        }
+
         [Header("调试信息")]
         [SerializeField] private List<BaseSnake> _snakes = new List<BaseSnake>();
         [SerializeField] private int _totalSnakeCount = 0;
@@ -27,7 +43,6 @@ namespace ReGecko.SnakeSystem
         private readonly Dictionary<string, BaseSnake> _snakeDict = new Dictionary<string, BaseSnake>();
         private LevelConfig _currentLevel;
         private GridConfig _grid;
-        private GridEntityManager _entityManager;
 
         // 属性
         public Transform SnakeContainer { get; private set; }
@@ -43,11 +58,10 @@ namespace ReGecko.SnakeSystem
         /// <summary>
         /// 初始化蛇管理器
         /// </summary>
-        public void Initialize(LevelConfig levelConfig, GridConfig gridConfig, GridEntityManager entityManager = null, Transform container = null)
+        public void Init(LevelConfig levelConfig, GridConfig gridConfig, Transform container = null)
         {
             _currentLevel = levelConfig;
             _grid = gridConfig;
-            _entityManager = entityManager;
             SnakeContainer = container ?? transform;
             _parentCanvas = GetComponentInParent<Canvas>();
 
@@ -98,7 +112,7 @@ namespace ReGecko.SnakeSystem
             ConfigureSnake(snake, snakeConfig, snakeId);
             
             // 初始化蛇
-            snake.Initialize(_grid, _entityManager, this);
+            snake.Initialize(_grid);
             
             // 添加到管理列表
             _snakes.Add(snake);
@@ -339,8 +353,8 @@ namespace ReGecko.SnakeSystem
                     continue;
 
                 var ctl = (SnakeController)snake;
-                var headCell = ctl.GetHeadBigCell();
-                var tailCell = ctl.GetTailBigCell();
+                var headCell = ctl.GetHeadCell();
+                var tailCell = ctl.GetTailCell();
 
                 int dHead = Mathf.Abs(curMouseBigCell.x - headCell.x) + Mathf.Abs(curMouseBigCell.y - headCell.y);
                 int dTail = Mathf.Abs(curMouseBigCell.x - tailCell.x) + Mathf.Abs(curMouseBigCell.y - tailCell.y);

@@ -11,7 +11,7 @@ namespace ReGecko.Framework.Scene
     /// <summary>
     /// 场景管理器：实现异步场景加载和无缝切换
     /// </summary>
-    public class SceneManager : MonoBehaviour
+    public class SceneManager : BaseManager
     {
         private static SceneManager _instance;
         public static SceneManager Instance

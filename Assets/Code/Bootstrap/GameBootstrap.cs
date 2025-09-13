@@ -31,12 +31,7 @@ namespace ReGecko.Bootstrap
             }
 
             // 初始化实体管理器
-            if (FindObjectOfType<GridEntityManager>() == null)
-            {
-                var entityManagerGo = new GameObject("EntityManager");
-                _entityManager = entityManagerGo.AddComponent<GridEntityManager>();
-                _entityManager.Grid = level.Grid;
-            }
+            GridEntityManager.Instance.Init(level.Grid);
                 
 
             // 显示预加载的UI并初始化游戏渲染
