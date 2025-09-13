@@ -80,6 +80,7 @@
     <Compile Include="Assets\Code\Game\SnakeColorType.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIManager.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIGameManager.cs" />
+    <Compile Include="Assets\Code\Grid\Entities\BaseEntity.cs" />
     <Compile Include="Assets\Code\Grid\Entities\ItemEntity.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIGridRenderer.cs" />
     <Compile Include="Assets\Code\Levels\DummyLevelProvider.cs" />

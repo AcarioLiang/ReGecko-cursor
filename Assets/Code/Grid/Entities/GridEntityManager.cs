@@ -23,17 +23,18 @@ namespace ReGecko.Grid.Entities
         }
 
         private GridConfig _grid;
-		readonly Dictionary<Vector2Int, List<GridEntity>> _cellToEntities = new Dictionary<Vector2Int, List<GridEntity>>();
-		private List<GridEntity> _HoleEntities = new List<GridEntity>();
-        private List<GridEntity> _WallEntities = new List<GridEntity>();
-        private List<GridEntity> _ItemEntities = new List<GridEntity>();
+		readonly Dictionary<Vector2Int, List<BaseEntity>> _cellToEntities = new Dictionary<Vector2Int, List<BaseEntity>>();
+		private List<BaseEntity> _HoleEntities = new List<BaseEntity>();
+        private List<BaseEntity> _WallEntities = new List<BaseEntity>();
+        private List<BaseEntity> _ItemEntities = new List<BaseEntity>();
+        private List<BaseEntity> _GridEntities = new List<BaseEntity>();
 
 
-        public List<GridEntity> HoleEntities => _HoleEntities;
-        public List<GridEntity> WallEntities => _WallEntities;
-        public List<GridEntity> ItemEntities => _ItemEntities;
+        public List<BaseEntity> HoleEntities => _HoleEntities;
+        public List<BaseEntity> WallEntities => _WallEntities;
+        public List<BaseEntity> ItemEntities => _ItemEntities;
+        public List<BaseEntity> GridEntities => _GridEntities;
 
-        readonly List<GridEntity> _entities = new List<GridEntity>();
 
 
         public void Init(GridConfig grid)
@@ -43,11 +44,11 @@ namespace ReGecko.Grid.Entities
         }
 
 
-		public void Register(GridEntity entity)
+		public void Register(BaseEntity entity)
 		{
 			if (!_cellToEntities.TryGetValue(entity.Cell, out var list))
 			{
-				list = new List<GridEntity>();
+				list = new List<BaseEntity>();
 				_cellToEntities[entity.Cell] = list;
 			}
 			list.Add(entity);
@@ -55,7 +56,7 @@ namespace ReGecko.Grid.Entities
             entity.OnRegistered(_grid);
 		}
 
-		public void Unregister(GridEntity entity)
+		public void Unregister(BaseEntity entity)
 		{
 			if (_cellToEntities.TryGetValue(entity.Cell, out var list))
 			{
@@ -66,7 +67,7 @@ namespace ReGecko.Grid.Entities
 			entity.OnUnregistered();
 		}
 
-		public List<GridEntity> GetAt(Vector2Int cell)
+		public List<BaseEntity> GetAt(Vector2Int cell)
 		{
 			if (_cellToEntities.TryGetValue(cell, out var list)) return list;
 			return null;
@@ -79,7 +80,7 @@ namespace ReGecko.Grid.Entities
 			return false;
 		}
 
-		private void _RegisteredToList(GridEntity entity)
+		private void _RegisteredToList(BaseEntity entity)
         {
             if (entity is HoleEntity)
             {
@@ -93,10 +94,13 @@ namespace ReGecko.Grid.Entities
             {
                 _ItemEntities.Add(entity);
             }
+            if (entity is ItemEntity)
+            {
+                _GridEntities.Add(entity);
+            }
 
-            _entities.Add(entity);
         }
-        private void _UnregisteredToList(GridEntity entity)
+        private void _UnregisteredToList(BaseEntity entity)
         {
             if (entity is HoleEntity)
             {
@@ -110,12 +114,15 @@ namespace ReGecko.Grid.Entities
             {
                 _ItemEntities.Remove(entity);
             }
-            _entities.Remove(entity);
+            if (entity is ItemEntity)
+            {
+                _GridEntities.Remove(entity);
+            }
         }
 
         public void ClearAllEntities()
         {
-            foreach (var entity in _entities)
+            foreach (var entity in _GridEntities)
             {
                 if (entity != null)
                 {
@@ -123,12 +130,40 @@ namespace ReGecko.Grid.Entities
                 }
             }
 
-            _entities.Clear();
+            foreach (var entity in _HoleEntities)
+            {
+                if (entity != null)
+                {
+                    Destroy(entity.gameObject);
+                }
+            }
+
+            foreach (var entity in _WallEntities)
+            {
+                if (entity != null)
+                {
+                    Destroy(entity.gameObject);
+                }
+            }
+
+            foreach (var entity in _ItemEntities)
+            {
+                if (entity != null)
+                {
+                    Destroy(entity.gameObject);
+                }
+            }
+
+            _GridEntities.Clear();
             _ItemEntities.Clear();
             _WallEntities.Clear();
             _HoleEntities.Clear();
         }
 
+        public void EnqueueBigCellPath(Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = 10)
+        {
+
+        }
 
         public void DestroyInstance()
         {

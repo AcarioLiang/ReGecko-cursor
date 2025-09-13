@@ -1,6 +1,6 @@
 namespace ReGecko.Grid.Entities
 {
-	public class WallEntity : GridEntity
+	public class WallEntity : BaseEntity
 	{
 		protected override void Awake()
 		{

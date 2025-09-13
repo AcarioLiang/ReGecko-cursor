@@ -7,6 +7,7 @@ using System.Collections;
 using ReGecko.GameCore.Flow;
 using System.Linq;
 using ReGecko.Game;
+using System;
 
 namespace ReGecko.SnakeSystem
 {
@@ -1037,53 +1038,124 @@ namespace ReGecko.SnakeSystem
             // if (pathList.Count > 0 && pathList.Last.Value == toSubCell) pathList.RemoveLast();
         }
 
-        void EnqueueBigCellPath(Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = 10)
+        bool EnqueueBigCellPath(Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = -1)
         {
             pathList.Clear();
-            if (from == to) return;
-            int dx = to.x - from.x;
-            int dy = to.y - from.y;
-            bool horizFirst = Mathf.Abs(dx) >= Mathf.Abs(dy);
-            int stepx = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
-            int stepy = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
-            Vector2Int cur = from;
+            if (from == to) return false;
+            if (!_grid.IsValid()) return false;
+            if (!_grid.IsInside(from) || !_grid.IsInside(to)) return false;
 
-            // 水平移动
-            if (horizFirst)
+            // A* 数据结构
+            var open = new List<Vector2Int>(64);
+            var openSet = new HashSet<Vector2Int>();
+            var closed = new HashSet<Vector2Int>();
+            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+            var gScore = new Dictionary<Vector2Int, int>();
+            var fScore = new Dictionary<Vector2Int, int>();
+
+            int Heuristic(Vector2Int a, Vector2Int b) => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+
+            open.Add(from);
+            openSet.Add(from);
+            gScore[from] = 0;
+            fScore[from] = Heuristic(from, to);
+
+            // 4邻域
+            ReadOnlySpan<Vector2Int> dirs = stackalloc Vector2Int[4]
             {
-                for (int i = 0; i < Mathf.Abs(dx); i++)
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            while (open.Count > 0)
+            {
+                // 取 f 最小
+                int bestIdx = 0;
+                int bestF = int.MaxValue;
+                for (int i = 0; i < open.Count; i++)
                 {
-                    cur = new Vector2Int(cur.x + stepx, cur.y);
-                    Vector2Int clampedCell = ClampInside(cur);
-                    //if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
-                    pathList.AddLast(clampedCell);
+                    var n = open[i];
+                    int f = fScore.TryGetValue(n, out var fv) ? fv : int.MaxValue;
+                    if (f < bestF)
+                    {
+                        bestF = f;
+                        bestIdx = i;
+                    }
                 }
-                for (int i = 0; i < Mathf.Abs(dy); i++)
+
+                var current = open[bestIdx];
+                open.RemoveAt(bestIdx);
+                openSet.Remove(current);
+
+                if (current == to)
                 {
-                    cur = new Vector2Int(cur.x, cur.y + stepy);
-                    Vector2Int clampedCell = ClampInside(cur);
-                    //if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
-                    pathList.AddLast(clampedCell);
+                    // 回溯路径
+                    var rev = new List<Vector2Int>(64);
+                    var c = current;
+                    while (!c.Equals(from))
+                    {
+                        rev.Add(c);
+                        c = cameFrom[c];
+                    }
+                    rev.Reverse();
+
+                    // 仅压入 from 之后的步
+                    if (maxPathCount > 0)
+                    {
+                        for (int i = 0; i < rev.Count && i < maxPathCount; i++)
+                            pathList.AddLast(rev[i]);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < rev.Count; i++)
+                            pathList.AddLast(rev[i]);
+                    }
+
+                    return pathList.Count > 0;
+                }
+
+                closed.Add(current);
+
+                for (int i = 0; i < 4; i++)
+                {
+                    var nb = new Vector2Int(current.x + dirs[i].x, current.y + dirs[i].y);
+
+                    // 边界与阻挡校验（确保不越界且不穿越阻挡）
+                    if (!_grid.IsInside(nb)) continue;
+                    if (IsPathBlocked(nb)) continue; // 注意：目标格若被阻挡，仍会被排除
+
+                    if (closed.Contains(nb)) continue;
+
+                    int tentativeG = (gScore.TryGetValue(current, out var cg) ? cg : int.MaxValue);
+                    if (tentativeG == int.MaxValue) continue;
+                    tentativeG += 1;
+
+                    bool isBetter = false;
+                    if (!openSet.Contains(nb))
+                    {
+                        open.Add(nb);
+                        openSet.Add(nb);
+                        isBetter = true;
+                    }
+                    else
+                    {
+                        int oldG = gScore.TryGetValue(nb, out var og) ? og : int.MaxValue;
+                        if (tentativeG < oldG) isBetter = true;
+                    }
+
+                    if (isBetter)
+                    {
+                        cameFrom[nb] = current;
+                        gScore[nb] = tentativeG;
+                        fScore[nb] = tentativeG + Heuristic(nb, to);
+                    }
                 }
             }
-            else
-            {
-                for (int i = 0; i < Mathf.Abs(dy); i++)
-                {
-                    cur = new Vector2Int(cur.x, cur.y + stepy);
-                    Vector2Int clampedCell = ClampInside(cur);
-                    //if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
-                    pathList.AddLast(clampedCell);
-                }
-                for (int i = 0; i < Mathf.Abs(dx); i++)
-                {
-                    cur = new Vector2Int(cur.x + stepx, cur.y);
-                    Vector2Int clampedCell = ClampInside(cur);
-                    //if (IsPathBlocked(clampedCell)) break; // 遇到阻挡物停止
-                    pathList.AddLast(clampedCell);
-                }
-            }
 
+            // 无路可达
+            return false;
         }
 
 

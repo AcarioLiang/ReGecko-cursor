@@ -5,7 +5,7 @@ using ReGecko.Game;
 
 namespace ReGecko.Grid.Entities
 {
-	public class HoleEntity : GridEntity
+	public class HoleEntity : BaseEntity
 	{
 		[Header("洞配置")]
 		public float ConsumeInterval = 0.01f; // 每段吞噬间隔

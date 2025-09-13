@@ -224,7 +224,7 @@ namespace ReGecko.Framework.UI
             Vector3 worldPos = Config.CellToWorld(new Vector2Int(x, y));
             rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
 
-            GridEntity entity = cellGo.AddComponent<GridEntity>();
+            BaseEntity entity = cellGo.AddComponent<GridEntity>();
 
             if (entity != null)
             {

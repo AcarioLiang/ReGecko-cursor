@@ -247,7 +247,7 @@ namespace ReGecko.Framework.UI
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
 
-            GridEntity entity = null;
+            BaseEntity entity = null;
             switch (entityConfig.Type)
             {
                 case GridEntityConfig.EntityType.Wall:

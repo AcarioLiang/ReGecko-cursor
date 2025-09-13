@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ReGecko.Grid.Entities
 {
-	public class ItemEntity : GridEntity
+	public class ItemEntity : BaseEntity
 	{
 		protected override void Awake()
 		{
