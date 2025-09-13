@@ -33,6 +33,8 @@ namespace ReGecko.Grid.Entities
         public List<GridEntity> WallEntities => _WallEntities;
         public List<GridEntity> ItemEntities => _ItemEntities;
 
+        readonly List<GridEntity> _entities = new List<GridEntity>();
+
 
         public void Init(GridConfig grid)
         {
@@ -40,12 +42,6 @@ namespace ReGecko.Grid.Entities
             ClearAllEntities();
         }
 
-		public void ClearAllEntities()
-        {
-            _HoleEntities.Clear();
-			_WallEntities.Clear();
-			_ItemEntities.Clear();
-        }
 
 		public void Register(GridEntity entity)
 		{
@@ -97,6 +93,8 @@ namespace ReGecko.Grid.Entities
             {
                 _ItemEntities.Add(entity);
             }
+
+            _entities.Add(entity);
         }
         private void _UnregisteredToList(GridEntity entity)
         {
@@ -111,6 +109,33 @@ namespace ReGecko.Grid.Entities
             if (entity is ItemEntity)
             {
                 _ItemEntities.Remove(entity);
+            }
+            _entities.Remove(entity);
+        }
+
+        public void ClearAllEntities()
+        {
+            foreach (var entity in _entities)
+            {
+                if (entity != null)
+                {
+                    Destroy(entity.gameObject);
+                }
+            }
+
+            _entities.Clear();
+            _ItemEntities.Clear();
+            _WallEntities.Clear();
+            _HoleEntities.Clear();
+        }
+
+
+        public void DestroyInstance()
+        {
+            if (_instance != null)
+            {
+                DestroyImmediate(_instance.gameObject);
+                _instance = null;
             }
         }
     }

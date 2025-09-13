@@ -4,6 +4,7 @@ using ReGecko.GridSystem;
 using System.Collections;
 using System.Collections.Generic;
 using ReGecko.Framework.Resources;
+using ReGecko.Grid.Entities;
 
 namespace ReGecko.Framework.UI
 {
@@ -223,19 +224,22 @@ namespace ReGecko.Framework.UI
             Vector3 worldPos = Config.CellToWorld(new Vector2Int(x, y));
             rt.anchoredPosition = new Vector2(worldPos.x, worldPos.y);
 
+            GridEntity entity = cellGo.AddComponent<GridEntity>();
+
+            if (entity != null)
+            {
+                entity.GameObj = cellGo;
+                entity.Cell = new Vector2Int(x, y);
+                entity.Sprite = image.sprite;
+
+                GridEntityManager.Instance.Register(entity);
+            }
+
             _cellImages.Add(image);
         }
 
         public void ClearGrid()
         {
-            foreach (var image in _cellImages)
-            {
-                if (image != null)
-                {
-                    if (Application.isPlaying) Destroy(image.gameObject);
-                    else DestroyImmediate(image.gameObject);
-                }
-            }
             _cellImages.Clear();
         }
 

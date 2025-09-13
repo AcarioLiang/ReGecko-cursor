@@ -46,24 +46,24 @@ namespace ReGecko.SnakeSystem
 
         // 属性
         public Transform SnakeContainer { get; private set; }
+        public Canvas SnakeCanvas { get; private set; }
         public int TotalSnakeCount => _snakes.Count;
         public int AliveSnakeCount => _snakes.Count(s => s != null && s.IsAlive());
 
 
         //优化缓存
         Vector3 _lastMousePos;
-        Canvas _parentCanvas;
         bool _hasPackSnake = false;
 
         /// <summary>
         /// 初始化蛇管理器
         /// </summary>
-        public void Init(LevelConfig levelConfig, GridConfig gridConfig, Transform container = null)
+        public void Init(LevelConfig levelConfig, GridConfig gridConfig, Canvas parentCanvas, Transform container = null)
         {
             _currentLevel = levelConfig;
             _grid = gridConfig;
             SnakeContainer = container ?? transform;
-            _parentCanvas = GetComponentInParent<Canvas>();
+            SnakeCanvas = parentCanvas;
 
             ClearAllSnakes();
             CreateSnakesFromConfig();
@@ -400,17 +400,16 @@ namespace ReGecko.SnakeSystem
         Vector3 ScreenToWorld(Vector3 screen)
         {
             // UI渲染模式：使用UI坐标转换
-            if (_parentCanvas != null)
+            if (SnakeCanvas != null)
             {
                 var rect = transform.parent as RectTransform; // GridContainer
-                if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, _parentCanvas.worldCamera, out Vector2 localPoint))
+                if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, SnakeCanvas.worldCamera, out Vector2 localPoint))
                 {
                     return new Vector3(localPoint.x, localPoint.y, 0f);
                 }
             }
             else
             {
-                _parentCanvas = GetComponentInParent<Canvas>();
                 Debug.LogError("cache _parentCanvas error!!!");
             }
 
@@ -540,12 +539,11 @@ namespace ReGecko.SnakeSystem
                 {
                     var snakeCells = new HashSet<Vector2Int>();
                     var bodyCells = snake.GetBodyCells().ToList();
-                    for (int i = 0; i < bodyCells.Count; )
+                    for (int i = 0; i < bodyCells.Count; i++)
                     {
-                        var bigcell = SubGridHelper.SubCellToBigCell(bodyCells[i]);
+                        var bigcell = bodyCells[i];
                         snakeCells.Add(bigcell);
                         _cachedOccupiedCells.Add(bigcell);
-                        i += 5;
                     }
                     _snakeOccupiedCells[snake] = snakeCells;
                 }
@@ -565,6 +563,16 @@ namespace ReGecko.SnakeSystem
         private void OnDestroy()
         {
             ClearAllSnakes();
+
+        }
+
+        public void DestroyInstance()
+        {
+            if (_instance != null)
+            {
+                DestroyImmediate(_instance.gameObject);
+                _instance = null;
+            }
         }
     }
 

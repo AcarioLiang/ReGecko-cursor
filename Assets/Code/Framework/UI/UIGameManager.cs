@@ -24,11 +24,7 @@ namespace ReGecko.Framework.UI
         public Canvas EntityCanvas;
         public Canvas SnakeCanvas;
 
-        // 管理的游戏对象
-        SnakeManager _snakeManager;
         GameStateController _gameStateController;
-        readonly List<GridEntity> _entities = new List<GridEntity>();
-
         LevelConfig _currentLevel;
 
         public void Initialize(LevelConfig level)
@@ -148,7 +144,7 @@ namespace ReGecko.Framework.UI
 
             // 注意：蛇的实际创建延迟到网格构建完成后
             // 现在网格已经构建完成，使用正确的配置初始化蛇管理器
-            SnakeManager.Instance.Init(_currentLevel, GridRenderer.Config, snakeContainer);
+            SnakeManager.Instance.Init(_currentLevel, GridRenderer.Config, GridCanvas, snakeContainer);
 
             Debug.Log($"蛇管理器初始化完成，CellSize: {GridRenderer.Config.CellSize}, 蛇数量: {SnakeManager.Instance.GetStats().TotalCount}");
         }
@@ -267,9 +263,11 @@ namespace ReGecko.Framework.UI
 
             if (entity != null)
             {
+                entity.GameObj = entityGo;
                 entity.Cell = entityConfig.Cell;
                 entity.Sprite = entityConfig.Sprite;
-                
+                entity.Blocking = false;
+
                 // 如果是洞实体，设置颜色类型
                 if (entity is HoleEntity holeEntity)
                 {
@@ -298,7 +296,6 @@ namespace ReGecko.Framework.UI
                 rt.sizeDelta = new Vector2(adaptiveCellSize, adaptiveCellSize);
 
                 GridEntityManager.Instance.Register(entity);
-                _entities.Add(entity);
             }
         }
 
@@ -317,39 +314,29 @@ namespace ReGecko.Framework.UI
 
         void UpdateSnakeGridConfigs()
         {
-            if (GridRenderer == null || _snakeManager == null) return;
+            if (GridRenderer == null ) return;
 
             // 获取更新后的网格配置（包含自适应的CellSize）
             var updatedGrid = GridRenderer.Config;
 
             // 更新蛇管理器的网格配置
-            _snakeManager.UpdateGridConfig(updatedGrid);
+            SnakeManager.Instance.UpdateGridConfig(updatedGrid);
         }
 
         public void ClearGame()
         {
             // 清理蛇
-            if (_snakeManager != null)
-            {
-                _snakeManager.ClearAllSnakes();
-            }
-
-            // 清理实体
-            foreach (var entity in _entities)
-            {
-                if (entity != null)
-                {
-                    if (Application.isPlaying) Destroy(entity.gameObject);
-                    else DestroyImmediate(entity.gameObject);
-                }
-            }
-            _entities.Clear();
+            SnakeManager.Instance.ClearAllSnakes();
+            GridEntityManager.Instance.ClearAllEntities();
 
             // 清理网格
             if (GridRenderer != null)
             {
                 GridRenderer.ClearGrid();
             }
+
+            SnakeManager.Instance.DestroyInstance();
+            GridEntityManager.Instance.DestroyInstance();
         }
 
         public GameStateController GetGameStateController() => _gameStateController;
@@ -415,6 +402,7 @@ namespace ReGecko.Framework.UI
             }
 
             ClearGame();
+
         }
     }
 }

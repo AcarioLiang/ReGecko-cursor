@@ -6,6 +6,7 @@ namespace ReGecko.Grid.Entities
 	[DisallowMultipleComponent]
 	public abstract class GridEntity : MonoBehaviour
 	{
+		public GameObject GameObj;
 		public Vector2Int Cell;
 		public bool Blocking;
 		public Sprite Sprite;
