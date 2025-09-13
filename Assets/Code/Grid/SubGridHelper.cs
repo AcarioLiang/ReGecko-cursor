@@ -144,6 +144,44 @@ namespace ReGecko.GridSystem
                 int subY = Mathf.RoundToInt(CENTER_INDEX + yUnits);
                 subY = Mathf.Clamp(subY, 0, SUB_DIV - 1);
                 Vector2Int fixres = new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + subY);
+                return fixres;
+            }
+            else
+            {
+                int subX = Mathf.RoundToInt(CENTER_INDEX + xUnits);
+                subX = Mathf.Clamp(subX, 0, SUB_DIV - 1);
+
+                Vector2Int fixres = new Vector2Int(bigCell.x * SUB_DIV + subX, bigCell.y * SUB_DIV + CENTER_INDEX);
+                return fixres;
+            }
+        }
+
+        public static Vector2Int WorldToSubCellFix(Vector3 world, GridConfig grid)
+        {
+            if (!grid.IsValid())
+                return Vector2Int.zero;
+
+            // 先得到大格，再夹紧到有效范围
+            Vector2Int bigCell = grid.WorldToCell(world);
+            bigCell = ClampBigCell(bigCell, grid);
+
+            // 使用夹紧后的大格中心计算偏移
+            Vector3 bigCellWorld = grid.CellToWorld(bigCell);
+            Vector3 offset = world - bigCellWorld;
+
+            // 每个小格的世界尺寸
+            float unit = SUB_CELL_SIZE * grid.CellSize; // = grid.CellSize / 5f
+
+            // 将偏移换算成“小格单位”（中心为0）
+            float xUnits = offset.x / unit;
+            float yUnits = offset.y / unit;
+
+            // 判断更靠近哪条中线：若更靠近竖直中线 → 返回(2, y)，否则返回(x, 2)
+            if (Mathf.Abs(xUnits) <= Mathf.Abs(yUnits))
+            {
+                int subY = Mathf.RoundToInt(CENTER_INDEX + yUnits);
+                subY = Mathf.Clamp(subY, 0, SUB_DIV - 1);
+                Vector2Int fixres = new Vector2Int(bigCell.x * SUB_DIV + CENTER_INDEX, bigCell.y * SUB_DIV + subY);
                 fixres.x = Math.Max(CENTER_INDEX, fixres.x);
                 fixres.x = Math.Min(fixres.x, grid.Width * SUB_DIV - CENTER_INDEX - 1);
                 fixres.y = Math.Max(CENTER_INDEX, fixres.y);
