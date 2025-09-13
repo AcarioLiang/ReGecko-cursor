@@ -36,7 +36,7 @@ namespace ReGecko.SnakeSystem
         public float MoveSpeedCellsPerSecond = 40f;
         
         [Header("功能开关")]
-        public bool EnableBodySpriteManagement = false;
+        public bool EnableBodySpriteManagement = true;
         public bool IsControllable = true; // 是否可以被玩家控制
         
         [Header("调试选项")]

@@ -135,6 +135,10 @@ namespace ReGecko.SnakeSystem
                     image.color = BodyColor;
                     image.raycastTarget = false;
                 }
+                else
+                {
+                    go.AddComponent<RectTransform>();
+                }
 
                 // 设置RectTransform（正确的锚点和轴心）
                 var rt = go.GetComponent<RectTransform>();
