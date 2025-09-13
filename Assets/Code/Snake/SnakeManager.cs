@@ -349,7 +349,7 @@ namespace ReGecko.SnakeSystem
 
             foreach (var snake in _snakes)
             {
-                if (snake == null || !snake.IsAlive() || snake.IsDragging || !snake.IsControllable)
+                if (snake == null || !snake.IsAlive() || !snake.IsControllable)
                     continue;
 
                 var ctl = (SnakeController)snake;
@@ -402,7 +402,7 @@ namespace ReGecko.SnakeSystem
             // UI渲染模式：使用UI坐标转换
             if (SnakeCanvas != null)
             {
-                var rect = transform.parent as RectTransform; // GridContainer
+                var rect = SnakeCanvas.transform.parent as RectTransform; // GridContainer
                 if (rect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, SnakeCanvas.worldCamera, out Vector2 localPoint))
                 {
                     return new Vector3(localPoint.x, localPoint.y, 0f);
