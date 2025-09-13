@@ -1043,7 +1043,10 @@ namespace ReGecko.SnakeSystem
             pathList.Clear();
             if (from == to) return false;
             if (!_grid.IsValid()) return false;
-            if (!_grid.IsInside(from) || !_grid.IsInside(to)) return false;
+            if (!_grid.IsInside(from)) return false;
+
+            // 允许 to 越界，夹紧到边缘
+            var target = ClampInside(to);
 
             // A* 数据结构
             var open = new List<Vector2Int>(64);
@@ -1058,10 +1061,15 @@ namespace ReGecko.SnakeSystem
             open.Add(from);
             openSet.Add(from);
             gScore[from] = 0;
-            fScore[from] = Heuristic(from, to);
+            fScore[from] = Heuristic(from, target);
+
+            // 回退用：记录“离目标最近”的已可达节点
+            Vector2Int bestNode = from;
+            int bestH = Heuristic(from, target);
+            int bestG = 0;
 
             // 4邻域
-            ReadOnlySpan<Vector2Int> dirs = stackalloc Vector2Int[4]
+            Vector2Int[] dirs = new Vector2Int[4]
             {
                 new Vector2Int(1, 0),
                 new Vector2Int(-1, 0),
@@ -1089,9 +1097,9 @@ namespace ReGecko.SnakeSystem
                 open.RemoveAt(bestIdx);
                 openSet.Remove(current);
 
-                if (current == to)
+                if (current == target)
                 {
-                    // 回溯路径
+                    // 命中目标：回溯路径
                     var rev = new List<Vector2Int>(64);
                     var c = current;
                     while (!c.Equals(from))
@@ -1101,7 +1109,6 @@ namespace ReGecko.SnakeSystem
                     }
                     rev.Reverse();
 
-                    // 仅压入 from 之后的步
                     if (maxPathCount > 0)
                     {
                         for (int i = 0; i < rev.Count && i < maxPathCount; i++)
@@ -1112,25 +1119,33 @@ namespace ReGecko.SnakeSystem
                         for (int i = 0; i < rev.Count; i++)
                             pathList.AddLast(rev[i]);
                     }
-
                     return pathList.Count > 0;
                 }
 
                 closed.Add(current);
 
+                // 更新“最佳可达节点”
+                int curG = gScore.TryGetValue(current, out var cg) ? cg : int.MaxValue;
+                int curH = Heuristic(current, target);
+                if (curG != int.MaxValue && (curH < bestH || (curH == bestH && curG < bestG)))
+                {
+                    bestH = curH;
+                    bestG = curG;
+                    bestNode = current;
+                }
+
                 for (int i = 0; i < 4; i++)
                 {
                     var nb = new Vector2Int(current.x + dirs[i].x, current.y + dirs[i].y);
 
-                    // 边界与阻挡校验（确保不越界且不穿越阻挡）
+                    // 边界与阻挡校验
                     if (!_grid.IsInside(nb)) continue;
-                    if (IsPathBlocked(nb)) continue; // 注意：目标格若被阻挡，仍会被排除
+                    if (IsPathBlocked(nb)) continue; // 若需要允许站上被阻挡的目标格：if (nb != target && IsPathBlocked(nb)) continue;
 
                     if (closed.Contains(nb)) continue;
 
-                    int tentativeG = (gScore.TryGetValue(current, out var cg) ? cg : int.MaxValue);
+                    int tentativeG = curG == int.MaxValue ? int.MaxValue : (curG + 1);
                     if (tentativeG == int.MaxValue) continue;
-                    tentativeG += 1;
 
                     bool isBetter = false;
                     if (!openSet.Contains(nb))
@@ -1149,12 +1164,39 @@ namespace ReGecko.SnakeSystem
                     {
                         cameFrom[nb] = current;
                         gScore[nb] = tentativeG;
-                        fScore[nb] = tentativeG + Heuristic(nb, to);
+                        fScore[nb] = tentativeG + Heuristic(nb, target);
                     }
                 }
             }
 
-            // 无路可达
+            // 未能到达目标：回退到“离目标最近的可达点”并回溯路径
+            if (bestNode != from && cameFrom.ContainsKey(bestNode))
+            {
+                var rev = new List<Vector2Int>(64);
+                var c = bestNode;
+                while (!c.Equals(from))
+                {
+                    rev.Add(c);
+                    // 安全回溯（理论上都会存在）
+                    if (!cameFrom.TryGetValue(c, out c))
+                        break;
+                }
+                rev.Reverse();
+
+                if (maxPathCount > 0)
+                {
+                    for (int i = 0; i < rev.Count && i < maxPathCount; i++)
+                        pathList.AddLast(rev[i]);
+                }
+                else
+                {
+                    for (int i = 0; i < rev.Count; i++)
+                        pathList.AddLast(rev[i]);
+                }
+                return pathList.Count > 0;
+            }
+
+            // 完全不可走（from四周全阻挡等）
             return false;
         }
 
