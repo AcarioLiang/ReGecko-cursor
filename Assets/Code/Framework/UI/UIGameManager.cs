@@ -160,7 +160,7 @@ namespace ReGecko.Framework.UI
             // 设置游戏时间限制（如果有的话）
             if (_currentLevel != null && _currentLevel.EnableTimeLimit && _currentLevel.GameTimeLimit > 0)
             {
-                _gameStateController.SetGameTimeLimit(/*_currentLevel.GameTimeLimit*/9999);//todo
+                _gameStateController.SetGameTimeLimit(_currentLevel.GameTimeLimit);
             }
         }
 

@@ -14,11 +14,11 @@ namespace ReGecko.SnakeSystem
     public class SnakeController : BaseSnake
     {
         // 在 SnakeController 类字段区添加
-        [SerializeField] bool DebugShowLeadTarget = true;
+        [SerializeField] bool DebugShowLeadTarget = false;
         [SerializeField] Color DebugLeadTargetColor = Color.red;
         [SerializeField] float DebugLeadMarkerSize = 8f;
 
-        [SerializeField] bool DebugShowCenterline = true;
+        [SerializeField] bool DebugShowCenterline = false;
         [SerializeField] Color DebugPolylineColor = new Color(0f, 1f, 0f, 0.9f);
         [SerializeField] Color DebugPolylineHeadColor = new Color(0f, 0.9f, 1f, 1f);
         [SerializeField] Color DebugPolylineTailColor = new Color(1f, 0.3f, 1f, 1f);
