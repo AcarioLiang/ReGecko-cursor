@@ -29,6 +29,10 @@ namespace ReGecko.SnakeSystem
         bool _startMove;
         bool _isReverse;
 
+        [SerializeField] float AStarDirectionBias = 1.0f; // 非前进方向的基础罚分
+        [SerializeField] float AStarBackwardPenalty = 3f; // 朝身体反向（与preferredDir相反）额外罚分
+        [SerializeField] float AStarTurnLeftPenalty = 1f; // 左转额外罚分
+        [SerializeField] float AStarTurnRightPenalty = 1f; // 右转额外罚分
 
         private List<GameObject> _segments = new List<GameObject>();
         protected readonly LinkedList<Vector2Int> _bodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
@@ -303,7 +307,7 @@ namespace ReGecko.SnakeSystem
             // 取“一步”的目标格
             _cellPathQueue ??= new LinkedList<Vector2Int>();
             _cellPathQueue.Clear();
-            EnqueueBigCellPath(leadCurrentCell, targetCell, _cellPathQueue, 1);
+            EnqueueBigCellPath(leadCurrentCell, targetCell, _cellPathQueue);
             if (_cellPathQueue.Count > 0)
             {
                 //跨格子移动
@@ -348,7 +352,6 @@ namespace ReGecko.SnakeSystem
                 return;
             }
 
-
             // 1) 确定“活动端”：正向=DragFromHead；倒车时取相反端
             bool activeFromHead = _isReverse ? !DragFromHead : DragFromHead;
 
@@ -386,10 +389,7 @@ namespace ReGecko.SnakeSystem
                     _activeLeadPos += dir * (step / dist);
                 }
             }
-            else
-            {
-                reachedThisFrame = true;
-            }
+
 
 
             // 5) 路径历史：位移达阈值才采样，降低抖动
@@ -774,7 +774,7 @@ namespace ReGecko.SnakeSystem
                     if (IsPathBlocked(nextBig)) continue;
                     if (!CheckOccupiedBySelfReverse(nextBig)) continue;
 
-                    EnqueueBigCellPath(GetTailCell(), nextBig, _cellPathQueue, 1);
+                    EnqueueBigCellPath(GetTailCell(), nextBig, _cellPathQueue);
                     if (_cellPathQueue.Count > 0)
                     {
                         newNextCell = _cellPathQueue.First.Value;
@@ -801,7 +801,7 @@ namespace ReGecko.SnakeSystem
                     if (IsPathBlocked(nextHeadBig)) continue;
                     if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
 
-                    EnqueueBigCellPath(GetHeadCell(), nextHeadBig, _cellPathQueue, 1);
+                    EnqueueBigCellPath(GetHeadCell(), nextHeadBig, _cellPathQueue);
 
                     if (_cellPathQueue.Count > 0)
                     {
@@ -992,44 +992,69 @@ namespace ReGecko.SnakeSystem
             // 允许 to 越界，夹紧到边缘
             var target = ClampInside(to);
 
-            // A* 数据结构
+            // 计算“前方”方向：拖动段后面一格 → 拖动段
+            Vector2Int preferredDir = Vector2Int.zero;
+            if (_bodyCells != null && _bodyCells.Count >= 2)
+            {
+                if (DragFromHead)
+                {
+                    // next(后面一格) -> head(拖动段)
+                    var head = _currentHeadCell;
+                    var neck = GetBodyCellAtIndex(1);
+                    preferredDir = new Vector2Int(Mathf.Clamp(head.x - neck.x, -1, 1), Mathf.Clamp(head.y - neck.y, -1, 1));
+                }
+                else
+                {
+                    // preTail(后面一格) -> tail(拖动段)
+                    var tail = _currentTailCell;
+                    var preTail = GetBodyCellAtIndex(_bodyCells.Count - 2);
+                    preferredDir = new Vector2Int(Mathf.Clamp(tail.x - preTail.x, -1, 1), Mathf.Clamp(tail.y - preTail.y, -1, 1));
+                }
+            }
+            // 只有一段时，退化为朝向目标的方向
+            if (preferredDir == Vector2Int.zero)
+            {
+                preferredDir = new Vector2Int(Mathf.Clamp(target.x - from.x, -1, 1), Mathf.Clamp(target.y - from.y, -1, 1));
+            }
+
+            // A*（浮点代价）
             var open = new List<Vector2Int>(64);
             var openSet = new HashSet<Vector2Int>();
             var closed = new HashSet<Vector2Int>();
             var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
-            var gScore = new Dictionary<Vector2Int, int>();
-            var fScore = new Dictionary<Vector2Int, int>();
+            var gScore = new Dictionary<Vector2Int, float>();
+            var fScore = new Dictionary<Vector2Int, float>();
 
             int Heuristic(Vector2Int a, Vector2Int b) => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
 
             open.Add(from);
             openSet.Add(from);
-            gScore[from] = 0;
+            gScore[from] = 0f;
             fScore[from] = Heuristic(from, target);
 
             // 回退用：记录“离目标最近”的已可达节点
             Vector2Int bestNode = from;
             int bestH = Heuristic(from, target);
-            int bestG = 0;
+            float bestG = 0f;
 
             // 4邻域
             Vector2Int[] dirs = new Vector2Int[4]
             {
-                new Vector2Int(1, 0),
-                new Vector2Int(-1, 0),
-                new Vector2Int(0, 1),
-                new Vector2Int(0, -1)
+        new Vector2Int(1, 0),
+        new Vector2Int(-1, 0),
+        new Vector2Int(0, 1),
+        new Vector2Int(0, -1)
             };
 
             while (open.Count > 0)
             {
-                // 取 f 最小
+                // 取 f 最小（加强方向偏好的 fScore 也会影响这里的选择顺序）
                 int bestIdx = 0;
-                int bestF = int.MaxValue;
+                float bestF = float.PositiveInfinity;
                 for (int i = 0; i < open.Count; i++)
                 {
                     var n = open[i];
-                    int f = fScore.TryGetValue(n, out var fv) ? fv : int.MaxValue;
+                    float f = fScore.TryGetValue(n, out var fv) ? fv : float.PositiveInfinity;
                     if (f < bestF)
                     {
                         bestF = f;
@@ -1043,7 +1068,7 @@ namespace ReGecko.SnakeSystem
 
                 if (current == target)
                 {
-                    // 命中目标：回溯路径
+                    // 回溯路径
                     var rev = new List<Vector2Int>(64);
                     var c = current;
                     while (!c.Equals(from))
@@ -1069,9 +1094,9 @@ namespace ReGecko.SnakeSystem
                 closed.Add(current);
 
                 // 更新“最佳可达节点”
-                int curG = gScore.TryGetValue(current, out var cg) ? cg : int.MaxValue;
+                float curG = gScore.TryGetValue(current, out var cg) ? cg : float.PositiveInfinity;
                 int curH = Heuristic(current, target);
-                if (curG != int.MaxValue && (curH < bestH || (curH == bestH && curG < bestG)))
+                if (curG < float.PositiveInfinity && (curH < bestH || (curH == bestH && curG < bestG)))
                 {
                     bestH = curH;
                     bestG = curG;
@@ -1080,16 +1105,43 @@ namespace ReGecko.SnakeSystem
 
                 for (int i = 0; i < 4; i++)
                 {
-                    var nb = new Vector2Int(current.x + dirs[i].x, current.y + dirs[i].y);
+                    var step = dirs[i];
+                    var nb = new Vector2Int(current.x + step.x, current.y + step.y);
 
-                    // 边界与阻挡校验
+                    // 边界与阻挡
                     if (!_grid.IsInside(nb)) continue;
-                    if (IsPathBlocked(nb)) continue; // 若需要允许站上被阻挡的目标格：if (nb != target && IsPathBlocked(nb)) continue;
-
+                    if (IsPathBlocked(nb)) continue;
                     if (closed.Contains(nb)) continue;
 
-                    int tentativeG = curG == int.MaxValue ? int.MaxValue : (curG + 1);
-                    if (tentativeG == int.MaxValue) continue;
+                    // 本步方向罚分：非前进、后退、左右转
+                    float stepPenalty = 0f;
+                    if (preferredDir != Vector2Int.zero)
+                    {
+                        // 非前进基础罚分
+                        if (step != preferredDir) stepPenalty += AStarDirectionBias;
+
+                        // 后退（远离“拖动段后一格”）
+                        if (step.x == -preferredDir.x && step.y == -preferredDir.y)
+                        {
+                            stepPenalty += AStarBackwardPenalty;
+                        }
+                        else
+                        {
+                            // 左/右转（与 preferredDir 正交）
+                            int dot = step.x * preferredDir.x + step.y * preferredDir.y; // -1,0,1
+                            if (dot == 0)
+                            {
+                                // 叉积：>0 左转，<0 右转（坐标：x右 y上）
+                                int cross = preferredDir.x * step.y - preferredDir.y * step.x;
+                                if (cross > 0) stepPenalty += AStarTurnLeftPenalty;
+                                else if (cross < 0) stepPenalty += AStarTurnRightPenalty;
+                            }
+                        }
+                    }
+
+                    // g 代价：基础1 + 方向罚分
+                    float tentativeG = (curG < float.PositiveInfinity) ? (curG + 1f + stepPenalty) : float.PositiveInfinity;
+                    if (!(tentativeG < float.PositiveInfinity)) continue;
 
                     bool isBetter = false;
                     if (!openSet.Contains(nb))
@@ -1100,7 +1152,7 @@ namespace ReGecko.SnakeSystem
                     }
                     else
                     {
-                        int oldG = gScore.TryGetValue(nb, out var og) ? og : int.MaxValue;
+                        float oldG = gScore.TryGetValue(nb, out var og) ? og : float.PositiveInfinity;
                         if (tentativeG < oldG) isBetter = true;
                     }
 
@@ -1108,12 +1160,16 @@ namespace ReGecko.SnakeSystem
                     {
                         cameFrom[nb] = current;
                         gScore[nb] = tentativeG;
-                        fScore[nb] = tentativeG + Heuristic(nb, target);
+
+                        // f = g + h +（再加一次“方向偏好”用于强偏好）
+                        // 这样在选择开放表最小 f 时，也会倾向于“前进/侧转”而不是后退
+                        float h = Heuristic(nb, target);
+                        fScore[nb] = tentativeG + h + stepPenalty * 2;
                     }
                 }
             }
 
-            // 未能到达目标：回退到“离目标最近的可达点”并回溯路径
+            // 无法到达，回退到最近可达节点
             if (bestNode != from && cameFrom.ContainsKey(bestNode))
             {
                 var rev = new List<Vector2Int>(64);
@@ -1121,9 +1177,7 @@ namespace ReGecko.SnakeSystem
                 while (!c.Equals(from))
                 {
                     rev.Add(c);
-                    // 安全回溯（理论上都会存在）
-                    if (!cameFrom.TryGetValue(c, out c))
-                        break;
+                    if (!cameFrom.TryGetValue(c, out c)) break;
                 }
                 rev.Reverse();
 
@@ -1140,7 +1194,6 @@ namespace ReGecko.SnakeSystem
                 return pathList.Count > 0;
             }
 
-            // 完全不可走（from四周全阻挡等）
             return false;
         }
 
