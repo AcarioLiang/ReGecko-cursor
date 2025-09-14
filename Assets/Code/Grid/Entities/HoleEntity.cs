@@ -8,7 +8,7 @@ namespace ReGecko.Grid.Entities
 	public class HoleEntity : BaseEntity
 	{
 		[Header("洞配置")]
-		public float ConsumeInterval = 0.01f; // 每段吞噬间隔
+		public float ConsumeInterval = 0.1f; // 每段吞噬间隔
 		
 		[Header("颜色配置")]
 		[Tooltip("洞的颜色类型，只有相同颜色的蛇才能进入")]

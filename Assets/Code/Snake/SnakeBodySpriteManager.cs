@@ -11,6 +11,22 @@ namespace ReGecko.SnakeSystem
         public float LineWidth = 1.0f;
         public Color BodyColor = Color.white;
         public bool EnableTiledTexture = true;
+        //吞噬动画相关
+        float _allConsumeTime = 0f;
+        bool _consumeFromHead = false;
+        float _consumeSpeed = 0f;              // 路径总长 / 总时长
+        Vector3 _consumeAnchor = Vector3.zero; // 锚点（不动不隐藏）
+        bool _consumeInited = false;
+        float _consumeElapsed = 0f;
+
+        // 路径缓存（严格夹紧于启动瞬间的折线）
+        Vector3[] _consumePathCache;   // 顺序：从锚点到末端
+        float[] _consumePrefixLen;     // 前缀弧长（长度 = _consumePathCount）
+        int _consumePathCount = 0;
+
+        // 原始索引 -> 在缓存路径中的弧长位置 s0
+        float[] _consumeInitialS;      // 长度 = _linePositionsCount
+        int _consumeAnchorOriginalIndex = 0;
 
         SnakeController _snake;
         GridConfig _grid;
@@ -619,6 +635,129 @@ namespace ReGecko.SnakeSystem
             float len = 0f;
             for (int i = 1; i < pts.Count; i++) len += Vector3.Distance(pts[i - 1], pts[i]);
             return len;
+        }
+        public void StartSnakeCoconsume(float time, bool activeFromHead)
+        {
+            _allConsumeTime = time;
+            _consumeFromHead = activeFromHead;
+
+            _consumeSpeed = 0f;
+            _consumeElapsed = 0f;
+            _consumeInited = false;
+
+            if (_line == null || _linePositionsCache == null) return;
+
+            _linePositionsCount = Mathf.Max(_linePositionsCount, _line.positionCount);
+            if (_linePositionsCount <= 1 || _allConsumeTime <= 1e-6f) return;
+
+            int last = _linePositionsCount - 1;
+            _consumeAnchorOriginalIndex = _consumeFromHead ? 0 : last;
+            _consumeAnchor = _linePositionsCache[_consumeAnchorOriginalIndex];
+
+            // 1) 构建“从锚点到末端”的路径缓存
+            _consumePathCount = _linePositionsCount;
+            if (_consumePathCache == null || _consumePathCache.Length < _consumePathCount)
+                _consumePathCache = new Vector3[_consumePathCount];
+            if (_consumePrefixLen == null || _consumePrefixLen.Length < _consumePathCount)
+                _consumePrefixLen = new float[_consumePathCount];
+
+            if (_consumeFromHead)
+            {
+                // 原顺序：0..last
+                for (int i = 0; i < _consumePathCount; i++)
+                    _consumePathCache[i] = _linePositionsCache[i];
+            }
+            else
+            {
+                // 反向：last..0（把锚点搬到0位）
+                for (int i = 0; i < _consumePathCount; i++)
+                    _consumePathCache[i] = _linePositionsCache[last - i];
+            }
+
+            // 2) 前缀弧长
+            _consumePrefixLen[0] = 0f;
+            for (int i = 1; i < _consumePathCount; i++)
+            {
+                _consumePrefixLen[i] = _consumePrefixLen[i - 1] +
+                    Vector3.Distance(_consumePathCache[i - 1], _consumePathCache[i]);
+            }
+            float totalLen = _consumePrefixLen[_consumePathCount - 1];
+            if (totalLen <= 1e-6f) return;
+
+            // 3) 原始索引的初始弧长 s0
+            if (_consumeInitialS == null || _consumeInitialS.Length < _linePositionsCount)
+                _consumeInitialS = new float[_linePositionsCount];
+
+            if (_consumeFromHead)
+            {
+                // 原索引 i 对应缓存路径的 i 位置
+                for (int i = 0; i < _linePositionsCount; i++)
+                    _consumeInitialS[i] = _consumePrefixLen[Mathf.Clamp(i, 0, _consumePathCount - 1)];
+            }
+            else
+            {
+                // 原索引 i 对应缓存路径的 (last - i) 位置
+                for (int i = 0; i < _linePositionsCount; i++)
+                    _consumeInitialS[i] = _consumePrefixLen[Mathf.Clamp(last - i, 0, _consumePathCount - 1)];
+            }
+
+            // 4) 速度（总长 / 时间）
+            _consumeSpeed = totalLen / _allConsumeTime;
+            _consumeInited = true;
+        }
+
+        public void OnSnakeCoconsumeUpdate()
+        {
+            if (_line == null || _linePositionsCache == null) return;
+            if (!_consumeInited || _linePositionsCount <= 0 || _consumePathCount <= 1) return;
+            if (_allConsumeTime <= 1e-6f || _consumeSpeed <= 0f) return;
+
+            _consumeElapsed += Time.deltaTime;
+            float travel = _consumeSpeed * _consumeElapsed; // 本帧应减少的弧长
+
+            // s(t) = max(0, s0 - travel)，并严格落在缓存路径上
+            for (int i = 0; i < _linePositionsCount; i++)
+            {
+                float s0 = _consumeInitialS[i];
+                float s = s0 - travel;
+                if (s <= 0f)
+                {
+                    // 到达锚点：位置贴锚点，且非锚点隐藏
+                    _linePositionsCache[i] = _consumeAnchor;
+                    if (i != _consumeAnchorOriginalIndex)
+                    {
+                        var hide = _consumeAnchor;
+                        hide.z = _consumeAnchor.z - 1000f;
+                        _linePositionsCache[i] = hide;
+                    }
+                    continue;
+                }
+                if (s >= _consumePrefixLen[_consumePathCount - 1])
+                {
+                    // 超出末端（正常不发生），夹紧到末端
+                    _linePositionsCache[i] = _consumePathCache[_consumePathCount - 1];
+                    continue;
+                }
+
+                // 二分查找 s 所在段：prefix[j] <= s < prefix[j+1]
+                int lo = 0, hi = _consumePathCount - 1;
+                while (lo + 1 < hi)
+                {
+                    int mid = (lo + hi) >> 1;
+                    if (_consumePrefixLen[mid] <= s) lo = mid; else hi = mid;
+                }
+                float segStart = _consumePrefixLen[lo];
+                float segLen = Mathf.Max(1e-6f, _consumePrefixLen[lo + 1] - segStart);
+                float t = (s - segStart) / segLen;
+
+                Vector3 a = _consumePathCache[lo];
+                Vector3 b = _consumePathCache[lo + 1];
+                _linePositionsCache[i] = Vector3.LerpUnclamped(a, b, t);
+            }
+
+            // 写回 LineRenderer
+            _line.positionCount = _linePositionsCount;
+            _line.SetPositions(_linePositionsCache);
         }
 
     }
