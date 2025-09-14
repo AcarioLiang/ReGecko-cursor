@@ -25,6 +25,10 @@ namespace ReGecko.SnakeSystem
         private Vector2Int _currentHeadSubCell;
         private Vector2Int _currentTailSubCell;
 
+        // 新增：折线缓存，避免每帧ToArray分配
+        Vector3[] _linePositionsCache;
+        int _linePositionsCount;
+
         void Awake()
         {
             _snake = GetComponentInParent<SnakeController>();
@@ -52,7 +56,7 @@ namespace ReGecko.SnakeSystem
 
         public void OnSnakeMoved()
         {
-            UpdateAllLinePositions();
+            //UpdateAllLinePositions();
         }
 
         public void OnSnakeLengthChanged()
@@ -84,7 +88,7 @@ namespace ReGecko.SnakeSystem
                 _line.material.color = BodyColor;
 
                 // _Borders = (左边框, 右边框, 头部高度, 尾部高度)
-                Vector4 borders = new Vector4(5,5,108,107);
+                Vector4 borders = new Vector4(5, 5, 108, 107);
                 // 设置九宫格边框参数（像素单位）
                 // 假设纹理是 64x64，边框各为 16 像素
                 _line.material.SetVector("_Borders", borders);
@@ -429,7 +433,6 @@ namespace ReGecko.SnakeSystem
             EnsureLineCreated();
             _posBuffer.Clear();
 
-
             Vector2Int[] bodyArray = new Vector2Int[bodys.Count];
             bodys.CopyTo(bodyArray, 0);
 
@@ -444,7 +447,6 @@ namespace ReGecko.SnakeSystem
                 p.z = 0f;
                 _posBuffer.Add(p);
             }
-
 
             if (_posBuffer.Count < 2)
             {
@@ -462,9 +464,123 @@ namespace ReGecko.SnakeSystem
                 var scale = _line.material.mainTextureScale;
                 _line.material.mainTextureScale = new Vector2(Mathf.Max(1f, length / Mathf.Max(0.01f, 25)), scale.y);
             }
-
-
         }
+
+        // 新增：高效直连更新（输入为网格局部坐标折线）
+        public void UpdateLineFromPolyline(List<Vector2> gridLocalPath, int segmentCount, float segmentSpacing, bool activeFromHead)
+        {
+            if (_snake == null || _grid.Width == 0) return;
+            if (gridLocalPath == null || gridLocalPath.Count < 2 || segmentCount <= 0)
+            {
+                if (_line != null) _line.gameObject.SetActive(false);
+                return;
+            }
+
+            EnsureLineCreated();
+
+            int subDiv = SubGridHelper.SUB_DIV;                // 5
+            int totalPoints = segmentCount * subDiv;           // 与 _cachedRectTransforms 1:5 对齐
+            EnsurePositionsCapacity(totalPoints);
+
+            // 折线扫描状态：统一从折线起点（index 0）向前扫描
+            int polyIdx = 1;
+            Vector2 cur = gridLocalPath[0];
+            Vector2 nxt = gridLocalPath.Count > 1 ? gridLocalPath[1] : gridLocalPath[0];
+            float segLen = Vector2.Distance(cur, nxt);
+            float acc = 0f;
+
+            // 每个小段间距 = segmentSpacing * 0.2
+            float subStep = segmentSpacing * SubGridHelper.SUB_CELL_SIZE;
+
+            var container = _snake.transform.parent as RectTransform;
+
+            // 按给定 targetDist 采样当前折线位置（推进扫描光标，低GC）
+            void SampleAndWrite(float targetDist, int writeIndex)
+            {
+                while (acc + segLen + 1e-4f < targetDist && polyIdx < gridLocalPath.Count - 1)
+                {
+                    acc += segLen;
+                    cur = nxt;
+                    polyIdx++;
+                    nxt = gridLocalPath[polyIdx];
+                    segLen = Vector2.Distance(cur, nxt);
+                }
+
+                Vector2 pos;
+                if (segLen <= 1e-6f) pos = cur;
+                else
+                {
+                    float need = Mathf.Clamp(targetDist - acc, 0f, segLen);
+                    float t = need / Mathf.Max(segLen, 1e-6f);
+                    pos = Vector2.LerpUnclamped(cur, nxt, t);
+                }
+
+                // grid-local → world
+                Vector3 worldPos = container != null
+                    ? container.TransformPoint(new Vector3(pos.x, pos.y, 0f))
+                    : new Vector3(pos.x, pos.y, 0f);
+
+                _linePositionsCache[writeIndex] = worldPos;
+            }
+
+            // 采样顺序：targetDist 单调递增；写入索引根据朝向选择正向或反向
+            if (activeFromHead)
+            {
+                for (int i = 0; i < segmentCount; i++)
+                {
+                    float baseDist = i * segmentSpacing;
+                    for (int j = 0; j < subDiv; j++)
+                    {
+                        float target = baseDist + j * subStep;
+                        int writeIndex = i * subDiv + j; // 5*i + j
+                        SampleAndWrite(target, writeIndex);
+                    }
+                }
+            }
+            else
+            {
+                // 反向：使 _linePositionsCache[totalPoints-1] 对应 targetDist=0（即 _centerlinePolyline[0]）
+                for (int i = 0; i < segmentCount; i++)
+                {
+                    float baseDist = i * segmentSpacing;
+                    for (int j = 0; j < subDiv; j++)
+                    {
+                        float target = baseDist + j * subStep;
+                        int forwardIndex = i * subDiv + j;               // 0..totalPoints-1
+                        int writeIndex = totalPoints - 1 - forwardIndex; // 反向写入
+                        SampleAndWrite(target, writeIndex);
+                    }
+                }
+            }
+
+            // 写回 LineRenderer
+            _line.gameObject.SetActive(true);
+            _line.positionCount = totalPoints;
+            _line.SetPositions(_linePositionsCache);
+
+            // 可选：平铺纹理自适应
+            if (EnableTiledTexture && _line.material != null && _line.textureMode == LineTextureMode.Tile)
+            {
+                float length = ComputePolylineLength(_linePositionsCache, totalPoints);
+                var scale = _line.material.mainTextureScale;
+                _line.material.mainTextureScale = new Vector2(Mathf.Max(1f, length / Mathf.Max(0.01f, 25f)), scale.y);
+            }
+        }
+
+        void EnsurePositionsCapacity(int n)
+        {
+            if (_linePositionsCache == null || _linePositionsCache.Length < n)
+                _linePositionsCache = new Vector3[Mathf.NextPowerOfTwo(n)];
+        }
+
+        float ComputePolylineLength(Vector3[] pts, int count)
+        {
+            if (pts == null || count < 2) return 0f;
+            float len = 0f;
+            for (int i = 1; i < count; i++) len += Vector3.Distance(pts[i - 1], pts[i]);
+            return len;
+        }
+
 
         // 就地修改 bodyList：
         // - 头部：用 [0] 到 [5] 的连线四等分，写入 [1..4]

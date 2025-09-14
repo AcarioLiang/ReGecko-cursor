@@ -18,6 +18,12 @@ namespace ReGecko.SnakeSystem
         [SerializeField] Color DebugLeadTargetColor = Color.red;
         [SerializeField] float DebugLeadMarkerSize = 8f;
 
+        [SerializeField] bool DebugShowCenterline = true;
+        [SerializeField] Color DebugPolylineColor = new Color(0f, 1f, 0f, 0.9f);
+        [SerializeField] Color DebugPolylineHeadColor = new Color(0f, 0.9f, 1f, 1f);
+        [SerializeField] Color DebugPolylineTailColor = new Color(1f, 0.3f, 1f, 1f);
+        [SerializeField] float DebugPolylinePointSize = 10f;
+
         [Header("SnakeController特有属性")]
         // 拖拽相关
         bool _startMove;
@@ -92,6 +98,9 @@ namespace ReGecko.SnakeSystem
         // 活动端（正向=拖动端；倒车时=对端）
         Vector2 _activeLeadPos;
         List<Vector2> _activeLeadPath = new List<Vector2>(512);
+
+        // 新增：中线折线缓存，减少GC
+        List<Vector2> _centerlinePolyline = new List<Vector2>(512);
 
         // 扫描缓存
         Vector2[] _tmpBodyPos;
@@ -279,13 +288,6 @@ namespace ReGecko.SnakeSystem
             // 基础校验
             if (_bodyCells == null || _bodyCells.Count == 0 || _cachedRectTransforms.Count == 0) return;
 
-            // 初始化/切换端
-            //if (!_smoothInited || _lastDragFromHead != DragFromHead)
-            //{
-            //    InitializeSmoothPathFromCurrentState();
-            //    _lastDragFromHead = DragFromHead;
-            //}
-
             _isReverse = false;
 
             // 速度/间距（世界单位）
@@ -302,44 +304,50 @@ namespace ReGecko.SnakeSystem
             _cellPathQueue ??= new LinkedList<Vector2Int>();
             _cellPathQueue.Clear();
             EnqueueBigCellPath(leadCurrentCell, targetCell, _cellPathQueue, 1);
-            if (_cellPathQueue.Count == 0)
+            if (_cellPathQueue.Count > 0)
             {
+                //跨格子移动
+                _leadTargetCell = _cellPathQueue.First.Value;
+
+                // 倒车判定（你已有）
+                if (CheckIfNeedReverseByCell(_leadTargetCell, out _leadReverseCell))
+                {
+                    _isReverse = true;
+                }
+                else
+                {
+                    if (_leadTargetCell == (DragFromHead ? _bodyCells.First.Next.Value : _bodyCells.Last.Previous.Value))
+                    {
+                        return;
+                    }
+                }
+
+                if (!_isReverse)
+                {
+                    // 检查目标点合法性
+                    if (!CheckNextCell(_leadTargetCell))
+                    {
+                        //Debug.LogError("CheckNextCell return!");
+                        return;
+                    }
+                }
+
+
+                if (_isReverse)
+                {
+                    _leadReversePos = _grid.CellToWorld(_leadReverseCell);
+                }
+                else
+                {
+                    _leadTargetPos = _grid.CellToWorld(_leadTargetCell);
+                }
+            }
+            else
+            {
+                //小格子移动
                 return;
             }
-            _leadTargetCell = _cellPathQueue.First.Value;
 
-
-            // 倒车判定（你已有）
-            if (CheckIfNeedReverseByCell(_leadTargetCell, out _leadReverseCell))
-            {
-                _isReverse = true;
-            }
-            else
-            {
-                if (_leadTargetCell == (DragFromHead ? _bodyCells.First.Next.Value : _bodyCells.Last.Previous.Value))
-                {
-                    return;
-                }
-            }
-
-            if (!_isReverse)
-            {
-                // 检查目标点合法性
-                if (!CheckNextCell(_leadTargetCell))
-                {
-                    //Debug.LogError("CheckNextCell return!");
-                    return;
-                }
-            }
-
-            if(_isReverse)
-            {
-                _leadReversePos = _grid.CellToWorld(_leadReverseCell);
-            }
-            else
-            {
-                _leadTargetPos = _grid.CellToWorld(_leadTargetCell);
-            }
 
             // 1) 确定“活动端”：正向=DragFromHead；倒车时取相反端
             bool activeFromHead = _isReverse ? !DragFromHead : DragFromHead;
@@ -483,7 +491,6 @@ namespace ReGecko.SnakeSystem
                 else break;
             }
         }
-
         void ApplySmoothVisualsByPath(bool activeFromHead)
         {
             int n = _bodyCells.Count;
@@ -499,15 +506,14 @@ namespace ReGecko.SnakeSystem
                 return new Vector2(w.x, w.y);
             }
 
-            // 1) 将“活动端+历史”的自由轨迹转换为严格的中线折线
-            List<Vector2> cl = new List<Vector2>(Mathf.Max(4, _activeLeadPath.Count + 2));
+            // 1) 构建严格中线折线（缓存复用）
+            _centerlinePolyline.Clear();
             var start = SnapToCenterline(_activeLeadPos);
-            cl.Add(start);
-
+            _centerlinePolyline.Add(start);
             for (int i = _activeLeadPath.Count - 1; i >= 0; i--)
             {
                 var b = SnapToCenterline(_activeLeadPath[i]);
-                var a = cl[cl.Count - 1];
+                var a = _centerlinePolyline[_centerlinePolyline.Count - 1];
                 if (Vector2.Distance(a, b) <= EPS) continue;
 
                 var su = SubGridHelper.WorldToSubCell(new Vector3(a.x, a.y, 0f), _grid);
@@ -517,41 +523,41 @@ namespace ReGecko.SnakeSystem
                 {
                     var w = SubGridHelper.SubCellToWorld(nodes[k], _grid);
                     var ww = new Vector2(w.x, w.y);
-                    if (Vector2.Distance(cl[cl.Count - 1], ww) > EPS)
-                        cl.Add(ww);
+                    if (Vector2.Distance(_centerlinePolyline[_centerlinePolyline.Count - 1], ww) > EPS)
+                        _centerlinePolyline.Add(ww);
                 }
             }
 
-            // 2) 沿中线折线按等距采样（保持 _segmentspacing）
-            int segIndex = 1;
-            Vector2 cur = cl[0];
-            Vector2 nxt = (segIndex < cl.Count) ? cl[segIndex] : cl[0];
-            float segLen = Vector2.Distance(cur, nxt);
+            // 2) 等距采样（保持_segmentspacing），驱动段位
+            int idx = 1;
+            Vector2 cur = _centerlinePolyline[0];
+            Vector2 nxt = (idx < _centerlinePolyline.Count) ? _centerlinePolyline[idx] : _centerlinePolyline[0];
+            float seg = Vector2.Distance(cur, nxt);
             float acc = 0f;
 
             for (int i = 0; i < n; i++)
             {
                 float target = _distTargets[i];
 
-                while (acc + segLen + EPS < target && segIndex < cl.Count - 1)
+                while (acc + seg + EPS < target && idx < _centerlinePolyline.Count - 1)
                 {
-                    acc += segLen;
+                    acc += seg;
                     cur = nxt;
-                    segIndex++;
-                    nxt = cl[segIndex];
-                    segLen = Vector2.Distance(cur, nxt);
+                    idx++;
+                    nxt = _centerlinePolyline[idx];
+                    seg = Vector2.Distance(cur, nxt);
                 }
 
                 Vector2 pos;
-                if (segLen <= EPS) pos = cur;
+                if (seg <= EPS) pos = cur;
                 else
                 {
-                    float need = Mathf.Clamp(target - acc, 0f, segLen);
-                    float t = need / segLen;
+                    float need = Mathf.Clamp(target - acc, 0f, seg);
+                    float t = need / seg;
                     pos = Vector2.LerpUnclamped(cur, nxt, t);
                 }
 
-                // 3) 再次夹紧，消除数值误差导致的轻微偏离
+                // 夹紧以消除误差
                 pos = SnapToCenterline(pos);
 
                 int visIndex = activeFromHead ? i : (n - 1 - i);
@@ -562,9 +568,15 @@ namespace ReGecko.SnakeSystem
                 }
             }
 
-            if (EnableBodySpriteManagement)
+            // 3) 直接用中线折线更新LineRenderer（避免重建子段/池化）
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
-                _bodySpriteManager?.OnSnakeMoved();
+                _bodySpriteManager.UpdateLineFromPolyline(
+                   _centerlinePolyline,
+                   _cachedRectTransforms.Count,   // 段数
+                   _segmentspacing,               // 每段间距=大格尺寸
+                   activeFromHead                 // 朝向
+               );
             }
         }
 
@@ -1666,35 +1678,86 @@ namespace ReGecko.SnakeSystem
 
         void OnGUI()
         {
-            if (!DebugShowLeadTarget) return;
             if (_grid.Width == 0 || _grid.Height == 0) return;
 
             // 取容器 RectTransform（与 ScreenToWorld 中一致的父容器）
             var container = transform.parent as RectTransform;
             if (container == null) return;
 
-            // 将“网格世界坐标系”的 _leadTargetPos 映射到屏幕坐标
-            // 先把局部(anchored)坐标转换为世界坐标，再转屏幕坐标
-            Vector3 worldPoint = container.TransformPoint(new Vector3(_leadTargetPos.x, _leadTargetPos.y, 0f));
-            var cam = GetComponentInParent<Canvas>()?.worldCamera;
-            Vector2 sp = RectTransformUtility.WorldToScreenPoint(cam, worldPoint);
+            if(DebugShowLeadTarget)
+            {
+                // 将“网格世界坐标系”的 _leadTargetPos 映射到屏幕坐标
+                // 先把局部(anchored)坐标转换为世界坐标，再转屏幕坐标
+                Vector3 worldPoint = container.TransformPoint(new Vector3(_leadTargetPos.x, _leadTargetPos.y, 0f));
+                var cam = GetComponentInParent<Canvas>()?.worldCamera;
+                Vector2 sp = RectTransformUtility.WorldToScreenPoint(cam, worldPoint);
 
-            // OnGUI 的 y 轴从顶向下，需要翻转
-            float sx = sp.x;
-            float sy = Screen.height - sp.y;
+                // OnGUI 的 y 轴从顶向下，需要翻转
+                float sx = sp.x;
+                float sy = Screen.height - sp.y;
 
-            // 画一个十字与坐标文本
-            var prev = GUI.color;
-            GUI.color = DebugLeadTargetColor;
+                // 画一个十字与坐标文本
+                var prev = GUI.color;
+                GUI.color = DebugLeadTargetColor;
 
-            float s = DebugLeadMarkerSize;
-            GUI.DrawTexture(new Rect(sx - 1f, sy - s, 2f, 2f * s), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(sx - s, sy - 1f, 2f * s, 2f), Texture2D.whiteTexture);
+                float s = DebugLeadMarkerSize;
+                GUI.DrawTexture(new Rect(sx - 1f, sy - s, 2f, 2f * s), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(sx - s, sy - 1f, 2f * s, 2f), Texture2D.whiteTexture);
 
-            GUI.Label(new Rect(sx + s + 4f, sy - 12f, 260f, 24f),
-                $"leadTarget ({_leadTargetPos.x:F2},{_leadTargetPos.y:F2})");
+                GUI.Label(new Rect(sx + s + 4f, sy - 12f, 260f, 24f),
+                    $"leadTarget ({_leadTargetPos.x:F2},{_leadTargetPos.y:F2})");
 
-            GUI.color = prev;
+                GUI.color = prev;
+            }
+
+            // 追加：绘制 _centerlinePolyline
+            if (DebugShowCenterline && _centerlinePolyline != null && _centerlinePolyline.Count > 0)
+            {
+                var prev = GUI.color;
+                // 把折线的“网格局部坐标”转成屏幕坐标后绘制
+                int n = _centerlinePolyline.Count;
+                var cam = GetComponentInParent<Canvas>()?.worldCamera;
+                // 先画中间点（统一颜色）
+                GUI.color = DebugPolylineColor;
+                for (int i = 0; i < n; i++)
+                {
+                    var pLocal = _centerlinePolyline[i];
+                    Vector3 wp = container.TransformPoint(new Vector3(pLocal.x, pLocal.y, 0f));
+                    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
+                    float px = scr.x;
+                    float py = Screen.height - scr.y;
+                    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize, py - DebugPolylinePointSize,
+                        2f * DebugPolylinePointSize, 2f * DebugPolylinePointSize), Texture2D.whiteTexture);
+                }
+
+                // 头点（折线开头）
+                {
+                    var headLocal = _centerlinePolyline[0];
+                    Vector3 wp = container.TransformPoint(new Vector3(headLocal.x, headLocal.y, 0f));
+                    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
+                    float px = scr.x;
+                    float py = Screen.height - scr.y;
+                    GUI.color = DebugPolylineHeadColor;
+                    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize * 1.5f, py - DebugPolylinePointSize * 1.5f,
+                        3f * DebugPolylinePointSize, 3f * DebugPolylinePointSize), Texture2D.whiteTexture);
+                }
+
+                // 尾点（折线末尾）
+                {
+                    var tailLocal = _centerlinePolyline[n - 1];
+                    Vector3 wp = container.TransformPoint(new Vector3(tailLocal.x, tailLocal.y, 0f));
+                    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
+                    float px = scr.x;
+                    float py = Screen.height - scr.y;
+                    GUI.color = DebugPolylineTailColor;
+                    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize * 1.5f, py - DebugPolylinePointSize * 1.5f,
+                        3f * DebugPolylinePointSize, 3f * DebugPolylinePointSize), Texture2D.whiteTexture);
+                }
+                GUI.color = prev;
+            }
+
+
+
         }
 
         void OnDrawGizmosSelected()
