@@ -488,6 +488,34 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        public void UpdateLineOffset(Vector3 offset)
+        {
+            if (_linePositionsCache == null || _linePositionsCache.Length == 0) return;
+
+
+            Vector3[] bodyArray = new Vector3[_linePositionsCache.Length];
+
+            for (int i = 0; i < _linePositionsCache.Length; i++) 
+            {
+                bodyArray[i] = _linePositionsCache[i] + offset;
+            }
+  
+
+
+            var totalPoints = _linePositionsCache.Length;
+            _line.gameObject.SetActive(true);
+            _line.positionCount = totalPoints;
+            _line.SetPositions(bodyArray);
+
+            if (EnableTiledTexture && _line.material != null && _line.textureMode == LineTextureMode.Tile)
+            {
+                float length = ComputePolylineLength(_linePositionsCache, totalPoints);
+                var scale = _line.material.mainTextureScale;
+                _line.material.mainTextureScale = new Vector2(Mathf.Max(1f, length / Mathf.Max(0.01f, 25f)), scale.y);
+            }
+
+        }
+
         // 新增：高效直连更新（输入为网格局部坐标折线）
         public void UpdateLineFromPolyline(List<Vector2> gridLocalPath, int segmentCount, float segmentSpacing, bool activeFromHead)
         {
@@ -503,7 +531,7 @@ namespace ReGecko.SnakeSystem
             int subDiv = SubGridHelper.SUB_DIV;                // 5
             int totalPoints = segmentCount * subDiv;           // 与 _cachedRectTransforms 1:5 对齐
             EnsurePositionsCapacity(totalPoints);
-
+            /*
             // --- 折线清洗（保留长回环，只去掉连续重复与极短回退）---
             _polylineCleanBuffer.Clear();
             _polylineKeyBuffer.Clear();
@@ -636,7 +664,8 @@ namespace ReGecko.SnakeSystem
 
             // 使用清洗后的路径
             var path = res;
-
+            */
+            var path = gridLocalPath;
             // 折线扫描状态：统一从折线起点（index 0）向前扫描
             int polyIdx = 1;
             Vector2 cur = path[0];
