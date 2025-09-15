@@ -505,36 +505,10 @@ namespace ReGecko.SnakeSystem
 
         public void UpdateLineOffset(bool dragfromhead ,float offset)
         {
-            Debug.Log(dragfromhead +" : "+ offset);
             if (_snake == null)
                 return;
-            var container = _snake.transform.parent as RectTransform;
-            if (container == null)
-                return;
 
-            if(!_isInitGridLocalPath)
-            {
-                _cacheGridLocalPath.Clear();
-                if (dragfromhead)
-                {
-                    for (int i = 0; i < _linePositionsCache.Length; i++)
-                    {
-                        Vector3 leadLocal = container.InverseTransformPoint(_linePositionsCache[i]);
-                        _cacheGridLocalPath.Add(new Vector2(leadLocal.x, leadLocal.y));
-                    }
-
-                }
-                else
-                {
-                    for (int i = _linePositionsCache.Length - 1; i >= 0; i--)
-                    {
-                        Vector3 leadLocal = container.InverseTransformPoint(_linePositionsCache[i]);
-                        _cacheGridLocalPath.Add(new Vector2(leadLocal.x, leadLocal.y));
-                    }
-                }
-            }
-
-            UpdateLineFromPolyline(_cacheGridLocalPath, _snake.Length, _snake.GetGrid().CellSize, dragfromhead, offset);
+            UpdateLineFromPolyline(dragfromhead?_snake.GetVirtualPathPoints(): _snake.GetVirtualPathPointsRe(), _snake.Length, _snake.GetGrid().CellSize, dragfromhead, offset);
         }
 
         // 新增：高效直连更新（输入为网格局部坐标折线）
@@ -543,15 +517,10 @@ namespace ReGecko.SnakeSystem
             if (_snake == null || _grid.Width == 0) return;
             if (gridLocalPath == null || gridLocalPath.Count < 2 || segmentCount <= 0)
             {
-                if (_line != null) _line.gameObject.SetActive(false);
+                //if (_line != null) _line.gameObject.SetActive(false);
                 return;
             }
 
-            if(offset == 0)
-            {
-                _cacheGridLocalPath = gridLocalPath;
-                _isInitGridLocalPath = true;
-            }
 
             EnsureLineCreated();
 
@@ -560,21 +529,30 @@ namespace ReGecko.SnakeSystem
             EnsurePositionsCapacity(totalPoints);
             
             var path = gridLocalPath;
-            // 折线扫描状态：统一从折线起点（index 0）向前扫描
+
+            // 预计算折线总长
+            float totalLen = 0f;
+            for (int i = 1; i < path.Count; i++) totalLen += Vector2.Distance(path[i - 1], path[i]);
+
+            // 扫描光标（从起点向前）
             int polyIdx = 1;
             Vector2 cur = path[0];
             Vector2 nxt = path.Count > 1 ? path[1] : path[0];
             float segLen = Vector2.Distance(cur, nxt);
             float acc = 0f;
 
-            // 每个小段间距 = segmentSpacing * 0.2
             float subStep = segmentSpacing * SubGridHelper.SUB_CELL_SIZE;
-
             var container = _snake.transform.parent as RectTransform;
 
             void SampleAndWrite(float targetDist, int writeIndex)
             {
-                while (acc + segLen + 1e-4f < targetDist && polyIdx < path.Count - 1)
+                // 优先尝试偏移后的采样
+                float desired = targetDist + offset;
+                bool useOffset = desired >= 0f && desired <= totalLen;
+                float s = useOffset ? desired : targetDist;
+
+                // 推进光标至 s
+                while (acc + segLen + 1e-4f < s && polyIdx < path.Count - 1)
                 {
                     acc += segLen;
                     cur = nxt;
@@ -587,7 +565,7 @@ namespace ReGecko.SnakeSystem
                 if (segLen <= 1e-6f) pos = cur;
                 else
                 {
-                    float need = Mathf.Clamp(targetDist - acc, 0f, segLen);
+                    float need = Mathf.Clamp(s - acc, 0f, segLen);
                     float t = need / Mathf.Max(segLen, 1e-6f);
                     pos = Vector2.LerpUnclamped(cur, nxt, t);
                 }
@@ -599,15 +577,16 @@ namespace ReGecko.SnakeSystem
                 _linePositionsCache[writeIndex] = worldPos;
             }
 
+            // forward：按 targetDist 递增调用；reverse：反向写入索引
             if (activeFromHead)
             {
                 for (int i = 0; i < segmentCount; i++)
                 {
                     float baseDist = i * segmentSpacing;
-                    for (int j = 0; j < subDiv; j++)
+                    for (int j = 0; j < SubGridHelper.SUB_DIV; j++)
                     {
                         float target = baseDist + j * subStep;
-                        int writeIndex = i * subDiv + j; // 5*i + j
+                        int writeIndex = i * SubGridHelper.SUB_DIV + j;
                         SampleAndWrite(target, writeIndex);
                     }
                 }
@@ -617,18 +596,18 @@ namespace ReGecko.SnakeSystem
                 for (int i = 0; i < segmentCount; i++)
                 {
                     float baseDist = i * segmentSpacing;
-                    for (int j = 0; j < subDiv; j++)
+                    for (int j = 0; j < SubGridHelper.SUB_DIV; j++)
                     {
                         float target = baseDist + j * subStep;
-                        int forwardIndex = i * subDiv + j;
-                        int writeIndex = totalPoints - 1 - forwardIndex; // 反向写入，使 [last] 对应 path[0]
+                        int forwardIndex = i * SubGridHelper.SUB_DIV + j;
+                        int writeIndex = (segmentCount * SubGridHelper.SUB_DIV - 1) - forwardIndex;
                         SampleAndWrite(target, writeIndex);
                     }
                 }
             }
 
             _line.gameObject.SetActive(true);
-            _line.positionCount = totalPoints;
+            _line.positionCount = segmentCount * SubGridHelper.SUB_DIV;
             _line.SetPositions(_linePositionsCache);
 
             if (EnableTiledTexture && _line.material != null && _line.textureMode == LineTextureMode.Tile)
