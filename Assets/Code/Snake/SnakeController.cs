@@ -297,6 +297,14 @@ namespace ReGecko.SnakeSystem
             // 速度/间距（世界单位）
             RefreshKinematicsIfNeeded();
 
+            //寻路开始
+            // 1) 确定“活动端”：正向=DragFromHead；倒车时取相反端
+            bool activeFromHead = _isReverse ? !DragFromHead : DragFromHead;
+
+            // 2) 初始化活动端的平滑状态（首次或切换端时）
+            EnsureActiveLeadInited(activeFromHead);
+
+
             // 先把旧格子寻路走完
             if (_leadLastTargetCell != Vector2Int.zero)
             {
@@ -313,7 +321,6 @@ namespace ReGecko.SnakeSystem
             {
                 // 新寻路
 
-                _isReverse = false;
                 // 采样鼠标 → 期望小格（中线）
                 var world = ScreenToWorld(Input.mousePosition);
                 Vector2Int targetCell = _grid.WorldToCell(world);
@@ -344,6 +351,8 @@ namespace ReGecko.SnakeSystem
                         }
                     }
 
+                    _isReverse = false;
+
                     if (!_isReverse)
                     {
                         // 检查目标点合法性
@@ -369,34 +378,46 @@ namespace ReGecko.SnakeSystem
                 }
                 else
                 {
-                    /*
-                    //小格子移动
-                    // 1) 鼠标投影到最近中线（连续世界坐标，不量化到小格中心）
-                    _leadTargetPos = ScreenToWorldCenter(Input.mousePosition);
-                    //2 计算拖动端的朝向
-                    float leaddir = 0f;
-                    //3.计算方向上的偏移，分前进方向（拖动端朝向，以及左转右转），后退方向
-                    var offset = _leadTargetPos - _cachedRectTransforms[0].anchoredPosition;
-                    //4.判断偏移量是否合法
-
+                    //小格子视觉移动
                     if (EnableBodySpriteManagement && _bodySpriteManager != null)
                     {
-                        EnsureActiveLeadInited(DragFromHead);
-                        ApplySmoothVisualsByPath(DragFromHead);
-                        _bodySpriteManager.UpdateLineOffset(new Vector3(offset.x, offset.y, 0));
+                        // 1) 鼠标投影到最近中线（连续本地世界坐标，不量化到小格中心）
+                        Vector2 centerLocal = ScreenToWorldCenter(Input.mousePosition);
+
+                        // 2) 真实视觉头/尾点（LineRenderer世界坐标）→ 转换到 GridContainer 本地
+                        var container = transform.parent as RectTransform;
+                        if (container == null) return;
+
+                        Vector3 leadWorld = _bodySpriteManager != null
+                            ? _bodySpriteManager.GetLineLeadFirstPos(DragFromHead)
+                            : Vector3.zero;
+                        Vector3 leadLocal = container.InverseTransformPoint(leadWorld);
+
+                        // 3) 拖动端朝向（用_bodyCells.First/Next 或 Last/Previous）
+
+
+
+                        Vector2Int a = DragFromHead ? _currentHeadCell : _currentTailCell;
+                        Vector2Int b = DragFromHead ? GetBodyCellAtIndex(1) : GetBodyCellAtIndex(_bodyCells.Count - 2);
+                        Vector2Int d = a - b; // 拖动端后面一格 -> 拖动端
+                        bool alongX = Mathf.Abs(d.x) >= Mathf.Abs(d.y);
+
+                        // 4) 计算在拖动端移动方向上的偏移（本地坐标系）
+                        Vector2 deltaLocal = new Vector2(centerLocal.x - leadLocal.x, centerLocal.y - leadLocal.y);
+                        float offset = alongX ? (d.x > 0 ? deltaLocal.x : -deltaLocal.x) : (d.y > 0 ? deltaLocal.y : -deltaLocal.y);
+
+                        // 5) 暂不做偏移合法性校验
+
+                        // 7) 将偏移与方向传给渲染层
+                        if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                            _bodySpriteManager.UpdateLineOffset(DragFromHead, -offset);
                     }
-                    */
+                        
                     return;
                 }
             }
 
 
-            //寻路开始
-            // 1) 确定“活动端”：正向=DragFromHead；倒车时取相反端
-            bool activeFromHead = _isReverse ? !DragFromHead : DragFromHead;
-
-            // 2) 初始化活动端的平滑状态（首次或切换端时）
-            EnsureActiveLeadInited(activeFromHead);
 
             // 3) 目标点（连续世界坐标）
             Vector2 targetPos;
@@ -687,42 +708,6 @@ namespace ReGecko.SnakeSystem
             if (_distTargets == null || _distTargets.Length < n) _distTargets = new float[Mathf.NextPowerOfTwo(n)];
         }
 
-        //每一小段身体移动完成之后
-        void AfterSmoothVisualsByPath()
-        {
-            //UpdateSubBodyCellsFromCachedSubRectTransforms();
-
-            // 5) 刷新缓存
-            _currentHeadCell = _bodyCells.First.Value;
-            _currentTailCell = _bodyCells.Last.Value;
-
-            //刷新碰撞缓存
-            SnakeManager.Instance.InvalidateOccupiedCellsCache();
-
-            // 洞检测：若拖动端在洞位置或临近洞，且颜色匹配，触发吞噬
-            {
-                var hole = FindHoleAtOrAdjacentWithColor(_currentHeadCell, ColorType);
-                if (hole != null)
-                {
-                    _consumeCoroutine ??= StartCoroutine(CoConsume(hole, true));
-                    return;
-                }
-            }
-            {
-                var hole = FindHoleAtOrAdjacentWithColor(_currentTailCell, ColorType);
-                if (hole != null)
-                {
-                    _consumeCoroutine ??= StartCoroutine(CoConsume(hole, false));
-                    return;
-                }
-            }
-
-            //更新身体图片
-            if (EnableBodySpriteManagement)
-            {
-                _bodySpriteManager?.OnSnakeMoved();
-            }
-        }
 
 
         /// <summary>
@@ -1430,12 +1415,8 @@ namespace ReGecko.SnakeSystem
 
             InitializeSegmentPositions(newInitialBodyCells);
             UpdateCachedRectTransformsFromBodyCells();
-
-            if (EnableBodySpriteManagement)
-            {
-                _bodySpriteManager?.OnSnakeMoved();
-            }
         }
+
         public IEnumerator CoConsume(HoleEntity hole, bool fromHead)
         {
             _consuming = true;

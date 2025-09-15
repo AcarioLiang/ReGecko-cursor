@@ -32,6 +32,8 @@ namespace ReGecko.SnakeSystem
         GridConfig _grid;
         LineRenderer _line;
         readonly List<Vector3> _posBuffer = new List<Vector3>(256);
+        List<Vector2> _cacheGridLocalPath = new List<Vector2>();
+        bool _isInitGridLocalPath = false;
 
         readonly List<GameObject> _subSegments = new List<GameObject>();// 每段的5个小段
         readonly Queue<GameObject> _subSegmentPool = new Queue<GameObject>();
@@ -76,15 +78,26 @@ namespace ReGecko.SnakeSystem
             UpdateAllLinePositions();
         }
 
-        public void OnSnakeMoved()
-        {
-            //UpdateAllLinePositions();
-        }
 
         public void OnSnakeLengthChanged()
         {
             EnsureLineCreated();
             UpdateAllLinePositions();
+        }
+
+        public Vector3 GetLineLeadFirstPos(bool fromHead)
+        {
+            if (_line == null) return Vector3.zero;
+            if (_linePositionsCache == null || _linePositionsCache.Length == 0) return Vector3.zero;
+
+            if (fromHead)
+            {
+                return _linePositionsCache[0];
+            }
+            else
+            {
+                return _linePositionsCache[_linePositionsCache.Length - 1];
+            }
         }
 
         void EnsureLineCreated()
@@ -476,9 +489,11 @@ namespace ReGecko.SnakeSystem
                 return;
             }
 
+            _linePositionsCount = _posBuffer.Count;
+            _linePositionsCache = _posBuffer.ToArray();
             _line.gameObject.SetActive(true);
-            _line.positionCount = _posBuffer.Count;
-            _line.SetPositions(_posBuffer.ToArray());
+            _line.positionCount = _linePositionsCount;
+            _line.SetPositions(_linePositionsCache);
 
             if (EnableTiledTexture && _line.material != null && _line.textureMode == LineTextureMode.Tile)
             {
@@ -488,36 +503,42 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        public void UpdateLineOffset(Vector3 offset)
+        public void UpdateLineOffset(bool dragfromhead ,float offset)
         {
-            if (_linePositionsCache == null || _linePositionsCache.Length == 0) return;
+            Debug.Log(dragfromhead +" : "+ offset);
+            if (_snake == null)
+                return;
+            var container = _snake.transform.parent as RectTransform;
+            if (container == null)
+                return;
 
-
-            Vector3[] bodyArray = new Vector3[_linePositionsCache.Length];
-
-            for (int i = 0; i < _linePositionsCache.Length; i++) 
+            if(!_isInitGridLocalPath)
             {
-                bodyArray[i] = _linePositionsCache[i] + offset;
+                _cacheGridLocalPath.Clear();
+                if (dragfromhead)
+                {
+                    for (int i = 0; i < _linePositionsCache.Length; i++)
+                    {
+                        Vector3 leadLocal = container.InverseTransformPoint(_linePositionsCache[i]);
+                        _cacheGridLocalPath.Add(new Vector2(leadLocal.x, leadLocal.y));
+                    }
+
+                }
+                else
+                {
+                    for (int i = _linePositionsCache.Length - 1; i >= 0; i--)
+                    {
+                        Vector3 leadLocal = container.InverseTransformPoint(_linePositionsCache[i]);
+                        _cacheGridLocalPath.Add(new Vector2(leadLocal.x, leadLocal.y));
+                    }
+                }
             }
-  
 
-
-            var totalPoints = _linePositionsCache.Length;
-            _line.gameObject.SetActive(true);
-            _line.positionCount = totalPoints;
-            _line.SetPositions(bodyArray);
-
-            if (EnableTiledTexture && _line.material != null && _line.textureMode == LineTextureMode.Tile)
-            {
-                float length = ComputePolylineLength(_linePositionsCache, totalPoints);
-                var scale = _line.material.mainTextureScale;
-                _line.material.mainTextureScale = new Vector2(Mathf.Max(1f, length / Mathf.Max(0.01f, 25f)), scale.y);
-            }
-
+            UpdateLineFromPolyline(_cacheGridLocalPath, _snake.Length, _snake.GetGrid().CellSize, dragfromhead, offset);
         }
 
         // 新增：高效直连更新（输入为网格局部坐标折线）
-        public void UpdateLineFromPolyline(List<Vector2> gridLocalPath, int segmentCount, float segmentSpacing, bool activeFromHead)
+        public void UpdateLineFromPolyline(List<Vector2> gridLocalPath, int segmentCount, float segmentSpacing, bool activeFromHead, float offset = 0)
         {
             if (_snake == null || _grid.Width == 0) return;
             if (gridLocalPath == null || gridLocalPath.Count < 2 || segmentCount <= 0)
@@ -526,145 +547,18 @@ namespace ReGecko.SnakeSystem
                 return;
             }
 
+            if(offset == 0)
+            {
+                _cacheGridLocalPath = gridLocalPath;
+                _isInitGridLocalPath = true;
+            }
+
             EnsureLineCreated();
 
             int subDiv = SubGridHelper.SUB_DIV;                // 5
             int totalPoints = segmentCount * subDiv;           // 与 _cachedRectTransforms 1:5 对齐
             EnsurePositionsCapacity(totalPoints);
-            /*
-            // --- 折线清洗（保留长回环，只去掉连续重复与极短回退）---
-            _polylineCleanBuffer.Clear();
-            _polylineKeyBuffer.Clear();
-
-            float eps2 = PolylineDedupEps * PolylineDedupEps;
-            float minLoopLen = Mathf.Max(PolylineDedupEps * 4f, PolylineMinLoopEraseFactor * segmentSpacing);
-
-            // 累计长度，用于判定局部 loop 的长度（res 同步维护）
-            var res = _polylineCleanBuffer;
-            var prefixLen = new List<float>(Mathf.Max(16, gridLocalPath.Count));
-            var map = new Dictionary<long, List<int>>(gridLocalPath.Count * 2);
-
-            bool Same(Vector2 a, Vector2 b) => (a - b).sqrMagnitude <= eps2;
-
-            long QuantKey(Vector2 p)
-            {
-                int qx = Mathf.RoundToInt(p.x * 10000f);
-                int qy = Mathf.RoundToInt(p.y * 10000f);
-                return ((long)qx << 32) ^ (uint)qy;
-            }
-
-            void RebuildMap()
-            {
-                map.Clear();
-                for (int i = 0; i < res.Count; i++)
-                {
-                    long k = QuantKey(res[i]);
-                    if (!map.TryGetValue(k, out var lst)) { lst = new List<int>(2); map[k] = lst; }
-                    lst.Add(i);
-                }
-            }
-
-            void TruncateToIndex(int keepIdx)
-            {
-                // 保留 [0..keepIdx]
-                if (keepIdx < res.Count - 1)
-                {
-                    res.RemoveRange(keepIdx + 1, res.Count - (keepIdx + 1));
-                    prefixLen.RemoveRange(keepIdx + 1, prefixLen.Count - (keepIdx + 1));
-                    RebuildMap();
-                }
-            }
-
-            for (int i = 0; i < gridLocalPath.Count; i++)
-            {
-                var p = gridLocalPath[i];
-
-                // 1) 跳过连续重复
-                if (res.Count > 0 && Same(res[res.Count - 1], p)) continue;
-
-                // 2) 立即回退 A-B-A：直接去掉 B（把 res.Count-1 弹出），且不再添加 p（等于新末尾）
-                if (res.Count >= 2 && Same(res[res.Count - 2], p))
-                {
-                    res.RemoveAt(res.Count - 1);
-                    prefixLen.RemoveAt(prefixLen.Count - 1);
-                    RebuildMap();
-                    continue;
-                }
-
-                long key = QuantKey(p);
-
-                // 3) 查找是否命中旧点（可能有多次出现，需用距离确认）
-                if (map.TryGetValue(key, out var idxList) && idxList != null && idxList.Count > 0)
-                {
-                    int found = -1;
-                    for (int k = idxList.Count - 1; k >= 0; k--)
-                    {
-                        int idx = idxList[k];
-                        if (Same(res[idx], p)) { found = idx; break; }
-                    }
-                    if (found >= 0)
-                    {
-                        // 计算从 found 到当前末尾的路径长度
-                        float loopLen = 0f;
-                        if (res.Count > found)
-                        {
-                            for (int a = found; a < res.Count - 1; a++)
-                                loopLen += Vector2.Distance(res[a], res[a + 1]);
-                            // 还未把 p 加入，末段长度加上 res.Last→p
-                            loopLen += Vector2.Distance(res[res.Count - 1], p);
-                        }
-
-                        // 仅当“局部回环”很短才擦除，否则保留（允许长回环）
-                        if (loopLen <= minLoopLen)
-                        {
-                            TruncateToIndex(found);
-                            continue; // 不再添加 p，因为 found 点已经存在且等于 p
-                        }
-                        // 否则 fallthrough：把 p 作为新点追加
-                    }
-                }
-
-                // 4) 追加正常点，并更新累计长度与索引表
-                if (res.Count == 0)
-                {
-                    res.Add(p);
-                    prefixLen.Add(0f);
-                }
-                else
-                {
-                    float d = Vector2.Distance(res[res.Count - 1], p);
-                    res.Add(p);
-                    prefixLen.Add(prefixLen[prefixLen.Count - 1] + d);
-                }
-
-                _polylineKeyBuffer.Add(key);
-                if (!map.TryGetValue(key, out var list)) { list = new List<int>(2); map[key] = list; }
-                list.Add(res.Count - 1);
-            }
-
-            // 5) 保底：至少保留2点（若清洗过度）
-            if (res.Count < 2)
-            {
-                res.Clear();
-                // 取原路径末尾两个不同点
-                Vector2 last = gridLocalPath[gridLocalPath.Count - 1];
-                int j = gridLocalPath.Count - 2;
-                while (j >= 0 && Same(gridLocalPath[j], last)) j--;
-                if (j < 0)
-                {
-                    res.Add(last);
-                    res.Add(last + new Vector2(PolylineDedupEps, 0f));
-                }
-                else
-                {
-                    res.Add(gridLocalPath[j]);
-                    res.Add(last);
-                }
-            }
-
-            // 使用清洗后的路径
-            var path = res;
-            */
+            
             var path = gridLocalPath;
             // 折线扫描状态：统一从折线起点（index 0）向前扫描
             int polyIdx = 1;
