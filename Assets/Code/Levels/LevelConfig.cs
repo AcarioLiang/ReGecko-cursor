@@ -25,7 +25,6 @@ namespace ReGecko.Levels
 		public Vector2Int[] BodyCells;
 		
 		[Header("行为设置")]
-		public float MoveSpeed = 16f; // 移动速度（格子/秒）
 		public bool IsControllable = true; // 是否可被玩家控制
 		
 		[Header("特殊属性")]

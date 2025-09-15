@@ -64,7 +64,6 @@ namespace ReGecko.Levels
 					Color = SnakeColorType.Purple.ToUnityColor(),
 					ColorType = SnakeColorType.Purple, // 红色类型
 					BodySprite = SnakeBodySprite,
-					MoveSpeed = 16f,
 					IsControllable = true,
 					BodyCells = new []
 					{
@@ -84,7 +83,6 @@ namespace ReGecko.Levels
 					Color = SnakeColorType.Green.ToUnityColor(),
 					ColorType = SnakeColorType.Green, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-					MoveSpeed = 12f,
 					IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
 					{
@@ -108,7 +106,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue,
                     BodySprite = SnakeBodySprite,
-                    MoveSpeed = 16f,
                     IsControllable = true,
                     BodyCells = new []
                     {
@@ -130,7 +127,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Orange.ToUnityColor(),
                     ColorType = SnakeColorType.Orange, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -148,7 +144,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Purple.ToUnityColor(),
                     ColorType = SnakeColorType.Purple, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -166,7 +161,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -191,7 +185,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green,
                     BodySprite = SnakeBodySprite,
-                    MoveSpeed = 16f,
                     IsControllable = true,
                     BodyCells = new []
                     {
@@ -211,7 +204,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Red.ToUnityColor(),
                     ColorType = SnakeColorType.Red, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -229,7 +221,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Yellow.ToUnityColor(),
                     ColorType = SnakeColorType.Yellow, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -247,7 +238,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -270,7 +260,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue,
                     BodySprite = SnakeBodySprite,
-                    MoveSpeed = 16f,
                     IsControllable = true,
                     BodyCells = new []
                     {
@@ -294,7 +283,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Yellow.ToUnityColor(),
                     ColorType = SnakeColorType.Yellow, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -312,7 +300,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Red.ToUnityColor(),
                     ColorType = SnakeColorType.Red, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -330,7 +317,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -348,7 +334,6 @@ namespace ReGecko.Levels
                     Color = SnakeColorType.Orange.ToUnityColor(),
                     ColorType = SnakeColorType.Orange, // 蓝色类型
 					BodySprite = SnakeBodySprite,
-                    MoveSpeed = 12f,
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {

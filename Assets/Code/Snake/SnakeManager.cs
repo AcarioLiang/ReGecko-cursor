@@ -136,7 +136,6 @@ namespace ReGecko.SnakeSystem
             snake.Length = Mathf.Max(1, config.Length);
             snake.InitialHeadCell = config.HeadCell;
             snake.InitialBodyCells = config.BodyCells;
-            snake.MoveSpeedCellsPerSecond = config.MoveSpeed > 0 ? config.MoveSpeed : 16f;
             snake.IsControllable = config.IsControllable;
             
         }
