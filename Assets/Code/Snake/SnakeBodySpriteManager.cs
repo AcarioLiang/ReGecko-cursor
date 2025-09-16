@@ -53,6 +53,15 @@ namespace ReGecko.SnakeSystem
         readonly List<Vector2> _polylineCleanBuffer = new List<Vector2>(512);
         readonly List<long> _polylineKeyBuffer = new List<long>(512);
 
+        public Vector3[] GetCurLinePositions()
+        {
+            return _linePositionsCache;
+        }
+        public int GetCurLinePositionsCount()
+        {
+            return _linePositionsCount;
+        }
+
         void Awake()
         {
             _snake = GetComponentInParent<SnakeController>();
@@ -608,7 +617,6 @@ namespace ReGecko.SnakeSystem
 
             _line.gameObject.SetActive(true);
             _line.positionCount = segmentCount * SubGridHelper.SUB_DIV;
-            _line.SetPositions(_linePositionsCache);
 
             if (EnableTiledTexture && _line.material != null && _line.textureMode == LineTextureMode.Tile)
             {

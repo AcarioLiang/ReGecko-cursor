@@ -14,7 +14,7 @@ namespace ReGecko.SnakeSystem
     public class SnakeController : BaseSnake
     {
         // 在 SnakeController 类字段区添加
-        [SerializeField] bool DebugShowLeadTarget = false;
+        [SerializeField] bool DebugShowLeadTarget = true;
         [SerializeField] Color DebugLeadTargetColor = Color.red;
         [SerializeField] float DebugLeadMarkerSize = 10f;
 
@@ -23,6 +23,8 @@ namespace ReGecko.SnakeSystem
         [SerializeField] Color DebugPolylineHeadColor = Color.red;
         [SerializeField] Color DebugPolylineTailColor = Color.green;
         [SerializeField] float DebugPolylinePointSize = 10f;
+
+        [SerializeField] bool DebugShowPolyline = true;
 
         [Header("SnakeController特有属性")]
         // 拖拽相关
@@ -82,6 +84,11 @@ namespace ReGecko.SnakeSystem
 
         Vector2Int _leadReverseCell;  // 拖动端倒车目标小格（中线）
 
+        bool _switchToSingleCellPath = false;
+        bool _lastIsSingleCellPath = false;
+        Vector2 _lastSingleCellPathPos;
+        Vector3[] _linePositionsCache;
+
         bool _smoothInited = false;
 
         float _segmentspacing;           // 每段身体之间固定间距（世界单位）
@@ -106,6 +113,9 @@ namespace ReGecko.SnakeSystem
         List<Vector2> _virtualPathPoints = new List<Vector2>(512);
         List<Vector2> _virtualPathPointsRe = new List<Vector2>(512);
         LinkedList<Vector2Int> _virtualBodyCells = new LinkedList<Vector2Int>();
+
+
+        [SerializeField] bool EnableSingleCellMode = false;
 
         public List<Vector2> GetVirtualPathPoints()
         {
@@ -315,20 +325,23 @@ namespace ReGecko.SnakeSystem
 
 
             // 先把旧格子寻路走完
-            if (_leadLastTargetCell != Vector2Int.zero)
+            if (_leadLastTargetCell != Vector2Int.zero || _leadLastTargetPos != Vector2.zero)
             {
                 if (_isReverse)
                 {
-                    _leadReversePos = _grid.CellToWorld(_leadLastTargetCell);
+                    //_leadReversePos = _grid.CellToWorld(_leadLastTargetCell);
+                    _leadReversePos = _leadLastTargetPos;
                 }
                 else
                 {
-                    _leadTargetPos = _grid.CellToWorld(_leadLastTargetCell);
+                    //_leadTargetPos = _grid.CellToWorld(_leadLastTargetCell);
+                    _leadTargetPos = _leadLastTargetPos;
                 }
             }
             else
             {
                 // 新寻路
+                _switchToSingleCellPath = false;
                 _isReverse = false;
 
                 // 采样鼠标 → 期望小格（中线）
@@ -386,103 +399,38 @@ namespace ReGecko.SnakeSystem
                         _leadTargetPos = _grid.CellToWorld(curTargetCell);
                         _leadLastTargetPos = _leadTargetPos;
                     }
+
+                    if (EnableSingleCellMode)
+                    {
+                        if (_lastIsSingleCellPath && !_isReverse)
+                        {
+                            _lastIsSingleCellPath = false;
+                            ReUpdateCenterlinePolyline();
+                            Debug.Log("切换大格寻路");
+                        }
+                    }
+                        
                 }
                 else
                 {
-                    return;
-
-                    //小格子视觉移动
-                    if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                    if(EnableSingleCellMode)
                     {
-                        /*
-                        // 1) 鼠标投影到最近中线（连续本地世界坐标，不量化到小格中心）
-                        Vector2 centerLocal = ScreenToWorldCenter(Input.mousePosition);
-
-                        // 2) 真实视觉头/尾点（LineRenderer世界坐标）→ 转换到 GridContainer 本地
-                        var container = transform.parent as RectTransform;
-                        if (container == null) return;
-
-                        Vector3 leadWorld = _bodySpriteManager != null
-                            ? _bodySpriteManager.GetLineLeadFirstPos(DragFromHead)
-                            : Vector3.zero;
-                        Vector3 leadLocal = container.InverseTransformPoint(leadWorld);
-
-                        // 3) 拖动端朝向（用_bodyCells.First/Next 或 Last/Previous）
-
-
-
-                        Vector2Int a = DragFromHead ? _currentHeadCell : _currentTailCell;
-                        Vector2Int b = DragFromHead ? GetBodyCellAtIndex(1) : GetBodyCellAtIndex(_bodyCells.Count - 2);
-                        Vector2Int d = a - b; // 拖动端后面一格 -> 拖动端
-                        bool alongX = Mathf.Abs(d.x) >= Mathf.Abs(d.y);
-
-                        // 4) 计算在拖动端移动方向上的偏移（本地坐标系）
-                        Vector2 deltaLocal = new Vector2(centerLocal.x - leadLocal.x, centerLocal.y - leadLocal.y);
-                        float offset = alongX ? (d.x > 0 ? deltaLocal.x : -deltaLocal.x) : (d.y > 0 ? deltaLocal.y : -deltaLocal.y);
-
-
-                        // 5) 暂不做偏移合法性校验
-                        */
-
-                        if (_virtualPathPoints.Count == 0)
+                        if (!_isReverse)
                         {
-                            GenerateVirtualPathPoints();
+                            //小格视觉刷新
+                            UpdateSingleCellMovement();
+                            _lastIsSingleCellPath = true;
+                            _switchToSingleCellPath = true;
+                            Debug.Log("小格寻路");
                         }
-
-                        if(_virtualPathPoints.Count > 0)
-                        {
-                            _virtualPathPointsRe = new List<Vector2>(_virtualPathPoints);
-                            _virtualPathPointsRe.Reverse();
-                            var centerpos = ScreenToWorldCenter(Input.mousePosition);
-                            var fpos = DragFromHead ? _virtualPathPoints[0] : _virtualPathPoints[_virtualPathPoints.Count - 1];
-
-                            float segLen = 0;
-                            float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
-
-                            bool findinpath = false;
-                            if (DragFromHead)
-                            {
-                                for (int i = 1; i < _virtualPathPoints.Count; i++)
-                                {
-                                    if (Vector2.Distance(_virtualPathPoints[i - 1], centerpos) < subStep)
-                                    {
-                                        findinpath = true;
-                                        break;
-                                    }
-
-                                    segLen += Vector2.Distance(_virtualPathPoints[i - 1], _virtualPathPoints[i]);
-                                }
-                            }else
-                            {
-                                for (int i = _virtualPathPoints.Count - 1; i > 0; i--)
-                                {
-                                    if (Vector2.Distance(_virtualPathPoints[i], centerpos) < subStep)
-                                    {
-                                        findinpath = true;
-                                        break;
-                                    }
-
-                                    segLen += Vector2.Distance(_virtualPathPoints[i - 1], _virtualPathPoints[i]);
-
-                                }
-                            }
-
-                            if(!findinpath)
-                            {
-                                segLen = Vector2.Distance(DragFromHead ? _virtualPathPoints[0] : _virtualPathPoints[_virtualPathPoints.Count - 1], centerpos);
-                            }
-                            
-
-                            _bodySpriteManager.UpdateLineOffset(DragFromHead, segLen);
-                        }
-
+                    }else
+                    {
+                        return;
                     }
+                    
 
-                    return;
                 }
             }
-
-
 
             // 3) 目标点（连续世界坐标）
             Vector2 targetPos;
@@ -497,6 +445,10 @@ namespace ReGecko.SnakeSystem
                 targetPos = _leadTargetPos;
             }
 
+            if(targetPos == Vector2.zero)
+            {
+                return;
+            }
 
             // 4) 活动端沿目标插值
             bool reachedThisFrame = false;
@@ -513,6 +465,29 @@ namespace ReGecko.SnakeSystem
                 else
                 {
                     _activeLeadPos += dir * (step / dist);
+
+                    if (EnableSingleCellMode)
+                    {
+                        //本帧寻路到达新格子边缘
+                        if ((targetPos - _activeLeadPos).magnitude < _grid.CellSize * 0.55f)
+                        {
+                            //检查是否需要小格寻路接管
+                            var world = ScreenToWorld(Input.mousePosition);
+                            Vector2Int mouseCell = _grid.WorldToCell(world);
+                            if (mouseCell == _leadLastTargetCell)
+                            {
+                                //鼠标还在当前格子里，要被小格寻路接管
+                                Debug.Log("小格寻路接管");
+                                _switchToSingleCellPath = true;
+                                _lastIsSingleCellPath = true;
+                                _lastSingleCellPathPos = ScreenToWorldCenter(Input.mousePosition);
+
+                            }
+
+                            Debug.Log("大格寻路");
+                        }
+                    }
+                        
                 }
             }
 
@@ -536,23 +511,49 @@ namespace ReGecko.SnakeSystem
             // 7) 由“活动端当前位置+历史”生成整条蛇的连续位置并写入可视（单调扫描 O(n)）
             ApplySmoothVisualsByPath(activeFromHead);
 
-
-            // 3) 直接用中线折线更新LineRenderer
-            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            if(EnableSingleCellMode)
             {
-                _bodySpriteManager.UpdateLineFromPolyline(
+                // 3) 直接用中线折线更新LineRenderer
+                if (!_switchToSingleCellPath)
+                {
+                    if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                    {
+                        _bodySpriteManager.UpdateLineFromPolyline(
 
-                    _centerlinePolyline,
-                    _cachedRectTransforms.Count,
-                    _segmentspacing,
-                    activeFromHead
-                );
+                            _centerlinePolyline,
+                            _cachedRectTransforms.Count,
+                            _segmentspacing,
+                            activeFromHead
+                        );
+                    }
+                }
+                else
+                {
+                    UpdateSingleCellMovement();
+                }
             }
+            else
+            {
+                if (EnableBodySpriteManagement && _bodySpriteManager != null)
+                {
+                    _bodySpriteManager.UpdateLineFromPolyline(
+
+                        _centerlinePolyline,
+                        _cachedRectTransforms.Count,
+                        _segmentspacing,
+                        activeFromHead
+                    );
+                }
+            }
+            
+            
 
 
             if (reachedThisFrame)
             {
                 _leadLastTargetCell = Vector2Int.zero;
+                _leadLastTargetPos = Vector2.zero;
+                _switchToSingleCellPath = false;
                 UpdateBodyCellsFromCachedRectTransforms();
 
                 // 5) 刷新缓存
@@ -562,7 +563,6 @@ namespace ReGecko.SnakeSystem
                 //刷新碰撞缓存
                 SnakeManager.Instance.InvalidateOccupiedCellsCache();
 
-                //GenerateVirtualPathPoints();
                 // 洞检测：若拖动端在洞位置或临近洞，且颜色匹配，触发吞噬
                 {
                     var hole = FindHoleAtOrAdjacentWithColor(_currentHeadCell, ColorType);
@@ -583,60 +583,385 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        void ReUpdateCenterlinePolyline()
+        {
+            bool isinit = false;
+            if (_activeLeadPath.Count < 5)
+                isinit = true;
+
+            if (_activeLeadPath.Count > 0)
+            {
+                if(DragFromHead)
+                {
+                    bool find = false;
+                    int addcount = 0;
+                    float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
+                    var firstpath = _activeLeadPath[_activeLeadPath.Count - 1];
+                    for (int i = _virtualPathPoints.Count - 1; i > 0; i--)
+                    {
+                        if (find == false)
+                        {
+                            if (Vector2.Distance(firstpath, _virtualPathPoints[i]) < subStep)
+                            {
+                                find = true;
+
+                                continue;
+                            }
+                        }
+
+                        if (find)
+                        {
+                            if (addcount >= (isinit ? 7 : 2))
+                            {
+                                break;
+                            }
+
+                            _activeLeadPath.Add(_virtualPathPoints[i]);
+                            addcount++;
+                        }
+
+                    }
+
+                    _activeLeadPos = _activeLeadPath[_activeLeadPath.Count - 1];
+                }
+                else
+                {
+                    bool find = false;
+                    int addcount = 0;
+                    float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
+                    var firstpath = _activeLeadPath[_activeLeadPath.Count - 1];
+                    for (int i = 0; i < _virtualPathPoints.Count - 1; i++)
+                    {
+                        if (find == false)
+                        {
+                            if (Vector2.Distance(firstpath, _virtualPathPoints[i]) < subStep)
+                            {
+                                find = true;
+
+                                continue;
+                            }
+                        }
+
+                        if (find)
+                        {
+                            if (addcount >= (isinit ? 7 : 2))
+                            {
+                                break;
+                            }
+
+                            _activeLeadPath.Add(_virtualPathPoints[i]);
+                            addcount++;
+                        }
+
+                    }
+
+                    _activeLeadPos = _activeLeadPath[_activeLeadPath.Count - 1];
+                }
+                
+            }
+//             
+//             if (EnableBodySpriteManagement && _bodySpriteManager != null)
+//             {
+//                 List<Vector2> tmpoldactiveLeadPath = new List<Vector2>(_activeLeadPath);
+//                 _activeLeadPath.Clear();
+// 
+//                 if (_linePositionsCache == null)
+//                 {
+//                     _linePositionsCache = new Vector3[_bodySpriteManager.GetCurLinePositionsCount()];
+//                 }
+// 
+//                 _linePositionsCache = _bodySpriteManager.GetCurLinePositions();
+// 
+// 
+//                 // 获取容器RectTransform用于坐标转换
+//                 var container = transform.parent as RectTransform;
+//                 if (container == null) return;
+// 
+//                 // 将世界坐标转换为蛇的本地坐标，并保存到_activeLeadPath
+//                 for (int i = 0; i < _linePositionsCache.Length; i++)
+//                 {
+//                     // 世界坐标 -> 本地坐标 (GridContainer的本地坐标系)
+//                     Vector3 localPos = container.InverseTransformPoint(_linePositionsCache[i]);
+// 
+//                     // 添加到路径中
+//                     _activeLeadPath.Add(new Vector2(localPos.x, localPos.y));
+//                 }
+// 
+// 
+//                 _activeLeadPos = _activeLeadPath[0];
+// 
+//                 //添加就路点
+//                 var lastvirtual = _activeLeadPath[_activeLeadPath.Count - 1];
+// 
+//                 bool find = false;
+//                 int addcount = 0;
+//                 float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
+//                 for (int i = 0; i < tmpoldactiveLeadPath.Count; i++)
+//                 {
+//                     if (find == false)
+//                     {
+//                         if (Vector2.Distance(lastvirtual, tmpoldactiveLeadPath[i]) < subStep)
+//                         {
+//                             find = true;
+//                             //路点过少就不要了
+//                             if (tmpoldactiveLeadPath.Count - i < 5)
+//                             {
+//                                 Debug.Log("GenerateVirtualPathPoints less then break!!");
+//                                 find = false;
+//                                 break;
+//                             }
+// 
+//                             continue;
+//                         }
+//                     }
+// 
+// 
+//                     if (find)
+//                     {
+//                         _activeLeadPath.Add(tmpoldactiveLeadPath[i]);
+//                         addcount++;
+//                     }
+//                 }
+//             }
+        }
+
+        void UpdateSingleCellMovement()
+        {
+            if (EnableBodySpriteManagement && _bodySpriteManager != null)
+            {
+                var mouseWorld = ScreenToWorld(Input.mousePosition);
+                var mouseCell = _grid.WorldToCell(mouseWorld);
+
+                if (!_grid.IsInside(mouseCell))
+                    return;
+                if (IsPathBlocked(mouseCell))
+                    return;
+                if (SnakeManager.Instance.IsCellOccupiedByOtherSnakes(mouseCell, this))
+                {
+                    return;
+                }
+
+                if (!GenerateVirtualPathPoints())
+                {
+                    return;
+                }
+
+                if (_virtualPathPoints.Count > 0)
+                {
+                    _virtualPathPointsRe = new List<Vector2>(_virtualPathPoints);
+                    _virtualPathPointsRe.Reverse();
+                    var centerpos = ScreenToWorldCenter(Input.mousePosition);
+                    var fpos = DragFromHead ? _virtualPathPoints[0] : _virtualPathPoints[_virtualPathPoints.Count - 1];
+
+                    float segLen = 0;
+                    float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
+
+                    bool findinpath = false;
+                    if (DragFromHead)
+                    {
+                        for (int i = 1; i < _virtualPathPoints.Count; i++)
+                        {
+                            if (Vector2.Distance(_virtualPathPoints[i - 1], centerpos) < subStep)
+                            {
+                                findinpath = true;
+                                break;
+                            }
+
+                            segLen += Vector2.Distance(_virtualPathPoints[i - 1], _virtualPathPoints[i]);
+                        }
+                    }
+                    else
+                    {
+                        for (int i = _virtualPathPoints.Count - 1; i > 0; i--)
+                        {
+                            if (Vector2.Distance(_virtualPathPoints[i], centerpos) < subStep)
+                            {
+                                findinpath = true;
+                                break;
+                            }
+
+                            segLen += Vector2.Distance(_virtualPathPoints[i - 1], _virtualPathPoints[i]);
+
+                        }
+                    }
+
+                    if (!findinpath)
+                    {
+                        segLen = Vector2.Distance(DragFromHead ? _virtualPathPoints[0] : _virtualPathPoints[_virtualPathPoints.Count - 1], centerpos);
+                    }
+
+
+                    _bodySpriteManager.UpdateLineOffset(DragFromHead, segLen);
+                }
+            }
+        }
         // —— 工具与缓存 ——
         // —— 相关辅助（本方法内使用） ——
 
-        void GenerateVirtualPathPoints()
+        bool GenerateVirtualPathPoints()
         {
             //创建虚拟的可行走路径点，用于预测视觉点刷新
             _virtualPathPoints.Clear();
             _virtualBodyCells = new LinkedList<Vector2Int>(_bodyCells);
 
+            //插入虚拟路径点的头部
+            var nearbig = GetMouseNearestCell();
+            if (DragFromHead)
             {
-                //添加尾部
-                var tail = GetTailCell();
-                var prev = GetBodyCellAtIndex(_bodyCells.Count - 2);
-                Vector2Int dir = tail - prev;
-                Vector2Int left = new Vector2Int(-dir.y, dir.x);
-                Vector2Int right = new Vector2Int(dir.y, -dir.x);
-                var candidates = new[] { dir, left, right };
-                for (int i = 0; i < candidates.Length; i++)
+                if(nearbig == GetBodyCellAtIndex(0))
                 {
-                    var nextBig = tail + candidates[i];
-                    if (!_grid.IsInside(nextBig)) continue;
-                    if (IsPathBlocked(nextBig)) continue;
-                    if (!CheckOccupiedBySelfReverse(nextBig)) continue;
+                    var mouseWorld = ScreenToWorld(Input.mousePosition);
+                    nearbig = _grid.WorldToCell(mouseWorld);
+                }
 
-                    _virtualBodyCells.AddLast(nextBig);
-                    break;
+                if (nearbig == GetBodyCellAtIndex(1))
+                {
+                    var headcell = GetHeadCell();
+                    var candidates = new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        var newcell = headcell + candidates[i];
+                        if (_grid.IsInside(newcell) && newcell != nearbig)
+                        {
+                            nearbig = newcell;
+                            break;
+                        }
+                    }
+                }
+
+                _virtualBodyCells.AddFirst(nearbig);
+            }
+            else
+            {
+                if (nearbig == GetBodyCellAtIndex(_bodyCells.Count - 1))
+                {
+                    var mouseWorld = ScreenToWorld(Input.mousePosition);
+                    nearbig = _grid.WorldToCell(mouseWorld);
+                }
+         
+                if (nearbig == GetBodyCellAtIndex(_bodyCells.Count - 2))
+                {
+                    var tailcell = GetTailCell();
+                    var candidates = new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+                    for (int i = 0; i < candidates.Length; i++)
+                    {
+                        var newcell = tailcell + candidates[i];
+                        if (_grid.IsInside(newcell) && newcell != nearbig)
+                        {
+                            nearbig = newcell;
+                            break;
+                        }
+                    }
+                }
+
+                _virtualBodyCells.AddLast(nearbig);
+            }
+
+            if (Manhattan(nearbig, DragFromHead ? GetHeadCell() : GetTailCell()) != 1)
+                return false;
+
+            _GenerateVirtualBodyCells();
+
+            return true;
+
+            //添加尾部
+            var lastvirtual = _virtualPathPoints[_virtualPathPoints.Count - 1];
+
+            bool find = false;
+            int addcount = 0;
+            float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
+            for (int i = 0; i < _activeLeadPath.Count; i++)
+            {
+                if(find == false)
+                {
+                    if (Vector2.Distance(lastvirtual, _activeLeadPath[i]) < subStep)
+                    {
+                        find = true;
+                        //路点过少就不要了
+                        if (_activeLeadPath.Count - i < 5)
+                        {
+                            Debug.Log("GenerateVirtualPathPoints less then break!!");
+                            find = false;
+                            break;
+                        }
+
+                        continue;
+                    }
+                }
+                
+
+                if(find)
+                {
+                    _virtualPathPoints.Add(_activeLeadPath[i]);
+                    addcount++;
                 }
             }
-            {
-                //添加头部
-                var head = GetHeadCell();
-                var next = GetBodyCellAtIndex(1); // 头部相邻的身体
-                Vector2Int dir = head - next; // 远离身体方向
-                Vector2Int left = new Vector2Int(-dir.y, dir.x);
-                Vector2Int right = new Vector2Int(dir.y, -dir.x);
-                var candidates = new[] { dir, left, right };
 
-                //优先走大格
-                for (int i = 0; i < candidates.Length; i++)
+            return true;
+            /*
+            if(find == false)
+            {
+                //没有路点就添加预测结尾
+                if (DragFromHead)
                 {
-                    var nextHeadBig = head + candidates[i];
-                    if (!_grid.IsInside(nextHeadBig)) continue;
-                    if (IsPathBlocked(nextHeadBig)) continue;
-                    if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
+                    {
+                        //添加尾部
+                        var tail = GetTailCell();
+                        var prev = GetBodyCellAtIndex(_bodyCells.Count - 2);
+                        Vector2Int dir = tail - prev;
+                        Vector2Int left = new Vector2Int(-dir.y, dir.x);
+                        Vector2Int right = new Vector2Int(dir.y, -dir.x);
+                        var candidates = new[] { dir, left, right };
+                        for (int i = 0; i < candidates.Length; i++)
+                        {
+                            var nextBig = tail + candidates[i];
+                            if (!_grid.IsInside(nextBig)) continue;
+                            if (IsPathBlocked(nextBig)) continue;
+                            if (!CheckOccupiedBySelfReverse(nextBig)) continue;
 
-                    _virtualBodyCells.AddFirst(nextHeadBig);
-                    break;
+                            _virtualBodyCells.AddLast(nextBig);
+                            break;
+                        }
+                    }
                 }
+                else
+                {
+                    {
+                        //添加头部
+                        var head = GetHeadCell();
+                        var next = GetBodyCellAtIndex(1); // 头部相邻的身体
+                        Vector2Int dir = head - next; // 远离身体方向
+                        Vector2Int left = new Vector2Int(-dir.y, dir.x);
+                        Vector2Int right = new Vector2Int(dir.y, -dir.x);
+                        var candidates = new[] { dir, left, right };
+
+                        //优先走大格
+                        for (int i = 0; i < candidates.Length; i++)
+                        {
+                            var nextHeadBig = head + candidates[i];
+                            if (!_grid.IsInside(nextHeadBig)) continue;
+                            if (IsPathBlocked(nextHeadBig)) continue;
+                            if (!CheckOccupiedBySelfReverse(nextHeadBig)) continue;
+
+                            _virtualBodyCells.AddFirst(nextHeadBig);
+                            break;
+                        }
+                    }
+
+                }
+
+                _GenerateVirtualBodyCells();
             }
 
-            if (_virtualBodyCells.Count != _bodyCells.Count + 2)
-            {
-                return;
-            }
+
+
+            */
+            return true;
+        }
+
+        void _GenerateVirtualBodyCells()
+        {
+            _virtualPathPoints.Clear();
 
             //离散成路点（每个大格输出5个“中线小格”点 → world）
             // 辅助：方向→边、边→小格入口
@@ -748,10 +1073,6 @@ namespace ReGecko.SnakeSystem
                 while (count < need)
                     PushSub(curSub);
             }
-
-            // 期望数量：newBodyCells.Count * 5
-            // 若需要可在调试时断言：
-            // Debug.Assert(_virtualPathPoints.Count == newBodyCells.Count * SubGridHelper.SUB_DIV);
         }
 
         void EnsureActiveLeadInited(bool fromHead)
@@ -1368,7 +1689,11 @@ namespace ReGecko.SnakeSystem
 
                     // 边界与阻挡
                     if (!_grid.IsInside(nb)) continue;
-                    if (IsPathBlocked(nb)) continue;
+                    if (IsPathBlocked(nb)) continue; 
+                    if (SnakeManager.Instance.IsCellOccupiedByOtherSnakes(nb, this))
+                    {
+                        continue;
+                    }
                     if (closed.Contains(nb)) continue;
 
                     // 本步方向罚分：非前进、后退、左右转
@@ -1620,7 +1945,13 @@ namespace ReGecko.SnakeSystem
                 return;
 
 
+            _lastIsSingleCellPath = false;
+            _switchToSingleCellPath = false;
             _leadLastTargetCell = Vector2Int.zero;
+            _leadLastTargetPos = Vector2.zero;
+            _leadReversePos = Vector2.zero;
+            _leadTargetPos = Vector2.zero;
+
             Vector2Int[] newInitialBodyCells = new Vector2Int[Length];
             if (DragFromHead)
             {
@@ -1932,6 +2263,185 @@ namespace ReGecko.SnakeSystem
 
             return new Vector3(bigCenter.x + ox, bigCenter.y + oy, 0f);
         }
+
+        /// <summary>
+        /// 获取鼠标位置所在的格子，如果更接近边缘则返回相邻格子
+        /// </summary>
+        /// <returns>鼠标所在或更接近的格子坐标（已确保在网格范围内）</returns>
+        Vector2Int GetMouseNearestCell()
+        {
+            // 1. 获取鼠标在网格中的世界坐标
+            var mouseWorld = ScreenToWorld(Input.mousePosition);
+            if (_grid.Width == 0 || _grid.Height == 0) return Vector2Int.zero;
+
+            // 2. 获取鼠标所在的格子
+            var currentCell = _grid.WorldToCell(mouseWorld);
+
+            // 确保在网格范围内
+            currentCell.x = Mathf.Clamp(currentCell.x, 0, _grid.Width - 1);
+            currentCell.y = Mathf.Clamp(currentCell.y, 0, _grid.Height - 1);
+
+            // 3. 计算鼠标在当前格子内的相对位置（-0.5到0.5范围）
+            var cellCenter = _grid.CellToWorld(currentCell);
+            float relX = (mouseWorld.x - cellCenter.x) / _grid.CellSize;
+            float relY = (mouseWorld.y - cellCenter.y) / _grid.CellSize;
+
+            // 4. 判断是否靠近边缘（阈值设为0.3，可根据需要调整）
+            const float threshold = 0f;
+            Vector2Int nearestCell = currentCell;
+
+            // 5. 根据相对位置判断更接近哪个边缘
+            if (Mathf.Abs(relX) > Mathf.Abs(relY))
+            {
+                // 更接近左右边缘
+                if (relX > threshold)
+                {
+                    // 更接近右边缘
+                    nearestCell.x = Mathf.Min(currentCell.x + 1, _grid.Width - 1);
+                }
+                else if (relX < -threshold)
+                {
+                    // 更接近左边缘
+                    nearestCell.x = Mathf.Max(currentCell.x - 1, 0);
+                }
+            }
+            else
+            {
+                // 更接近上下边缘
+                if (relY > threshold)
+                {
+                    // 更接近上边缘
+                    nearestCell.y = Mathf.Min(currentCell.y + 1, _grid.Height - 1);
+                }
+                else if (relY < -threshold)
+                {
+                    // 更接近下边缘
+                    nearestCell.y = Mathf.Max(currentCell.y - 1, 0);
+                }
+            }
+
+            return nearestCell;
+        }
+
+        Vector2Int GetMouseNearestCellReverse()
+        {
+            // 1. 获取鼠标在网格中的世界坐标
+            var mouseWorld = ScreenToWorld(Input.mousePosition);
+            if (_grid.Width == 0 || _grid.Height == 0) return Vector2Int.zero;
+
+            // 2. 获取鼠标所在的格子
+            var currentCell = _grid.WorldToCell(mouseWorld);
+
+            // 确保在网格范围内
+            currentCell.x = Mathf.Clamp(currentCell.x, 0, _grid.Width - 1);
+            currentCell.y = Mathf.Clamp(currentCell.y, 0, _grid.Height - 1);
+
+            // 3. 计算鼠标在当前格子内的相对位置（-0.5到0.5范围）
+            var cellCenter = _grid.CellToWorld(currentCell);
+            float relX = (mouseWorld.x - cellCenter.x) / _grid.CellSize;
+            float relY = (mouseWorld.y - cellCenter.y) / _grid.CellSize;
+
+            // 4. 判断是否靠近边缘（阈值设为0.3，可根据需要调整）
+            const float threshold = 0f;
+            Vector2Int nearestCell = currentCell;
+
+            // 5. 根据相对位置判断更接近哪个边缘
+            if (Mathf.Abs(relX) > Mathf.Abs(relY))
+            {
+                // 更接近左右边缘
+                if (relX > threshold)
+                {
+                    // 更接近右边缘
+                    nearestCell.x = Mathf.Max(currentCell.x - 1, 0);
+                }
+                else if (relX < -threshold)
+                {
+                    // 更接近左边缘
+                    nearestCell.x = Mathf.Min(currentCell.x + 1, _grid.Width - 1);
+                }
+            }
+            else
+            {
+                // 更接近上下边缘
+                if (relY > threshold)
+                {
+                    // 更接近上边缘
+                    nearestCell.y = Mathf.Max(currentCell.y - 1, 0);
+                }
+                else if (relY < -threshold)
+                {
+                    // 更接近下边缘
+                    nearestCell.y = Mathf.Min(currentCell.y + 1, _grid.Height - 1);
+                }
+            }
+
+            return nearestCell;
+        }
+        /// <summary>
+        /// 获取鼠标位置所在的格子，如果更接近边缘则返回相邻格子，同时返回相对位置信息
+        /// </summary>
+        /// <param name="relativePosition">输出参数：鼠标在格子内的相对位置（-0.5到0.5范围）</param>
+        /// <returns>鼠标所在或更接近的格子坐标（已确保在网格范围内）</returns>
+        Vector2Int GetMouseNearestCell(out Vector2 relativePosition)
+        {
+            // 1. 获取鼠标在网格中的世界坐标
+            var mouseWorld = ScreenToWorld(Input.mousePosition);
+            if (_grid.Width == 0 || _grid.Height == 0)
+            {
+                relativePosition = Vector2.zero;
+                return Vector2Int.zero;
+            }
+
+            // 2. 获取鼠标所在的格子
+            var currentCell = _grid.WorldToCell(mouseWorld);
+
+            // 确保在网格范围内
+            currentCell.x = Mathf.Clamp(currentCell.x, 0, _grid.Width - 1);
+            currentCell.y = Mathf.Clamp(currentCell.y, 0, _grid.Height - 1);
+
+            // 3. 计算鼠标在当前格子内的相对位置（-0.5到0.5范围）
+            var cellCenter = _grid.CellToWorld(currentCell);
+            float relX = (mouseWorld.x - cellCenter.x) / _grid.CellSize;
+            float relY = (mouseWorld.y - cellCenter.y) / _grid.CellSize;
+            relativePosition = new Vector2(relX, relY);
+
+            // 4. 判断是否靠近边缘（阈值设为0.3，可根据需要调整）
+            const float threshold = 0.3f;
+            Vector2Int nearestCell = currentCell;
+
+            // 5. 根据相对位置判断更接近哪个边缘
+            if (Mathf.Abs(relX) > Mathf.Abs(relY))
+            {
+                // 更接近左右边缘
+                if (relX > threshold)
+                {
+                    // 更接近右边缘
+                    nearestCell.x = Mathf.Min(currentCell.x + 1, _grid.Width - 1);
+                }
+                else if (relX < -threshold)
+                {
+                    // 更接近左边缘
+                    nearestCell.x = Mathf.Max(currentCell.x - 1, 0);
+                }
+            }
+            else
+            {
+                // 更接近上下边缘
+                if (relY > threshold)
+                {
+                    // 更接近上边缘
+                    nearestCell.y = Mathf.Min(currentCell.y + 1, _grid.Height - 1);
+                }
+                else if (relY < -threshold)
+                {
+                    // 更接近下边缘
+                    nearestCell.y = Mathf.Max(currentCell.y - 1, 0);
+                }
+            }
+
+            return nearestCell;
+        }
+
         void OnGUI()
         {
             if (_grid.Width == 0 || _grid.Height == 0) return;
@@ -2012,6 +2522,52 @@ namespace ReGecko.SnakeSystem
                 GUI.color = prev;
             }
 
+
+            // 追加：绘制 _centerlinePolyline
+            if (DebugShowPolyline && _centerlinePolyline != null && _centerlinePolyline.Count > 0)
+            {
+                var prev = GUI.color;
+                // 把折线的“网格局部坐标”转成屏幕坐标后绘制
+                int n = _centerlinePolyline.Count;
+                var cam = GetComponentInParent<Canvas>()?.worldCamera;
+                // 先画中间点（统一颜色）
+                GUI.color = DebugPolylineColor;
+                for (int i = 0; i < n; i++)
+                {
+                    var pLocal = _centerlinePolyline[i];
+                    Vector3 wp = container.TransformPoint(new Vector3(pLocal.x, pLocal.y, 0f));
+                    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
+                    float px = scr.x;
+                    float py = Screen.height - scr.y;
+                    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize, py - DebugPolylinePointSize,
+                        2f * DebugPolylinePointSize, 2f * DebugPolylinePointSize), Texture2D.whiteTexture);
+                }
+
+                // 头点（折线开头）
+                {
+                    var headLocal = _centerlinePolyline[0];
+                    Vector3 wp = container.TransformPoint(new Vector3(headLocal.x, headLocal.y, 0f));
+                    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
+                    float px = scr.x;
+                    float py = Screen.height - scr.y;
+                    GUI.color = DebugPolylineHeadColor;
+                    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize * 1.5f, py - DebugPolylinePointSize * 1.5f,
+                        3f * DebugPolylinePointSize, 3f * DebugPolylinePointSize), Texture2D.whiteTexture);
+                }
+
+                // 尾点（折线末尾）
+                {
+                    var tailLocal = _centerlinePolyline[n - 1];
+                    Vector3 wp = container.TransformPoint(new Vector3(tailLocal.x, tailLocal.y, 0f));
+                    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
+                    float px = scr.x;
+                    float py = Screen.height - scr.y;
+                    GUI.color = DebugPolylineTailColor;
+                    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize * 1.5f, py - DebugPolylinePointSize * 1.5f,
+                        3f * DebugPolylinePointSize, 3f * DebugPolylinePointSize), Texture2D.whiteTexture);
+                }
+                GUI.color = prev;
+            }
 
 
         }
