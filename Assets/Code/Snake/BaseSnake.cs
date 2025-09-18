@@ -33,7 +33,7 @@ namespace ReGecko.SnakeSystem
         public SnakeColorType ColorType = SnakeColorType.Red; // 蛇的颜色类型
         
         [Header("移动设置")]
-        public float MoveSpeedCellsPerSecond = 10f;
+        public float MoveSpeedCellsPerSecond = 60f;
         
         [Header("功能开关")]
         public bool EnableBodySpriteManagement = true;

@@ -10,8 +10,8 @@ namespace ReGecko.GridSystem
     /// </summary>
     public static class SubGridHelper
     {
-        public const int SUB_DIV = 5; // 每个大格细分为5x5小格
-        public const float SUB_CELL_SIZE = 0.2f; // 小格尺寸 = CellSize / 5f = 1.0f / 5f
+        public const int SUB_DIV = 7; // 每个大格细分为5x5小格
+        public const float SUB_CELL_SIZE = 0.14285f; // 小格尺寸 = CellSize / 5f = 1.0f / 5f
         public const int CENTER_INDEX = SUB_DIV / 2; // 中线索引 = 2
 
         /// <summary>
