@@ -444,7 +444,7 @@ namespace ReGecko.SnakeSystem
             if (_allConsumeTime <= 1e-6f || _consumeSpeed <= 0f) return;
 
             _consumeElapsed += Time.deltaTime;
-            float travel = _consumeSpeed * 1.5f * _consumeElapsed; // 本帧应减少的弧长
+            float travel = _consumeSpeed * _consumeElapsed; // 本帧应减少的弧长
 
             // s(t) = max(0, s0 - travel)，并严格落在缓存路径上
             for (int i = 0; i < _linePositionsCount; i++)

@@ -256,6 +256,8 @@ namespace ReGecko.SnakeSystem
             var bodyCells = initialbodycells;
             if (bodyCells == null || bodyCells.Length < 2) return;
 
+
+
             _subBodyCells.Clear();
 
             // 工具：方向与边的映射
@@ -621,10 +623,6 @@ namespace ReGecko.SnakeSystem
                     if (CheckIfNeedReverseByCell(_leadTargetCell, out _leadReverseCell))
                     {
                         _isReverse = true;
-                        if(SnakeManager.Instance.GetSnakeOccupiedCells(this).Contains(_leadReverseCell))
-                        {
-                            Debug.LogError("xxx");
-                        }
                     }
                     else
                     {
@@ -637,6 +635,7 @@ namespace ReGecko.SnakeSystem
 
                     if (!_isReverse)
                     {
+
                         var bigcell = SubGridHelper.SubCellToBigCell(_leadTargetCell);
                         // 检查目标点合法性
                         if (!CheckNextCell(bigcell))
@@ -822,7 +821,7 @@ namespace ReGecko.SnakeSystem
                     int addcount = 0;
                     float subStep = _segmentspacing * SubGridHelper.SUB_CELL_SIZE;
                     var firstpath = _activeLeadPath[_activeLeadPath.Count - 1];
-                    for (int i = _virtualPathPoints.Count - 1; i > 0; i--)
+                    for (int i = _virtualPathPoints.Count - 1; i >= 0; i--)
                     {
                         if (find == false)
                         {
@@ -997,7 +996,7 @@ namespace ReGecko.SnakeSystem
                     }
                     else
                     {
-                        for (int i = _virtualPathPoints.Count - 1; i > 0; i--)
+                        for (int i = _virtualPathPoints.Count - 1; i >= 0; i--)
                         {
                             if (Vector2.Distance(_virtualPathPoints[i], centerpos) < subStep)
                             {
@@ -1710,7 +1709,7 @@ namespace ReGecko.SnakeSystem
                         return true;
                     }
                 }
-                /*
+                
                 tail = _currentTailSubCell;
                 prev = _subBodyCells.Last.Previous.Value;
                 dir = tail - prev;
@@ -1733,7 +1732,7 @@ namespace ReGecko.SnakeSystem
                         return true;
                     }
                 }
-                */
+                
                 return false;
             }
             else
@@ -1765,7 +1764,7 @@ namespace ReGecko.SnakeSystem
                     }
                 }
 
-                /*
+                
                 //再走小格
                 head = _currentHeadSubCell;
                 next = _subBodyCells.First.Next.Value; // 头部相邻的身体
@@ -1792,7 +1791,7 @@ namespace ReGecko.SnakeSystem
                     }
                 }
                 
-                */
+                
                 return false;
             }
             return false;
@@ -2315,6 +2314,13 @@ namespace ReGecko.SnakeSystem
                     var nbBig = SubGridHelper.SubCellToBigCell(nb);
                     if (!_grid.IsInside(nbBig)) continue;
                     if (IsPathBlocked(nbBig)) continue;
+                    //寻路时只允许进入拖拽端后一格
+                    if((nb != _subBodyCells.First.Next.Value || nb != _subBodyCells.Last.Previous.Value) &&
+                            (nbBig != _currentHeadCell && nbBig != _currentTailCell &&
+                            nbBig != GetHeadNextBigCell() && nbBig != GetTailNextBigCell()))
+                    {
+                        if (SnakeManager.Instance.IsCellOccupiedBySelfSnakes(nbBig, this)) continue;
+                    }
                     if (SnakeManager.Instance.IsCellOccupiedByOtherSnakes(nbBig, this)) continue;
 
                     if (closed.Contains(nb)) continue;
@@ -2371,7 +2377,7 @@ namespace ReGecko.SnakeSystem
 
                         // 强偏好：f = g + h + stepPenalty * 2
                         float h = Heuristic(nb, targetSub);
-                        fScore[nb] = tentativeG + h + stepPenalty * 2f;
+                        fScore[nb] = tentativeG + h + stepPenalty * 10f;
                     }
                 }
             }
@@ -2787,7 +2793,6 @@ namespace ReGecko.SnakeSystem
 
         public override void SnapCellsToGrid()
         {
-            return;
             if (_cachedSubRectTransforms == null)
                 return;
             if (_cachedSubRectTransforms.Count == 0)
@@ -2802,6 +2807,7 @@ namespace ReGecko.SnakeSystem
             _leadTargetPos = Vector2.zero;
 
             _activeLeadPos = Vector2.zero;
+            _smoothInited = false;
 
             Vector2Int[] newInitialBodyCells = new Vector2Int[Length];
             if (DragFromHead)
@@ -2809,13 +2815,9 @@ namespace ReGecko.SnakeSystem
                 int segmentIndex = 0;
                 for (int i = 0; i < _subBodyCells.Count;)
                 {
-                    if (i >= _subSegments.Count) break;
-                    var rt = _subSegments[i].GetComponent<RectTransform>();
-                    if (rt != null)
-                    {
-                        var bigcell = SubGridHelper.WorldToBigCell(rt.anchoredPosition, _grid);
-                        newInitialBodyCells[segmentIndex] = bigcell;
-                    }
+                    if (i >= _subBodyCells.Count) break;
+                    var bigcell = SubGridHelper.SubCellToBigCell(GetBodyCellAtIndex(i));
+                    newInitialBodyCells[segmentIndex] = bigcell;
 
                     i += SubGridHelper.SUB_DIV;
                     segmentIndex++;
@@ -2824,15 +2826,11 @@ namespace ReGecko.SnakeSystem
             else
             {
                 int segmentIndex = Length - 1;
-                for (int i = _subBodyCells.Count - 1; i > 0;)
+                for (int i = _subBodyCells.Count - 1; i >= 0;)
                 {
                     if (i < 0) break;
-                    var rt = _subSegments[i].GetComponent<RectTransform>();
-                    if (rt != null)
-                    {
-                        var bigcell = SubGridHelper.WorldToBigCell(rt.anchoredPosition, _grid);
-                        newInitialBodyCells[segmentIndex] = bigcell;
-                    }
+                    var bigcell = SubGridHelper.SubCellToBigCell(GetBodyCellAtIndex(i));
+                    newInitialBodyCells[segmentIndex] = bigcell;
 
                     i -= SubGridHelper.SUB_DIV;
                     segmentIndex--;
@@ -3563,6 +3561,17 @@ namespace ReGecko.SnakeSystem
         {
 
             return _currentTailSubCell;
+        }
+
+        public Vector2Int GetHeadNextBigCell()
+        {
+            var nextsub = GetBodyCellAtIndex(SubGridHelper.SUB_DIV);
+            return SubGridHelper.SubCellToBigCell(nextsub);
+        }
+        public Vector2Int GetTailNextBigCell()
+        {
+            var nextsub = GetBodyCellAtIndex(_subBodyCells.Count - 1 - SubGridHelper.SUB_DIV);
+            return SubGridHelper.SubCellToBigCell(nextsub);
         }
 
         /// <summary>
