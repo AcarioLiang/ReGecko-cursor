@@ -72,7 +72,7 @@ namespace ReGecko.SnakeSystem
             if (_snake == null) yield break;
             _grid = _snake.GetGrid();
             BodyColor = _snake.BodyColor;
-            LineWidth = _grid.CellSize * 0.8f;
+            LineWidth = _grid.CellSize * 0.6f;
 
             EnsureLineCreated();
             UpdateAllLinePositions();

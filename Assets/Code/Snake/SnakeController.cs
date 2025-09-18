@@ -612,7 +612,6 @@ namespace ReGecko.SnakeSystem
 
                 
                 EnqueueSubCellPath(leadCurrentSubCell, targetSubCell, _cellPathQueue);
-                //GenerateBigCellPathWithMouse();
                 if (_cellPathQueue.Count > 0)
                 {
 
@@ -2315,7 +2314,7 @@ namespace ReGecko.SnakeSystem
                     if (!_grid.IsInside(nbBig)) continue;
                     if (IsPathBlocked(nbBig)) continue;
                     //寻路时只允许进入拖拽端后一格
-                    if((nb != _subBodyCells.First.Next.Value || nb != _subBodyCells.Last.Previous.Value) &&
+                    if((nb != _subBodyCells.First.Next.Value && nb != _subBodyCells.Last.Previous.Value) &&
                             (nbBig != _currentHeadCell && nbBig != _currentTailCell &&
                             nbBig != GetHeadNextBigCell() && nbBig != GetTailNextBigCell()))
                     {
