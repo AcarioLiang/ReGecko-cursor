@@ -149,13 +149,16 @@ namespace ReGecko.SnakeSystem
         Vector2Int _consumeLeadTargetCell = Vector2Int.zero;
         Vector2Int _consumeLeadReverseCell = Vector2Int.zero;
 
+        // 记录上一帧路径生成时间
+        float _lastEnqueueBigPathTime = 0f;
 
         struct MoveState
         {
-            public MoveState(bool d, Vector2Int t)
+            public MoveState(bool d, Vector2Int t,float s)
             {
                 DragFromHead = d;
                 TargetSubCell = t;
+                DragSpeed = s;
             }
             public bool IsValid()
             {
@@ -168,6 +171,7 @@ namespace ReGecko.SnakeSystem
 
             public bool DragFromHead;
             public Vector2Int TargetSubCell;
+            public float DragSpeed;
         }
 
         public List<Vector2> GetVirtualPathPoints()
@@ -677,6 +681,7 @@ namespace ReGecko.SnakeSystem
                 _cellPathQueue ??= new LinkedList<Vector2Int>();
                 _cellPathQueue.Clear();
                 EnqueueBigCellPath(fromBigCell, targetBigCell, _cellPathQueue);
+                var speed = UpdateConsumeMouseSpeedFromBigPath(fromBigCell);
 
                 for (var n = _cellPathQueue.First; n != null; n = n.Next)
                 {
@@ -686,10 +691,10 @@ namespace ReGecko.SnakeSystem
                         //_pendingTargets.Clear();
                     }
                     _pendingTargetBigCells.AddLast(n.Value);
-                    _pendingTargetCellStates.AddLast(new MoveState(fromHead, targetSubCell));
+                    _pendingTargetCellStates.AddLast(new MoveState(fromHead, targetSubCell, speed));
                 }
 
-                _lastMoveState = new MoveState(fromHead, targetSubCell);
+                _lastMoveState = new MoveState(fromHead, targetSubCell, speed);
 
                 yield return null; // 每帧产出一次
             }
@@ -710,6 +715,9 @@ namespace ReGecko.SnakeSystem
 
                         _currentMoveTarget = _pendingTargetBigCells.First.Value;
                         _consumeDragFromHead = _pendingTargetCellStates.First.Value.DragFromHead;
+                        _consumeMouseSpeed = _pendingTargetCellStates.First.Value.DragSpeed;
+                        _consumeMouseSpeed = _consumeMouseSpeed == 0 ? _leadSpeedWorld : _consumeMouseSpeed;
+                        _consumeMouseSpeed = Mathf.Min(_consumeMouseSpeed, _leadSpeedWorld * 2.5f);
 
 
                         _consumeLeadTargetCell = _currentMoveTarget;
@@ -772,6 +780,9 @@ namespace ReGecko.SnakeSystem
 
                             _currentMoveTarget = _cellPathQueueTMP.First.Value;
                             _consumeDragFromHead = _lastMoveState.DragFromHead;
+                            _consumeMouseSpeed = _lastMoveState.DragSpeed;
+                            _consumeMouseSpeed = _consumeMouseSpeed == 0 ? _leadSpeedWorld : _consumeMouseSpeed;
+                            _consumeMouseSpeed = Mathf.Min(_consumeMouseSpeed, _leadSpeedWorld * 2.5f);
 
 
                             _consumeLeadTargetCell = _currentMoveTarget;
@@ -848,7 +859,7 @@ namespace ReGecko.SnakeSystem
 
                 // 逐步移动
                 bool reachedThisFrame = false;
-                float step = _leadSpeedWorld * Time.deltaTime;
+                float step = _consumeMouseSpeed * Time.deltaTime;
                 Vector2 target = _consumeIsBigPath ? _grid.CellToWorld(_currentMoveTarget) : SubGridHelper.SubCellToWorld(_currentMoveTarget, _grid);
                 Vector2 dir = target - _activeLeadPos;
                 float dist = dir.magnitude;
@@ -1444,6 +1455,36 @@ namespace ReGecko.SnakeSystem
         // —— 工具与缓存 ——
         // —— 相关辅助（本方法内使用） ——
 
+        // 记录本帧到上帧的时间差，并计算_cellPathQueue对应路径总长，得到鼠标速度
+        float UpdateConsumeMouseSpeedFromBigPath(Vector2Int fromCell, LinkedList<Vector2Int> pathList = null)
+        {
+            float speed = 0f;
+            float now = Time.time;
+            float dt = (_lastEnqueueBigPathTime <= 0f) ? 0f : (now - _lastEnqueueBigPathTime);
+            _lastEnqueueBigPathTime = now;
+
+            if (pathList == null) pathList = _cellPathQueue;
+            if (pathList == null || pathList.Count == 0 || dt <= 1e-5f)
+            {
+                return speed;
+            }
+
+            // 从fromCell的大格中心开始，累加到队列每个大格中心的距离
+            float totalLen = 0f;
+            var prevW3 = _grid.CellToWorld(fromCell);
+            Vector2 prev = new Vector2(prevW3.x, prevW3.y);
+
+            for (var n = pathList.First; n != null; n = n.Next)
+            {
+                var w3 = _grid.CellToWorld(n.Value);
+                Vector2 p = new Vector2(w3.x, w3.y);
+                totalLen += Vector2.Distance(prev, p);
+                prev = p;
+            }
+
+            speed = totalLen / dt; // 世界单位/秒
+            return speed;
+        }
 
         bool GenerateBigCellPathWithMouse()
         {
