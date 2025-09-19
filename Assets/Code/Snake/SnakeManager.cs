@@ -312,7 +312,7 @@ namespace ReGecko.SnakeSystem
                     if (snake != null && snake.IsAlive() && snake.IsControllable && snake.IsDragging)
                     {
                         snake.IsDragging = false;
-                        snake.SnapCellsToGrid();
+                        snake.NeedSnapCellsToGrid = true;
                     }
                 }
 

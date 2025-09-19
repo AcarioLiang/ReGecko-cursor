@@ -71,6 +71,15 @@ namespace ReGecko.SnakeSystem
             set { _dragFromHead = value; }
         }
 
+        bool _needSnapCellsToGrid = false;
+        public bool NeedSnapCellsToGrid
+        {
+
+            get { return _needSnapCellsToGrid; }
+            set { _needSnapCellsToGrid = value; }
+        }
+
+
         public SnakeState State => _state;
 
         public bool IsAlive() => _state == SnakeState.Alive;
