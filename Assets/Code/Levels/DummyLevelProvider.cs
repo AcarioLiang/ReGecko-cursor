@@ -2,6 +2,7 @@ using UnityEngine;
 using ReGecko.GridSystem;
 using ReGecko.Game;
 using ReGecko.SnakeSystem;
+using System.Collections.Generic;
 
 namespace ReGecko.Levels
 {
@@ -10,12 +11,13 @@ namespace ReGecko.Levels
 		[Header("资源引用")]
 		public Sprite SnakeBodySprite;
 		public Sprite WallSprite;
-		public Sprite HoleSprite;
-		
-		[Header("蛇身体配置")]
+        public List<Sprite> HoleSpriteList = new List<Sprite>();
+        public List<Sprite> SnakeSpriteList = new List<Sprite>();
+
+        [Header("蛇身体配置")]
 		public SnakeBodySpriteConfig SnakeBodyConfig;
 
-		public LevelConfig GetLevel(int lv = 0)
+        public LevelConfig GetLevel(int lv = 0)
 		{
             //////////////////////////////////////////////////GridConfig////////////////////////////////////////////////////////
             var gridCfg = new GridConfig
@@ -63,7 +65,7 @@ namespace ReGecko.Levels
 					HeadCell = new Vector2Int(2, 3),
 					Color = SnakeColorType.Purple.ToUnityColor(),
 					ColorType = SnakeColorType.Purple, // 红色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Purple],
 					IsControllable = true,
 					BodyCells = new []
 					{
@@ -82,7 +84,7 @@ namespace ReGecko.Levels
 					HeadCell = new Vector2Int(3, 3),
 					Color = SnakeColorType.Green.ToUnityColor(),
 					ColorType = SnakeColorType.Green, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Green],
 					IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
 					{
@@ -105,7 +107,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(0, 3),
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue,
-                    BodySprite = SnakeBodySprite,
+                    BodySprite = SnakeSpriteList[(int)SnakeColorType.Blue],
                     IsControllable = true,
                     BodyCells = new []
                     {
@@ -126,7 +128,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(1, 3),
                     Color = SnakeColorType.Orange.ToUnityColor(),
                     ColorType = SnakeColorType.Orange, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Orange],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -143,7 +145,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(2, 3),
                     Color = SnakeColorType.Purple.ToUnityColor(),
                     ColorType = SnakeColorType.Purple, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Purple],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -160,7 +162,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(3, 3),
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Green],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -184,7 +186,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(0, 0),
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green,
-                    BodySprite = SnakeBodySprite,
+                    BodySprite = SnakeSpriteList[(int)SnakeColorType.Green],
                     IsControllable = true,
                     BodyCells = new []
                     {
@@ -203,7 +205,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(2, 0),
                     Color = SnakeColorType.Red.ToUnityColor(),
                     ColorType = SnakeColorType.Red, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Red],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -220,7 +222,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(3, 0),
                     Color = SnakeColorType.Yellow.ToUnityColor(),
                     ColorType = SnakeColorType.Yellow, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Yellow],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -237,7 +239,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(5, 0),
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Blue],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -259,7 +261,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(4, 0),
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue,
-                    BodySprite = SnakeBodySprite,
+                    BodySprite = SnakeSpriteList[(int)SnakeColorType.Blue],
                     IsControllable = true,
                     BodyCells = new []
                     {
@@ -282,7 +284,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(1, 3),
                     Color = SnakeColorType.Yellow.ToUnityColor(),
                     ColorType = SnakeColorType.Yellow, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Yellow],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -299,7 +301,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(2, 1),
                     Color = SnakeColorType.Red.ToUnityColor(),
                     ColorType = SnakeColorType.Red, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Red],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -316,7 +318,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(3,3),
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Green],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -333,7 +335,7 @@ namespace ReGecko.Levels
                     HeadCell = new Vector2Int(4, 1),
                     Color = SnakeColorType.Orange.ToUnityColor(),
                     ColorType = SnakeColorType.Orange, // 蓝色类型
-					BodySprite = SnakeBodySprite,
+					BodySprite = SnakeSpriteList[(int)SnakeColorType.Orange],
                     IsControllable = true, // 暂时也设为可控制，方便测试
 					BodyCells = new []
                     {
@@ -370,7 +372,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(8, 2),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Red],
                     Color = SnakeColorType.Red.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Red
                 },
@@ -380,7 +382,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(8, 7),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Blue],
                     Color = SnakeColorType.Blue.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Blue
                 },
@@ -390,7 +392,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(1, 8),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Green],
                     Color = SnakeColorType.Green.ToUnityColor(),
                     ColorType = SnakeColorType.Green
                 }
@@ -405,7 +407,7 @@ namespace ReGecko.Levels
 				{
 					Type = GridEntityConfig.EntityType.Hole,
 					Cell = new Vector2Int(0, 5),
-					Sprite = HoleSprite,
+					Sprite = HoleSpriteList[(int)SnakeColorType.Blue],
 					Color = SnakeColorType.Blue.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Blue
                 },
@@ -415,7 +417,7 @@ namespace ReGecko.Levels
 				{
 					Type = GridEntityConfig.EntityType.Hole,
 					Cell = new Vector2Int(1, 5),
-					Sprite = HoleSprite,
+					Sprite = HoleSpriteList[(int)SnakeColorType.Orange],
 					Color = SnakeColorType.Orange.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Orange
 				},
@@ -425,7 +427,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(2, 5),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Purple],
                     Color = SnakeColorType.Purple.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Purple
                 },
@@ -436,7 +438,7 @@ namespace ReGecko.Levels
 				{
 					Type = GridEntityConfig.EntityType.Hole,
 					Cell = new Vector2Int(3, 5),
-					Sprite = HoleSprite,
+					Sprite = HoleSpriteList[(int)SnakeColorType.Green],
 					Color = SnakeColorType.Green.ToUnityColor(),
 					ColorType = SnakeColorType.Green
 				}
@@ -510,7 +512,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(1, 4),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Green],
                     Color = SnakeColorType.Green.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Green
                 },
@@ -520,7 +522,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(2, 4),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Yellow],
                     Color = SnakeColorType.Yellow.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Yellow
                 },
@@ -530,7 +532,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(3, 4),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Red],
                     Color = SnakeColorType.Red.ToUnityColor(),
                     ColorType = SnakeColorType.Red
                 },
@@ -540,7 +542,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(4, 4),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Blue],
                     Color = SnakeColorType.Blue.ToUnityColor(),
                     ColorType = SnakeColorType.Blue
                 }
@@ -569,7 +571,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(0, 4),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Blue],
                     Color = SnakeColorType.Blue.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Blue
                 },
@@ -579,7 +581,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(1, 5),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Green],
                     Color = SnakeColorType.Green.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Green
                 },
@@ -589,7 +591,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(2, 5),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Yellow],
                     Color = SnakeColorType.Yellow.ToUnityColor(),
                     ColorType = SnakeColorType.Yellow
                 },
@@ -597,7 +599,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(3, 5),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Orange],
                     Color = SnakeColorType.Orange.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Orange
                 },
@@ -605,7 +607,7 @@ namespace ReGecko.Levels
                 {
                     Type = GridEntityConfig.EntityType.Hole,
                     Cell = new Vector2Int(4, 5),
-                    Sprite = HoleSprite,
+                    Sprite = HoleSpriteList[(int)SnakeColorType.Red],
                     Color = SnakeColorType.Red.ToUnityColor(), // 使用扩展方法获取颜色
 					ColorType = SnakeColorType.Red
                 }

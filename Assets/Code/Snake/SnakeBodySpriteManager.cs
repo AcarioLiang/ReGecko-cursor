@@ -10,6 +10,7 @@ namespace ReGecko.SnakeSystem
         public Material BodyLineMaterial;
         public float LineWidth = 1.0f;
         public Color BodyColor = Color.white;
+        public Sprite BodySprite;
         public bool EnableTiledTexture = true;
         //吞噬动画相关
         float _allConsumeTime = 0f;
@@ -72,7 +73,8 @@ namespace ReGecko.SnakeSystem
             if (_snake == null) yield break;
             _grid = _snake.GetGrid();
             BodyColor = _snake.BodyColor;
-            LineWidth = _grid.CellSize * 0.6f;
+            BodySprite = _snake.BodySprite;
+            LineWidth = _grid.CellSize * 0.9f;
 
             EnsureLineCreated();
             UpdateAllLinePositions();
@@ -120,25 +122,26 @@ namespace ReGecko.SnakeSystem
             {
                 // 独立材质实例，避免共享材质被改动
                 _line.material = new Material(BodyLineMaterial);
-                _line.material.color = BodyColor;
+                _line.material.color = Color.white;
+                _line.material.mainTexture = BodySprite.texture;
 
                 // _Borders = (左边框, 右边框, 头部高度, 尾部高度)
-                Vector4 borders = new Vector4(5, 5, 108, 107);
+                //Vector4 borders = new Vector4(5, 5, 108, 107);
                 // 设置九宫格边框参数（像素单位）
                 // 假设纹理是 64x64，边框各为 16 像素
-                _line.material.SetVector("_Borders", borders);
+                //_line.material.SetVector("_Borders", borders);
 
-                // 临时启用调试模式来验证分区
-                //_line.material.SetFloat("_DebugMode", 2f);
+                 //临时启用调试模式来验证分区
+                _line.material.SetFloat("_DebugMode", 2f);
 
 
                 // 调试输出
-                Debug.Log($"Texture size: {_line.material.mainTexture.width}x{_line.material.mainTexture.height}");
-                Debug.Log($"Borders set to: {borders}");
-                Debug.Log($"TexelSize: {_line.material.GetVector("_MainTex_TexelSize")}");
-
-                Debug.Log($"LineRenderer textureMode: {_line.textureMode}");
-                Debug.Log($"LineRenderer material: {_line.material.name}");
+                //Debug.Log($"Texture size: {_line.material.mainTexture.width}x{_line.material.mainTexture.height}");
+                //Debug.Log($"Borders set to: {borders}");
+                //Debug.Log($"TexelSize: {_line.material.GetVector("_MainTex_TexelSize")}");
+                //
+                //Debug.Log($"LineRenderer textureMode: {_line.textureMode}");
+                //Debug.Log($"LineRenderer material: {_line.material.name}");
             }
 
             var grad = new Gradient();

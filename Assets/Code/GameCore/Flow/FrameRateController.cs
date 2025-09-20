@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class FrameRateController : MonoBehaviour
 {
-    public int targetFrameRate = 120; // 默认设置为60帧
+    public int targetFrameRate = 60; // 默认设置为60帧
 
     [Header("传感器设置")]
     public bool enableAccelerometer = false;

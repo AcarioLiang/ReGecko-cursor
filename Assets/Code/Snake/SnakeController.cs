@@ -715,7 +715,7 @@ namespace ReGecko.SnakeSystem
 
                         _currentMoveTarget = _pendingTargetBigCells.First.Value;
                         _consumeDragFromHead = _pendingTargetCellStates.First.Value.DragFromHead;
-                        _consumeMouseSpeed = _pendingTargetCellStates.First.Value.DragSpeed * 0.9f;
+                        _consumeMouseSpeed = _pendingTargetCellStates.First.Value.DragSpeed;
                         _consumeMouseSpeed = Mathf.Min(_consumeMouseSpeed, _leadSpeedWorld * 2.3f);
 
 
@@ -779,7 +779,7 @@ namespace ReGecko.SnakeSystem
 
                             _currentMoveTarget = _cellPathQueueTMP.First.Value;
                             _consumeDragFromHead = _lastMoveState.DragFromHead;
-                            _consumeMouseSpeed = _lastMoveState.DragSpeed * 0.9f;
+                            _consumeMouseSpeed = _lastMoveState.DragSpeed;
                             _consumeMouseSpeed = Mathf.Min(_consumeMouseSpeed, _leadSpeedWorld * 2.3f);
 
 
@@ -845,15 +845,24 @@ namespace ReGecko.SnakeSystem
                     continue;
                 }
 
-                if(_currentMoveTarget == Vector2Int.zero)
-                {
-                    _hasCurrentMoveTarget = false;
-                    yield return null;
-                    continue;
-                }
+                //if(_currentMoveTarget == Vector2Int.zero)
+                //{
+                //    _hasCurrentMoveTarget = false;
+                //    yield return null;
+                //    continue;
+                //}
 
                 bool activeFromHead = _consumeIsReverse ? !_consumeDragFromHead : _consumeDragFromHead;
                 EnsureActiveLeadInited(activeFromHead);
+
+                if (_consumeIsBigPath)
+                    _consumeMouseSpeed = UpdateConsumeMouseSpeedFromBigPath(_activeLeadPos, _pendingTargetBigCells);
+                else
+                {
+                    var leadCurrentSubCell = _lastMoveState.DragFromHead ? GetHeadSubCell() : GetTailSubCell();
+                    EnqueueSubCellPath(leadCurrentSubCell, _lastMoveState.TargetSubCell, _cellPathQueueTMP);
+                    _consumeMouseSpeed = UpdateConsumeMouseSpeedFromSubPath(_activeLeadPos, _cellPathQueueTMP);
+                }
 
                 // 逐步移动
                 bool reachedThisFrame = false;
@@ -1074,22 +1083,20 @@ namespace ReGecko.SnakeSystem
         // —— 相关辅助（本方法内使用） ——
 
         // 记录本帧到上帧的时间差，并计算_cellPathQueue对应路径总长，得到鼠标速度
-        float UpdateConsumeMouseSpeedFromBigPath(Vector2Int fromCell, LinkedList<Vector2Int> pathList = null)
+        // 记录本帧到上帧的时间差，并计算_cellPathQueue对应路径总长，得到鼠标速度
+        float UpdateConsumeMouseSpeedFromBigPath(Vector2 fromPos, LinkedList<Vector2Int> pathList = null)
         {
             float speed = 0f;
-            float now = Time.time;
-            float dt = (_lastEnqueueBigPathTime <= 0f) ? 0f : (now - _lastEnqueueBigPathTime);
-            _lastEnqueueBigPathTime = now;
 
             if (pathList == null) pathList = _cellPathQueue;
-            if (pathList == null || pathList.Count == 0 || dt <= 1e-5f)
+            if (pathList == null || pathList.Count == 0)
             {
-                return speed;
+                return 0f;
             }
 
             // 从fromCell的大格中心开始，累加到队列每个大格中心的距离
             float totalLen = 0f;
-            var prevW3 = _grid.CellToWorld(fromCell);
+            var prevW3 = fromPos;
             Vector2 prev = new Vector2(prevW3.x, prevW3.y);
 
             for (var n = pathList.First; n != null; n = n.Next)
@@ -1100,9 +1107,49 @@ namespace ReGecko.SnakeSystem
                 prev = p;
             }
 
-            speed = totalLen / dt; // 世界单位/秒
+            // 固定五帧走完全部路径：每帧应前进 totalLen/5
+            // 速度(世界单位/秒) = (每帧步长) / Time.deltaTime
+            const int framesToFinish = 5;
+            float dt = Time.deltaTime;
+            if (totalLen <= 1e-5f || dt <= 1e-6f) return 0f;
+
+            speed = (totalLen / framesToFinish) / dt;
             return speed;
         }
+
+        float UpdateConsumeMouseSpeedFromSubPath(Vector2 fromPos, LinkedList<Vector2Int> pathList = null)
+        {
+            float speed = 0f;
+
+            if (pathList == null) pathList = _cellPathQueueTMP;
+            if (pathList == null || pathList.Count == 0)
+            {
+                return 0f;
+            }
+
+            // 从fromCell的大格中心开始，累加到队列每个大格中心的距离
+            float totalLen = 0f;
+            var prevW3 = fromPos;
+            Vector2 prev = new Vector2(prevW3.x, prevW3.y);
+
+            for (var n = pathList.First; n != null; n = n.Next)
+            {
+                var w3 = SubGridHelper.SubCellToWorld(n.Value, _grid);
+                Vector2 p = new Vector2(w3.x, w3.y);
+                totalLen += Vector2.Distance(prev, p);
+                prev = p;
+            }
+
+            // 固定五帧走完全部路径：每帧应前进 totalLen/5
+            // 速度(世界单位/秒) = (每帧步长) / Time.deltaTime
+            const int framesToFinish = 5;
+            float dt = Time.deltaTime;
+            if (totalLen <= 1e-5f || dt <= 1e-6f) return 0f;
+
+            speed = (totalLen / framesToFinish) / dt;
+            return speed;
+        }
+
 
         bool GenerateBigCellPathWithMouse()
         {
