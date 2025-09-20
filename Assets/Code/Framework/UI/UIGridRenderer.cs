@@ -213,12 +213,12 @@ namespace ReGecko.Framework.UI
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(_adaptiveCellSize - 5, _adaptiveCellSize - 5);
 
-            var image = cellGo.AddComponent<Image>();
-            
-            // 根据格子位置选择对应的图片
-            image.sprite = GetCellSprite(x, y);
-            image.color = new Color(DefaultCellColor.r, DefaultCellColor.g, DefaultCellColor.b, CellAlpha);
-            image.raycastTarget = false;
+            //var image = cellGo.AddComponent<Image>();
+            //
+            //// 根据格子位置选择对应的图片
+            //image.sprite = GetCellSprite(x, y);
+            //image.color = new Color(DefaultCellColor.r, DefaultCellColor.g, DefaultCellColor.b, CellAlpha);
+            //image.raycastTarget = false;
 
             // 使用Grid坐标系计算位置
             Vector3 worldPos = Config.CellToWorld(new Vector2Int(x, y));
@@ -230,12 +230,12 @@ namespace ReGecko.Framework.UI
             {
                 entity.GameObj = cellGo;
                 entity.Cell = new Vector2Int(x, y);
-                entity.Sprite = image.sprite;
+                entity.SetSprite(GetCellSprite(x, y) , new Color(DefaultCellColor.r, DefaultCellColor.g, DefaultCellColor.b, CellAlpha));
 
                 GridEntityManager.Instance.Register(entity);
             }
 
-            _cellImages.Add(image);
+            //_cellImages.Add(image);
         }
 
         public void ClearGrid()

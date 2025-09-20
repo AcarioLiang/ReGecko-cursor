@@ -9,6 +9,7 @@ using ReGecko.Levels;
 using ReGecko.Framework.Resources;
 using ReGecko.Framework.UI;
 using ReGecko.SnakeSystem;
+using DG.Tweening;
 
 namespace ReGecko.Bootstrap
 {
@@ -31,6 +32,7 @@ namespace ReGecko.Bootstrap
         {
             BuildUI();
             _playerData = PlayerService.Get();
+            DOTween.Init();
 
             // 加载玩家数据
             if (GameContext.NextLoadIsPlayer)

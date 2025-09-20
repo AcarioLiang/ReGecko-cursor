@@ -2636,6 +2636,7 @@ namespace ReGecko.SnakeSystem
 
         public IEnumerator CoConsume(HoleEntity hole, bool fromHead)
         {
+            hole.OnTirggerStart();
             _consuming = true;
             IsDragging = false; // 脱离手指控制
 

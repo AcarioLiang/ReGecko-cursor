@@ -128,7 +128,7 @@ namespace ReGecko.Framework.UI
 
         void SetupEntityManager()
         {
-            GridEntityManager.Instance.Init(_currentLevel.Grid);
+            GridEntityManager.Instance.Init();
         }
 
         void SetupSnakeManager()
@@ -192,6 +192,7 @@ namespace ReGecko.Framework.UI
 
 
 
+            GridEntityManager.Instance.SetGridConfig(GridRenderer.Config);
             // 创建游戏实体
             BuildEntities();
 
@@ -266,7 +267,7 @@ namespace ReGecko.Framework.UI
             {
                 entity.GameObj = entityGo;
                 entity.Cell = entityConfig.Cell;
-                entity.Sprite = entityConfig.Sprite;
+                entity.SetSprite(entityConfig.Sprite, entityConfig.Color);
                 entity.Blocking = false;
 
                 // 如果是洞实体，设置颜色类型
@@ -276,11 +277,6 @@ namespace ReGecko.Framework.UI
                     Debug.Log($"创建洞实体 {entityConfig.Cell}，颜色类型：{entityConfig.ColorType.GetDisplayName()}");
                 }
 
-                // 使用Image组件替代SpriteRenderer
-                var image = entityGo.AddComponent<UnityEngine.UI.Image>();
-                image.sprite = entityConfig.Sprite;
-                image.color = entityConfig.Color;
-                image.raycastTarget = false;
 
                 // 设置位置和尺寸（使用Grid坐标系）
                 float adaptiveCellSize = GridRenderer.GetAdaptiveCellSize();

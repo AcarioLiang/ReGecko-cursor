@@ -30,10 +30,6 @@ namespace ReGecko.Bootstrap
                 eventSystemGo.AddComponent<StandaloneInputModule>();
             }
 
-            // 初始化实体管理器
-            GridEntityManager.Instance.Init(level.Grid);
-                
-
             // 显示预加载的UI并初始化游戏渲染
             if (GameContext.PreloadedUIPrefab_GameMain != null)
             {

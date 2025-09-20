@@ -36,8 +36,12 @@ namespace ReGecko.Grid.Entities
         public List<BaseEntity> GridEntities => _GridEntities;
 
 
+        public override void Init()
+        {
+            base.Init();
+        }
 
-        public void Init(GridConfig grid)
+        public void SetGridConfig(GridConfig grid)
         {
             _grid = grid;
             ClearAllEntities();
