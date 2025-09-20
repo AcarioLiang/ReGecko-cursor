@@ -71,5 +71,12 @@ namespace ReGecko.Grid.Entities
 			// 颜色不匹配，洞算作阻挡物
 			return true;
 		}
-	}
+
+        public override void OnTirggered()
+        {
+            base.OnTirggered();
+			GridEntityManager.Instance.Unregister(this);
+			Destroy(this.gameObject);
+		}
+    }
 }
