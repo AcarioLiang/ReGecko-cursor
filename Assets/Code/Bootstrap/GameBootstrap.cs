@@ -11,7 +11,6 @@ namespace ReGecko.Bootstrap
     {
         public DummyLevelProvider LevelProvider;
 
-        GridEntityManager _entityManager;
 
         void Awake()
         {
@@ -36,11 +35,11 @@ namespace ReGecko.Bootstrap
                 var hudInstance = UIManager.Instance.Show("GameMain", GameContext.PreloadedUIPrefab_GameMain);
 
                 // 查找并初始化UI游戏管理器
-                var uiGameManager = hudInstance.GetComponentInChildren<UIGameManager>();
-                if (uiGameManager != null)
+                UIManager.Instance.GameManager = hudInstance.GetComponentInChildren<UIGameManager>();
+                if (UIManager.Instance.GameManager != null)
                 {
-                    uiGameManager.Initialize(level);
-                    uiGameManager.BuildGame();
+                    UIManager.Instance.GameManager.Initialize(level);
+                    UIManager.Instance.GameManager.BuildGame();
                 }
             }
         }

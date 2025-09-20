@@ -13,7 +13,14 @@ public class UIGameSetting : MonoBehaviour
     private Button _Btn_buy_tili;
     private Button _Btn_buy_coin;
 
-    private Button _Btn_reward_ad;
+    private Button _Btn_sound;
+    private Button _Btn_zhendong;
+
+    private Button _Btn_privacy;
+    private Button _Btn_language;
+    private Button _Btn_contact;
+    private Button _Btn_removeads;
+    private Button _Txt_version;
 
 
     GameStateController _gameStateController;
@@ -52,12 +59,38 @@ public class UIGameSetting : MonoBehaviour
             }
 
 
-            var Btn_reward_ad_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_reward_ad");
-            if (Btn_reward_ad_Transform != null)
+            var Btn_zhendong_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_zhendong");
+            if (Btn_zhendong_Transform != null)
             {
-                _Btn_reward_ad = Btn_reward_ad_Transform.GetComponent<Button>();
+                _Btn_zhendong = Btn_zhendong_Transform.GetComponent<Button>();
+            }
+            var Btn_sound_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_jingyin");
+            if (Btn_sound_Transform != null)
+            {
+                _Btn_sound = Btn_sound_Transform.GetComponent<Button>();
             }
 
+            var Btn_privacy_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_privacy");
+            if (Btn_privacy_Transform != null)
+            {
+                _Btn_privacy = Btn_privacy_Transform.GetComponent<Button>();
+            }
+
+            var Btn_language_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_language");
+            if (Btn_language_Transform != null)
+            {
+                _Btn_language = Btn_language_Transform.GetComponent<Button>();
+            }
+            var Btn_contact_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_contact");
+            if (Btn_contact_Transform != null)
+            {
+                _Btn_contact = Btn_language_Transform.GetComponent<Button>();
+            }
+            var Btn_removeads_Transform = _UIRoot.transform.Find("Panel/MiddleArea/Btn_removeads");
+            if (Btn_removeads_Transform != null)
+            {
+                _Btn_removeads = Btn_language_Transform.GetComponent<Button>();
+            }
         }
 
 
@@ -66,8 +99,18 @@ public class UIGameSetting : MonoBehaviour
             _Btn_buy_tili.onClick.AddListener(OnTiliButtonClicked);
         if (_Btn_buy_coin != null)
             _Btn_buy_coin.onClick.AddListener(OnCoinButtonClicked);
-        if (_Btn_reward_ad != null)
-            _Btn_reward_ad.onClick.AddListener(OnAdButtonClicked);
+        if (_Btn_sound != null)
+            _Btn_sound.onClick.AddListener(OnAdButtonClicked);
+        if (_Btn_zhendong != null)
+            _Btn_zhendong.onClick.AddListener(OnAdButtonClicked);
+        if (_Btn_privacy != null)
+            _Btn_privacy.onClick.AddListener(OnAdButtonClicked);
+        if (_Btn_language != null)
+            _Btn_language.onClick.AddListener(OnAdButtonClicked);
+        if (_Btn_contact != null)
+            _Btn_contact.onClick.AddListener(OnAdButtonClicked);
+        if (_Btn_removeads != null)
+            _Btn_removeads.onClick.AddListener(OnAdButtonClicked);
 
         // UI”Œœ∑π‹¿Ì∆˜
         var hudInstance = UIManager.Instance.FindUI("GameMain");

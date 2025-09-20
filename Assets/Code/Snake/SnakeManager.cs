@@ -6,6 +6,7 @@ using ReGecko.GridSystem;
 using ReGecko.Grid.Entities;
 using ReGecko.Levels;
 using ReGecko.Framework;
+using ReGecko.Framework.UI;
 
 namespace ReGecko.SnakeSystem
 {
@@ -272,6 +273,11 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         private void Update()
         {
+            if(UIManager.Instance.GameManager != null)
+            {
+                if (UIManager.Instance.GameManager.GetGameStateController().IsGameActive == false)
+                    return;
+            }
 
             HandleInput();
 
@@ -298,14 +304,18 @@ namespace ReGecko.SnakeSystem
         {
             if (Input.GetMouseButtonDown(0))
             {
-                if (_lastMousePos != Input.mousePosition )
+                if (IsMouseInCanvas())
                 {
-                    _lastMousePos = Input.mousePosition;
+                    if (_lastMousePos != Input.mousePosition)
+                    {
+                        _lastMousePos = Input.mousePosition;
 
-                    TryPickHeadOrTail(); 
+                        TryPickHeadOrTail();
+                    }
                 }
             }
-            else if (Input.GetMouseButtonUp(0))
+
+            if (Input.GetMouseButtonUp(0))
             {
                 foreach (var snake in _snakes)
                 {
@@ -320,6 +330,22 @@ namespace ReGecko.SnakeSystem
                 _lastMousePos = Vector3.zero;
             }
         }
+        bool IsMouseInCanvas()
+        {
+            if (SnakeCanvas == null) return false;
+
+            RectTransform rectTransform = SnakeCanvas.GetComponent<RectTransform>();
+            if (rectTransform == null) return false;
+
+            Vector2 localPoint;
+            Camera camera = SnakeCanvas.worldCamera;
+
+            bool success = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                rectTransform, Input.mousePosition, camera, out localPoint);
+
+            return success && rectTransform.rect.Contains(localPoint);
+        }
+
 
         public void TryClearSnakes()
         {

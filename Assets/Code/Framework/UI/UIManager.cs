@@ -26,6 +26,13 @@ namespace ReGecko.Framework.UI
         GraphicRaycaster _raycaster;
         readonly Dictionary<string, GameObject> _spawned = new Dictionary<string, GameObject>();
 
+        UIGameManager _uigameMgr;
+        public UIGameManager GameManager
+        {
+            get { return _uigameMgr; }
+            set { _uigameMgr = value; }
+        }
+
         void Init()
         {
             _canvas = gameObject.AddComponent<Canvas>();
