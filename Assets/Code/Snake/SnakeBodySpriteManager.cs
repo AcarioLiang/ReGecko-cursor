@@ -132,7 +132,7 @@ namespace ReGecko.SnakeSystem
                 //_line.material.SetVector("_Borders", borders);
 
                  //临时启用调试模式来验证分区
-                _line.material.SetFloat("_DebugMode", 2f);
+                //_line.material.SetFloat("_DebugMode", 2f);
 
 
                 // 调试输出

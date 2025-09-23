@@ -824,7 +824,7 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-
+        static int g_fcount = 0;
         System.Collections.IEnumerator _ConsumeMoveLoop()
         {
             while(enabled)
@@ -836,6 +836,7 @@ namespace ReGecko.SnakeSystem
                     {
                         if (NeedSnapCellsToGrid)
                         {
+                            g_fcount = 0;
                             Debug.Log("NeedSnapCellsToGridNeedSnapCellsToGridNeedSnapCellsToGridNeedSnapCellsToGrid");
                             NeedSnapCellsToGrid = false;
                             SnapCellsToGrid();
@@ -879,10 +880,12 @@ namespace ReGecko.SnakeSystem
 
                         _hasCurrentMoveTarget = false;
                         reachedThisFrame = true;
+                        Debug.Log(g_fcount);
                     }
                     else
                     {
                         _activeLeadPos += dir * (step / Mathf.Max(dist, 1e-6f));
+                        g_fcount++;
                     }
                 }
                 else
@@ -899,7 +902,7 @@ namespace ReGecko.SnakeSystem
                 else
                 {
                     var last = _activeLeadPath[_activeLeadPath.Count - 1];
-                    if (Vector2.Distance(last, _activeLeadPos) >= 0.10f * _segmentspacing)
+                    if (Vector2.Distance(last, _activeLeadPos) >= 0.05f * _segmentspacing)
                         _activeLeadPath.Add(_activeLeadPos);
                 }
 
@@ -1109,7 +1112,7 @@ namespace ReGecko.SnakeSystem
 
             // 固定五帧走完全部路径：每帧应前进 totalLen/5
             // 速度(世界单位/秒) = (每帧步长) / Time.deltaTime
-            const int framesToFinish = 5;
+            const int framesToFinish = 2;
             float dt = Time.deltaTime;
             if (totalLen <= 1e-5f || dt <= 1e-6f) return 0f;
 
@@ -1142,7 +1145,7 @@ namespace ReGecko.SnakeSystem
 
             // 固定五帧走完全部路径：每帧应前进 totalLen/5
             // 速度(世界单位/秒) = (每帧步长) / Time.deltaTime
-            const int framesToFinish = 5;
+            const int framesToFinish = 2;
             float dt = Time.deltaTime;
             if (totalLen <= 1e-5f || dt <= 1e-6f) return 0f;
 
@@ -1291,7 +1294,19 @@ namespace ReGecko.SnakeSystem
             // 从活动端当前位置（已夹紧在中线的小格中心）开始
             var startSub = SubGridHelper.WorldToSubCell(new Vector3(_activeLeadPos.x, _activeLeadPos.y, 0f), _grid);
             var startW = SubGridHelper.SubCellToWorld(startSub, _grid);
-            _centerlinePolyline.Add(new Vector2(startW.x, startW.y));
+            _centerlinePolyline.Add(_activeLeadPos);
+
+            // 构建连续的中线折线，包含当前移动中的位置
+            var prevPos = _activeLeadPos;
+            for (int i = _activeLeadPath.Count - 1; i >= 0; i--)
+            {
+                var nextPos = _activeLeadPath[i];
+                if (Vector2.Distance(prevPos, nextPos) > 1e-6f)
+                {
+                    _centerlinePolyline.Add(nextPos);
+                    prevPos = nextPos;
+                }
+            }
 
             // 工具：从一个小格走到另一个小格，沿中线每步±1，逐步写世界坐标
             void AppendSubgridSteps(Vector2Int fromSub, Vector2Int toSub)
@@ -1338,8 +1353,7 @@ namespace ReGecko.SnakeSystem
                 prevSub = nextSub;
             }
 
-            // 注意：此时 _centerlinePolyline 相邻点的实际距离即 subStep（横/竖每步恰好一小格）。
-            // 后续 2) 等距采样 与 3) LineRenderer 同原逻辑
+            // 等距采样并更新蛇身位置
             int idx = 1;
             Vector2 cur2 = _centerlinePolyline[0];
             Vector2 nxt2 = (idx < _centerlinePolyline.Count) ? _centerlinePolyline[idx] : _centerlinePolyline[0];
@@ -2738,7 +2752,7 @@ namespace ReGecko.SnakeSystem
                 else
                 {
                     var last = _activeLeadPath[_activeLeadPath.Count - 1];
-                    if (Vector2.Distance(last, _activeLeadPos) >= 0.10f * _segmentspacing)
+                    if (Vector2.Distance(last, _activeLeadPos) >= 0.05f * _segmentspacing)
                         _activeLeadPath.Add(_activeLeadPos);
                 }
 
