@@ -40,12 +40,6 @@ namespace ReGecko.SnakeSystem
         Vector3[] _linePositionsCache;
         int _linePositionsCount;
 
-        // 折线清洗参数
-        [SerializeField] float PolylineDedupEps = 1e-4f;       // 同一点容差
-        [SerializeField] float PolylineMinLoopEraseFactor = 0.35f; // 局部回环长度阈值系数(乘以 segmentSpacing)
-        readonly List<Vector2> _polylineCleanBuffer = new List<Vector2>(512);
-        readonly List<long> _polylineKeyBuffer = new List<long>(512);
-
         public Vector3[] GetCurLinePositions()
         {
             return _linePositionsCache;
@@ -213,7 +207,7 @@ namespace ReGecko.SnakeSystem
             if (_snake == null)
                 return;
 
-            UpdateLineFromPolyline(dragfromhead?_snake.GetVirtualPathPoints(): _snake.GetVirtualPathPointsRe(), _snake.Length, _snake.GetGrid().CellSize, dragfromhead, offset);
+            UpdateLineFromPolyline(_snake.GetVirtualPathPoints(), _snake.Length, _snake.GetGrid().CellSize, dragfromhead, offset);
         }
 
         // 新增：高效直连更新（输入为网格局部坐标折线）

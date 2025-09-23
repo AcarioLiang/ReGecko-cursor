@@ -14,7 +14,7 @@ namespace ReGecko.SnakeSystem
 {
     public class SnakeController : BaseSnake
     {
-        // 在 SnakeController 类字段区添加
+        [Header("调试相关")]
         [SerializeField] bool DebugShowLeadTarget = false;
         [SerializeField] Color DebugLeadTargetColor = Color.red;
         [SerializeField] float DebugLeadMarkerSize = 10f;
@@ -28,23 +28,19 @@ namespace ReGecko.SnakeSystem
         [SerializeField] bool DebugShowPolyline = false;
         [SerializeField] bool DebugShowBigCellPath = true;
 
-        [Header("SnakeController特有属性")]
-        // 拖拽相关
-        bool _startMove;
-        bool _isReverse;
+        [Header("寻路属性")]
 
         [SerializeField] float AStarDirectionBias = 1.0f; // 非前进方向的基础罚分
         [SerializeField] float AStarBackwardPenalty = 3f; // 朝身体反向（与preferredDir相反）额外罚分
         [SerializeField] float AStarTurnLeftPenalty = 1f; // 左转额外罚分
         [SerializeField] float AStarTurnRightPenalty = 1f; // 右转额外罚分
 
+        [Header("身体属性")]
         private Queue<GameObject> _subSegmentPool = new Queue<GameObject>();
         private List<GameObject> _subSegments = new List<GameObject>();
         protected readonly LinkedList<Vector2Int> _subBodyCells = new LinkedList<Vector2Int>(); // 离散身体占用格，头在First
         private readonly List<RectTransform> _cachedSubRectTransforms = new List<RectTransform>();
-
         private HashSet<HoleEntity> _cacheCoconsumeHoles = new HashSet<HoleEntity>();
-
 
         public override LinkedList<Vector2Int> GetBodyCells()
         {
@@ -66,7 +62,6 @@ namespace ReGecko.SnakeSystem
         private Vector2Int _currentTailCell;
         private Vector2Int _currentHeadSubCell;
         private Vector2Int _currentTailSubCell;
-        private Vector2Int _lastSampledSubCell;
 
 
 
@@ -77,32 +72,11 @@ namespace ReGecko.SnakeSystem
         private float _lastDragUpdateTime = 0f;
         private const float DRAG_UPDATE_INTERVAL = 0.008f; // 约120FPS更新频率
 
-
-        enum DragAxis { None, X, Y }
-        DragAxis _dragAxis = DragAxis.None;
-
         Coroutine _consumeCoroutine;
 
         // —— 平滑路径模式 开关与缓存 ——
         [SerializeField] bool EnableSmoothPathMode = true;
-
-        Vector2 _leadTargetPos;          // 正在朝向的目标小格中心（世界坐标）
-        Vector2 _leadReversePos;         // 倒车的目标点（世界坐标）
-        Vector2Int _leadTargetCell;   // 拖动端当前目标小格（中线）
-        Vector2Int _leadLastTargetCell;   // 拖动端上次的目标格子
-        Vector2 _leadLastTargetPos;   // 拖动端上次的目标格子
-
-        Vector2 _leadOffsetPos;         // 点击时鼠标在本格内的偏移
-
-        Vector2Int _leadReverseCell;  // 拖动端倒车目标小格（中线）
-
-        bool _switchToSingleCellPath = false;
-        bool _lastIsSingleCellPath = false;
-        Vector2 _lastSingleCellPathPos;
-        Vector3[] _linePositionsCache;
-
         bool _smoothInited = false;
-
         float _segmentspacing;           // 每段身体之间固定间距（世界单位）
         float _leadSpeedWorld;           // 拖动端线速度（世界单位/秒）
         const float EPS = 1e-4f;
@@ -110,9 +84,7 @@ namespace ReGecko.SnakeSystem
         float _cachedSpeedInput;
         float _cachedCellSize;
 
-        // 平滑公共
         bool _lastActiveFromHead;
-        bool _lastActiveReverse;
 
         // 活动端（正向=拖动端；倒车时=对端）
         Vector2 _activeLeadPos;
@@ -123,9 +95,7 @@ namespace ReGecko.SnakeSystem
 
         // 新增：
         List<Vector2> _virtualPathPoints = new List<Vector2>(512);
-        List<Vector2> _virtualPathPointsRe = new List<Vector2>(512);
         LinkedList<Vector2Int> _virtualBodyCells = new LinkedList<Vector2Int>();
-
 
         [SerializeField] int PendingTargetsCapacity = 64;
 
@@ -149,8 +119,6 @@ namespace ReGecko.SnakeSystem
         Vector2Int _consumeLeadTargetCell = Vector2Int.zero;
         Vector2Int _consumeLeadReverseCell = Vector2Int.zero;
 
-        // 记录上一帧路径生成时间
-        float _lastEnqueueBigPathTime = 0f;
 
         struct MoveState
         {
@@ -179,10 +147,6 @@ namespace ReGecko.SnakeSystem
             return _virtualPathPoints;
         }
 
-        public List<Vector2> GetVirtualPathPointsRe()
-        {
-            return _virtualPathPointsRe;
-        }
         // 扫描缓存
         Vector2[] _tmpBodyPos;
         float[] _distTargets;
@@ -512,7 +476,6 @@ namespace ReGecko.SnakeSystem
             _currentHeadCell = SubGridHelper.SubCellToBigCell(_currentHeadSubCell);
             _currentTailCell = SubGridHelper.SubCellToBigCell(_currentTailSubCell);
 
-            _lastSampledSubCell = _currentHeadSubCell;
             // 初始放置完成后，更新身体图片
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
@@ -824,7 +787,6 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        static int g_fcount = 0;
         System.Collections.IEnumerator _ConsumeMoveLoop()
         {
             while(enabled)
@@ -836,8 +798,6 @@ namespace ReGecko.SnakeSystem
                     {
                         if (NeedSnapCellsToGrid)
                         {
-                            g_fcount = 0;
-                            Debug.Log("NeedSnapCellsToGridNeedSnapCellsToGridNeedSnapCellsToGridNeedSnapCellsToGrid");
                             NeedSnapCellsToGrid = false;
                             SnapCellsToGrid();
                         }
@@ -845,13 +805,6 @@ namespace ReGecko.SnakeSystem
                     yield return null;
                     continue;
                 }
-
-                //if(_currentMoveTarget == Vector2Int.zero)
-                //{
-                //    _hasCurrentMoveTarget = false;
-                //    yield return null;
-                //    continue;
-                //}
 
                 bool activeFromHead = _consumeIsReverse ? !_consumeDragFromHead : _consumeDragFromHead;
                 EnsureActiveLeadInited(activeFromHead);
@@ -880,12 +833,10 @@ namespace ReGecko.SnakeSystem
 
                         _hasCurrentMoveTarget = false;
                         reachedThisFrame = true;
-                        Debug.Log(g_fcount);
                     }
                     else
                     {
                         _activeLeadPos += dir * (step / Mathf.Max(dist, 1e-6f));
-                        g_fcount++;
                     }
                 }
                 else
@@ -1203,11 +1154,10 @@ namespace ReGecko.SnakeSystem
         void EnsureActiveLeadInited(bool fromHead)
         {
             // 若首次或端发生切换，则重建历史并设置活动端初始位置
-            if (!_smoothInited || _lastActiveFromHead != fromHead || _lastActiveReverse != _isReverse)
+            if (!_smoothInited || _lastActiveFromHead != fromHead )
             {
                 InitializeSmoothPathFromEnd(fromHead);
                 _lastActiveFromHead = fromHead;
-                _lastActiveReverse = _isReverse;
                 _smoothInited = true;
             }
         }
@@ -2650,14 +2600,6 @@ namespace ReGecko.SnakeSystem
             if (_cachedSubRectTransforms.Count == 0)
                 return;
 
-
-            _lastIsSingleCellPath = false;
-            _switchToSingleCellPath = false;
-            _leadLastTargetCell = Vector2Int.zero;
-            _leadLastTargetPos = Vector2.zero;
-            _leadReversePos = Vector2.zero;
-            _leadTargetPos = Vector2.zero;
-
             _activeLeadPos = Vector2.zero;
             _smoothInited = false;
 
@@ -3173,6 +3115,7 @@ namespace ReGecko.SnakeSystem
 
         void OnGUI()
         {
+            /*
             if (_grid.Width == 0 || _grid.Height == 0) return;
 
             // 取容器 RectTransform（与 ScreenToWorld 中一致的父容器）
@@ -3348,25 +3291,7 @@ namespace ReGecko.SnakeSystem
                 GUI.color = prev;
             }
 
-            //绘制倒车点
-            //if (_leadReversePos != Vector2.zero)
-            //{
-            //    var prev = GUI.color;
-            //
-            //    var cam = GetComponentInParent<Canvas>()?.worldCamera;
-            //    var tailLocal = _leadReversePos;
-            //    Vector3 wp = container.TransformPoint(new Vector3(tailLocal.x, tailLocal.y, 0f));
-            //    Vector2 scr = RectTransformUtility.WorldToScreenPoint(cam, wp);
-            //    float px = scr.x;
-            //    float py = Screen.height - scr.y;
-            //    GUI.color = Color.blue;
-            //    GUI.DrawTexture(new Rect(px - DebugPolylinePointSize * 1.5f, py - DebugPolylinePointSize * 1.5f,
-            //        3f * DebugPolylinePointSize, 3f * DebugPolylinePointSize), Texture2D.whiteTexture);
-            //
-            //    GUI.color = prev;
-            //}
-
-
+            */
         }
 
         void OnDrawGizmosSelected()
