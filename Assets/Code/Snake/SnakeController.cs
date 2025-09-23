@@ -122,11 +122,12 @@ namespace ReGecko.SnakeSystem
 
         struct MoveState
         {
-            public MoveState(bool d, Vector2Int t,float s)
+            public MoveState(bool d, Vector2Int t,float s,Vector2 p)
             {
                 DragFromHead = d;
                 TargetSubCell = t;
                 DragSpeed = s;
+                TargetPos = p;
             }
             public bool IsValid()
             {
@@ -140,6 +141,7 @@ namespace ReGecko.SnakeSystem
             public bool DragFromHead;
             public Vector2Int TargetSubCell;
             public float DragSpeed;
+            public Vector2 TargetPos;
         }
 
         public List<Vector2> GetVirtualPathPoints()
@@ -654,10 +656,11 @@ namespace ReGecko.SnakeSystem
                         //_pendingTargets.Clear();
                     }
                     _pendingTargetBigCells.AddLast(n.Value);
-                    _pendingTargetCellStates.AddLast(new MoveState(fromHead, targetSubCell, speed));
+                    _pendingTargetCellStates.AddLast(new MoveState(fromHead, targetSubCell, speed, WorldToWorldCenter(world)));
                 }
 
-                _lastMoveState = new MoveState(fromHead, targetSubCell, speed);
+                SimplifySubCellPath(_pendingTargetBigCells, _pendingTargetCellStates);
+                _lastMoveState = new MoveState(fromHead, targetSubCell, speed, WorldToWorldCenter(world));
 
                 yield return null; // 每帧产出一次
             }
@@ -737,6 +740,8 @@ namespace ReGecko.SnakeSystem
 
                         if (_cellPathQueueTMP.Count > 0)
                         {
+                            SimplifySubCellPath(_cellPathQueueTMP);
+
                             _consumeIsBigPath = false;
                             _consumeIsReverse = false;
 
@@ -845,6 +850,7 @@ namespace ReGecko.SnakeSystem
                     reachedThisFrame = true;
                 }
 
+                
                 // 5) 路径历史：位移达阈值才采样，降低抖动
                 if (_activeLeadPath.Count == 0)
                 {
@@ -2212,6 +2218,224 @@ namespace ReGecko.SnakeSystem
             return false;
         }
 
+        /// <summary>
+        /// 简化SubCell路径，去除同轴向上的冗余点，只保留转折点
+        /// </summary>
+        /// <param name="pathList">要简化的路径列表</param>
+        void SimplifySubCellPath(LinkedList<Vector2Int> pathList, LinkedList<MoveState> pathListEx = null)
+        {
+            if (pathList == null || pathList.Count <= 2)
+                return; // 少于3个点的路径无需简化
+
+            var simplifiedPath = new List<Vector2Int>();
+            var node = pathList.First;
+
+            LinkedListNode<MoveState> nodeEx = null;
+            List<MoveState> simplifiedPathEx = null;
+            if (pathListEx != null)
+            {
+                simplifiedPathEx = new List<MoveState>();
+                nodeEx = pathListEx.First;
+                simplifiedPathEx.Add(nodeEx.Value);
+            }
+
+            // 始终保留起点
+            Vector2Int prevPoint = node.Value;
+            simplifiedPath.Add(prevPoint);
+
+            if (node.Next == null)
+                return;
+
+            Vector2Int currentPoint = node.Next.Value;
+            Vector2Int currentDirection = currentPoint - prevPoint;
+            MoveState currentPointEx = new MoveState();
+            if (nodeEx != null)
+            {
+                currentPointEx = nodeEx.Next.Value;
+            }
+
+            node = node.Next.Next; // 从第三个点开始检查
+            if(nodeEx != null)
+            {
+                nodeEx = nodeEx.Next.Next;
+            }
+
+            while (node != null)
+            {
+                Vector2Int nextPoint = node.Value;
+                Vector2Int nextDirection = nextPoint - currentPoint;
+
+                MoveState nextPointEx = new MoveState();
+                if (nodeEx != null)
+                {
+                    nextPointEx = nodeEx.Value;
+                }
+
+                // 检查方向是否改变
+                if (!IsSameDirection(currentDirection, nextDirection))
+                {
+                    // 方向改变了，保留当前点作为转折点
+                    simplifiedPath.Add(currentPoint);
+                    currentDirection = nextDirection;
+                    if(simplifiedPathEx != null)
+                    {
+                        simplifiedPathEx.Add(currentPointEx);
+                    }
+                }
+
+                // 移动到下一个点
+                prevPoint = currentPoint;
+                currentPoint = nextPoint;
+                node = node.Next;
+
+                if(nodeEx != null)
+                {
+                    currentPointEx = nextPointEx;
+                    nodeEx = nodeEx.Next;
+                }
+            }
+
+            // 始终保留终点
+            simplifiedPath.Add(currentPoint);
+
+            if(simplifiedPathEx != null)
+                simplifiedPathEx.Add(currentPointEx);
+
+            // 用简化后的路径替换原路径
+            pathList.Clear();
+            for (int i = 0; i < simplifiedPath.Count; i++)
+            {
+                pathList.AddLast(simplifiedPath[i]);
+            }
+
+            if(pathListEx != null)
+            {
+                pathListEx.Clear();
+
+                for (int i = 0; i < simplifiedPathEx.Count; i++)
+                {
+                    pathListEx.AddLast(simplifiedPathEx[i]);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 检查两个方向向量是否相同（同轴向）
+        /// </summary>
+        /// <param name="dir1">方向1</param>
+        /// <param name="dir2">方向2</param>
+        /// <returns>是否为相同方向</returns>
+        bool IsSameDirection(Vector2Int dir1, Vector2Int dir2)
+        {
+            // 标准化方向向量（限制为-1, 0, 1）
+            Vector2Int normalizedDir1 = new Vector2Int(
+                Mathf.Clamp(dir1.x, -1, 1),
+                Mathf.Clamp(dir1.y, -1, 1)
+            );
+
+            Vector2Int normalizedDir2 = new Vector2Int(
+                Mathf.Clamp(dir2.x, -1, 1),
+                Mathf.Clamp(dir2.y, -1, 1)
+            );
+
+            return normalizedDir1 == normalizedDir2;
+        }
+
+        /// <summary>
+        /// 简化SubCell路径的增强版本，支持更精确的转折点检测
+        /// </summary>
+        /// <param name="pathList">要简化的路径列表</param>
+        /// <param name="angleTolerance">角度容差，用于判断是否为直线（度数）</param>
+        void SimplifySubCellPathAdvanced(LinkedList<Vector2Int> pathList, float angleTolerance = 5f)
+        {
+            if (pathList == null || pathList.Count <= 2)
+                return;
+
+            var simplifiedPath = new List<Vector2Int>();
+            var pathArray = new Vector2Int[pathList.Count];
+
+            // 转换为数组便于处理
+            int index = 0;
+            var node = pathList.First;
+            while (node != null)
+            {
+                pathArray[index++] = node.Value;
+                node = node.Next;
+            }
+
+            // 始终保留起点
+            simplifiedPath.Add(pathArray[0]);
+
+            // 使用滑动窗口检测转折点
+            for (int i = 1; i < pathArray.Length - 1; i++)
+            {
+                Vector2Int prev = pathArray[i - 1];
+                Vector2Int current = pathArray[i];
+                Vector2Int next = pathArray[i + 1];
+
+                // 计算前后两段的方向
+                Vector2Int dir1 = current - prev;
+                Vector2Int dir2 = next - current;
+
+                // 如果方向明显改变，保留这个转折点
+                if (IsSignificantDirectionChange(dir1, dir2, angleTolerance))
+                {
+                    simplifiedPath.Add(current);
+                }
+            }
+
+            // 始终保留终点
+            simplifiedPath.Add(pathArray[pathArray.Length - 1]);
+
+            // 用简化后的路径替换原路径
+            pathList.Clear();
+            for (int i = 0; i < simplifiedPath.Count; i++)
+            {
+                pathList.AddLast(simplifiedPath[i]);
+            }
+        }
+
+        /// <summary>
+        /// 检查是否为显著的方向改变
+        /// </summary>
+        /// <param name="dir1">方向1</param>
+        /// <param name="dir2">方向2</param>
+        /// <param name="angleTolerance">角度容差</param>
+        /// <returns>是否为显著改变</returns>
+        bool IsSignificantDirectionChange(Vector2Int dir1, Vector2Int dir2, float angleTolerance)
+        {
+            // 零向量处理
+            if (dir1 == Vector2Int.zero || dir2 == Vector2Int.zero)
+                return true;
+
+            // 对于subcell路径，通常只有8个基本方向
+            // 我们可以简化为检查标准化方向是否相同
+            Vector2Int normalizedDir1 = new Vector2Int(
+                dir1.x == 0 ? 0 : (dir1.x > 0 ? 1 : -1),
+                dir1.y == 0 ? 0 : (dir1.y > 0 ? 1 : -1)
+            );
+
+            Vector2Int normalizedDir2 = new Vector2Int(
+                dir2.x == 0 ? 0 : (dir2.x > 0 ? 1 : -1),
+                dir2.y == 0 ? 0 : (dir2.y > 0 ? 1 : -1)
+            );
+
+            // 如果标准化方向不同，则认为方向改变了
+            return normalizedDir1 != normalizedDir2;
+        }
+
+        /// <summary>
+        /// 调试：打印路径简化前后的对比
+        /// </summary>
+        /// <param name="originalPath">原始路径</param>
+        /// <param name="simplifiedPath">简化后路径</param>
+        void DebugPrintPathSimplification(LinkedList<Vector2Int> originalPath, LinkedList<Vector2Int> simplifiedPath)
+        {
+            Debug.Log($"路径简化: {originalPath.Count} -> {simplifiedPath.Count} 个点");
+
+            Debug.Log("原始路径: " + string.Join(" -> ", originalPath));
+            Debug.Log("简化路径: " + string.Join(" -> ", simplifiedPath));
+        }
         bool EnqueueBigCellPath(Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = -1)
         {
             pathList.Clear();
