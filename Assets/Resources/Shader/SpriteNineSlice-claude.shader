@@ -4,187 +4,160 @@ Shader "Custom/SpriteNineSlice_claude"
     {
         _MainTex("Texture", 2D) = "white" {}
         _Color("Color", Color) = (1,1,1,1)
-        _Borders("Borders (L,R,B,T pixels)", Vector) = (16,16,16,16)
+        _Borders("Borders (L,R pixels)", Vector) = (32,32,0,0)
+        _SegmentCount("Snake Segment Count", Float) = 11
         [Toggle] _DebugMode("Debug Mode", Float) = 0
     }
 
-    SubShader
-    {
-        Tags 
-        { 
-            "Queue"="Transparent" 
-            "RenderType"="Transparent" 
-        }
-
-        Cull Off
-        Lighting Off
-        ZWrite Off
-        Blend SrcAlpha OneMinusSrcAlpha
-
-        Pass
+        SubShader
         {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include "UnityCG.cginc"
-
-            sampler2D _MainTex;
-            float4 _MainTex_TexelSize;
-            float4 _Color;
-            float4 _Borders;
-            float _DebugMode;
-
-            struct appdata
+            Tags
             {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-                float4 color : COLOR;
-            };
-
-            struct v2f
-            {
-                float4 vertex : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float4 color : COLOR;
-            };
-
-            v2f vert(appdata v)
-            {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.color = v.color * _Color;
-                return o;
+                "Queue" = "Transparent"
+                "RenderType" = "Transparent"
             }
 
-            float2 LineRendererNineSliceRemap(float2 uv)
+            Cull Off
+            Lighting Off
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
+
+            Pass
             {
-                // LineRenderer 在 Stretch 模式下的 UV：
-                // u = 沿线长度方向 (0-1)
-                // v = 沿线宽度方向 (0-1)
-                
-                // 对于蛇身体，我们希望：
-                // - 沿长度方向(u)：两端不拉伸，中间拉伸
-                // - 沿宽度方向(v)：保持原始纹理比例
-                
-                float2 result = uv;
-                
-                // 计算归一化边框阈值
-                float leftBorder = _Borders.x * _MainTex_TexelSize.x;    // 左边框
-                float rightBorder = _Borders.y * _MainTex_TexelSize.x;   // 右边框
-                float bottomBorder = _Borders.z * _MainTex_TexelSize.y;  // 下边框  
-                float topBorder = _Borders.w * _MainTex_TexelSize.y;     // 上边框
-                
-                // 沿长度方向(U)的九宫格处理
-                float uLeft = leftBorder;
-                float uRight = 1.0 - rightBorder;
-                
-                if (uv.x < uLeft)
+                CGPROGRAM
+                #pragma vertex vert
+                #pragma fragment frag
+                #include "UnityCG.cginc"
+
+                sampler2D _MainTex;
+                float4 _MainTex_TexelSize;
+                float4 _Color;
+                float4 _Borders;
+                float _SegmentCount;
+                float _DebugMode;
+
+                struct appdata
                 {
-                    // 左端区域：映射到纹理左边框
-                    result.x = (uv.x / uLeft) * leftBorder;
-                }
-                else if (uv.x > uRight)
+                    float4 vertex : POSITION;
+                    float2 uv : TEXCOORD0;
+                    float4 color : COLOR;
+                };
+
+                struct v2f
                 {
-                    // 右端区域：映射到纹理右边框
-                    float t = (uv.x - uRight) / (1.0 - uRight);
-                    result.x = (1.0 - rightBorder) + t * rightBorder;
-                }
-                else
+                    float4 vertex : SV_POSITION;
+                    float2 uv : TEXCOORD0;
+                    float4 color : COLOR;
+                };
+
+                v2f vert(appdata v)
                 {
-                    // 中间区域：映射到纹理中心部分
-                    float t = (uv.x - uLeft) / (uRight - uLeft);
-                    result.x = leftBorder + t * (1.0 - leftBorder - rightBorder);
+                    v2f o;
+                    o.vertex = UnityObjectToClipPos(v.vertex);
+                    o.uv = v.uv;
+                    o.color = v.color * _Color;
+                    return o;
                 }
-                
-                // 沿宽度方向(V)的九宫格处理
-                float vBottom = bottomBorder;
-                float vTop = 1.0 - topBorder;
-                
-                if (uv.y < vBottom)
+
+                float2 LineRendererNineSliceRemap(float2 uv)
                 {
-                    // 底部区域
-                    result.y = (uv.y / vBottom) * bottomBorder;
+                    float2 result = uv;
+
+                    // 计算边界UV位置（基于分段数）
+                    float segmentSize = 1.0 / _SegmentCount;
+                    float headBoundary = segmentSize;           // 第1段是蛇头
+                    float tailBoundary = 1.0 - segmentSize;     // 最后1段是蛇尾
+
+                    // 纹理边框大小（UV坐标系）
+                    float leftBorderTexUV = _Borders.x * _MainTex_TexelSize.x;     // 蛇头纹理区域
+                    float rightBorderTexUV = _Borders.y * _MainTex_TexelSize.x;    // 蛇尾纹理区域
+                    float centerTexUV = 1.0 - leftBorderTexUV - rightBorderTexUV;  // 身体纹理区域
+
+                    // X轴重新映射
+                    if (uv.x < headBoundary)
+                    {
+                        // 蛇头区域：映射到纹理的左边框
+                        float t = uv.x / headBoundary;
+                        result.x = t * leftBorderTexUV;
+                    }
+                    else if (uv.x > tailBoundary)
+                    {
+                        // 蛇尾区域：映射到纹理的右边框
+                        float t = (uv.x - tailBoundary) / segmentSize;
+                        result.x = (1.0 - rightBorderTexUV) + t * rightBorderTexUV;
+                    }
+                    else
+                    {
+                        // 身体区域：循环平铺纹理的中间部分
+                        float centerUV = (uv.x - headBoundary) / (tailBoundary - headBoundary);
+
+                        // 计算平铺次数
+                        float bodySegments = _SegmentCount - 2.0; // 减去头尾两段
+                        float tileCount = bodySegments; // 每个身体段对应一个完整的纹理平铺
+
+                        // 循环平铺
+                        float tiledU = fmod(centerUV * tileCount, 1.0);
+                        result.x = leftBorderTexUV + tiledU * centerTexUV;
+                    }
+
+                    // Y轴保持不变（不做九宫格处理）
+                    result.y = uv.y;
+
+                    return result;
                 }
-                else if (uv.y > vTop)
+
+                fixed4 frag(v2f i) : SV_Target
                 {
-                    // 顶部区域
-                    float t = (uv.y - vTop) / (1.0 - vTop);
-                    result.y = (1.0 - topBorder) + t * topBorder;
+                    // 详细调试模式
+                    if (_DebugMode > 0.5)
+                    {
+                        float2 uv = i.uv;
+
+                        // 计算边界
+                        float segmentSize = 1.0 / _SegmentCount;
+                        float headBoundary = segmentSize;
+                        float tailBoundary = 1.0 - segmentSize;
+
+                        // 根据分段显示不同颜色
+                        if (uv.x < headBoundary)
+                        {
+                            // 蛇头区域 - 绿色
+                            return fixed4(0, 1, 0, 1);
+                        }
+                        else if (uv.x > tailBoundary)
+                        {
+                            // 蛇尾区域 - 蓝色
+                            return fixed4(0, 0, 1, 1);
+                        }
+                        else
+                        {
+                            // 身体区域 - 红色，显示平铺效果
+                            float centerUV = (uv.x - headBoundary) / (tailBoundary - headBoundary);
+                            float bodySegments = _SegmentCount - 2.0;
+
+                            // 显示段落条纹
+                            float segmentIndex = floor(centerUV * bodySegments);
+                            float segmentPattern = fmod(segmentIndex, 2.0);
+
+                            // 红色渐变 + 条纹效果
+                            return fixed4(1, segmentPattern, centerUV, 1);
+                        }
+                    }
+
+                    if (_DebugMode > 1.5)
+                    {
+                        // 显示重新映射后的UV坐标
+                        float2 remappedUV = LineRendererNineSliceRemap(i.uv);
+                        return fixed4(remappedUV.x, remappedUV.y, 0, 1);
+                    }
+
+                    // 正常渲染
+                    float2 remappedUV = LineRendererNineSliceRemap(i.uv);
+                    fixed4 texColor = tex2D(_MainTex, remappedUV);
+                    return texColor * i.color;
                 }
-                else
-                {
-                    // 中间区域
-                    float t = (uv.y - vBottom) / (vTop - vBottom);
-                    result.y = bottomBorder + t * (1.0 - bottomBorder - topBorder);
-                }
-                
-                return result;
+                ENDCG
             }
-
-            fixed4 frag(v2f i) : SV_Target
-			{
-				// 详细调试模式
-				if (_DebugMode > 1.5) // 新的测试模式
-				{
-					float2 remappedUV = LineRendererNineSliceRemap(i.uv);
-					
-					// 生成测试图案：边框是纯色，中心是棋盘格
-					float leftBorder = _Borders.x * _MainTex_TexelSize.x;
-					float rightBorder = _Borders.y * _MainTex_TexelSize.x;
-					float bottomBorder = _Borders.z * _MainTex_TexelSize.y;
-					float topBorder = _Borders.w * _MainTex_TexelSize.y;
-					
-					// 判断采样点在纹理中的位置
-					if (remappedUV.x < leftBorder || remappedUV.x > (1.0 - rightBorder) ||
-						remappedUV.y < bottomBorder || remappedUV.y > (1.0 - topBorder))
-					{
-						// 边框区域：显示纯红色
-						return fixed4(1, 0, 0, 1);
-					}
-					else
-					{
-						// 中心区域：显示棋盘格图案
-						float2 centerUV = remappedUV;
-						centerUV.x = (centerUV.x - leftBorder) / (1.0 - leftBorder - rightBorder);
-						centerUV.y = (centerUV.y - bottomBorder) / (1.0 - bottomBorder - topBorder);
-						
-						// 创建棋盘格
-						float checker = step(0.5, fmod(centerUV.x * 8.0, 1.0)) + 
-									   step(0.5, fmod(centerUV.y * 8.0, 1.0));
-						checker = fmod(checker, 2.0);
-						
-						return fixed4(checker, checker, 1, 1); // 蓝白棋盘格
-					}
-				}
-				
-				if (_DebugMode > 0.5)
-				{
-					float leftBorder = _Borders.x * _MainTex_TexelSize.x;
-					float rightBorder = _Borders.y * _MainTex_TexelSize.x;
-					float bottomBorder = _Borders.z * _MainTex_TexelSize.y;
-					float topBorder = _Borders.w * _MainTex_TexelSize.y;
-					
-					float uLeft = leftBorder;
-					float uRight = 1.0 - rightBorder;
-					float vBottom = bottomBorder;
-					float vTop = 1.0 - topBorder;
-					
-					float2 uv = i.uv;
-					float2 remappedUV = LineRendererNineSliceRemap(uv);
-					
-					// 显示重映射后的 UV 作为颜色
-					// 这样可以看到重映射是否正确
-					return fixed4(remappedUV.x, remappedUV.y, 0, 1);
-				}
-
-				// 正常渲染
-				float2 remappedUV = LineRendererNineSliceRemap(i.uv);
-				fixed4 texColor = tex2D(_MainTex, remappedUV);
-				return texColor * i.color;
-			}
-            ENDCG
         }
-    }
-    FallBack "Sprites/Default"
+            FallBack "Sprites/Default"
 }

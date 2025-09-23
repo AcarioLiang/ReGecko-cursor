@@ -125,9 +125,9 @@ namespace ReGecko.SnakeSystem
                 // 假设纹理是 64x64，边框各为 16 像素
                 //_line.material.SetVector("_Borders", borders);
 
-                 //临时启用调试模式来验证分区
+                //临时启用调试模式来验证分区
                 //_line.material.SetFloat("_DebugMode", 2f);
-
+                _line.material.SetFloat("_SegmentCount", (float)_snake.Length);
 
                 // 调试输出
                 //Debug.Log($"Texture size: {_line.material.mainTexture.width}x{_line.material.mainTexture.height}");
