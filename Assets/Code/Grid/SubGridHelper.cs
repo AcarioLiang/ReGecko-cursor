@@ -26,7 +26,7 @@ namespace ReGecko.GridSystem
         }
         public static bool IsValidSubCellEx(Vector2Int subCell, GridConfig grid)
         {
-            if(subCell.x < CENTER_INDEX || subCell.x >= (grid.Width * SUB_DIV) - CENTER_INDEX ||
+            if (subCell.x < CENTER_INDEX || subCell.x >= (grid.Width * SUB_DIV) - CENTER_INDEX ||
                 subCell.y < CENTER_INDEX || subCell.y >= (grid.Height * SUB_DIV) - CENTER_INDEX)
                 return false;
 
@@ -113,6 +113,32 @@ namespace ReGecko.GridSystem
             float offsetY = (local.y - CENTER_INDEX) * unit;
 
             return bigCellWorld + new Vector3(offsetX, offsetY, 0f);
+        }
+
+        public static Vector2 WorldClampBigCell(Vector3 world, Vector2Int bigCell, GridConfig grid)
+        {
+            if (!grid.IsValid()) return Vector2.zero;
+
+            // 先夹紧bigCell到有效范围
+            bigCell = ClampBigCell(bigCell, grid);
+
+            // 该大格中心与半格尺寸
+            Vector3 c = grid.CellToWorld(bigCell);
+            float halfCell = 0.5f * grid.CellSize;
+
+            // 微偏移，防止落在格子边界导致RoundToInt进到相邻格
+            float eps = Mathf.Max(1e-5f * grid.CellSize, 1e-6f);
+
+            // 以bigCell为目标，将world夹紧到该格内部（上/右边界收缩eps，保证回算bigCell稳定）
+            float minX = c.x - halfCell + eps, maxX = c.x + halfCell - eps;
+            float minY = c.y - halfCell + eps, maxY = c.y + halfCell - eps;
+
+            // 与全局边界再做一次相交（理论上该格内部已在范围内，这里更稳妥）
+            float halfW = (grid.Width - 1) * 0.5f * grid.CellSize, halfH = (grid.Height - 1) * 0.5f * grid.CellSize;
+            minX = Mathf.Max(minX, -halfW + eps); maxX = Mathf.Min(maxX, halfW - eps);
+            minY = Mathf.Max(minY, -halfH + eps); maxY = Mathf.Min(maxY, halfH - eps);
+
+            return new Vector2(Mathf.Clamp(world.x, minX, maxX), Mathf.Clamp(world.y, minY, maxY));
         }
 
         /// <summary>

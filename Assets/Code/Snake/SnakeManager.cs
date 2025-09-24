@@ -374,7 +374,7 @@ namespace ReGecko.SnakeSystem
 
             foreach (var snake in _snakes)
             {
-                if (snake == null || !snake.IsAlive() || !snake.IsControllable)
+                if (snake == null || !snake.IsAlive() || !snake.IsControllable || snake.IsConsuming())
                     continue;
 
                 var ctl = (SnakeController)snake;

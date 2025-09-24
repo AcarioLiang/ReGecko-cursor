@@ -81,20 +81,6 @@ namespace ReGecko.SnakeSystem
             UpdateAllLinePositions();
         }
 
-        public Vector3 GetLineLeadFirstPos(bool fromHead)
-        {
-            if (_line == null) return Vector3.zero;
-            if (_linePositionsCache == null || _linePositionsCache.Length == 0) return Vector3.zero;
-
-            if (fromHead)
-            {
-                return _linePositionsCache[0];
-            }
-            else
-            {
-                return _linePositionsCache[_linePositionsCache.Length - 1];
-            }
-        }
 
         void EnsureLineCreated()
         {
@@ -186,6 +172,9 @@ namespace ReGecko.SnakeSystem
                 _line.gameObject.SetActive(false);
                 return;
             }
+
+            //_posBuffer.Insert(0,_snake.GetHeadVirtualPos());
+            //_posBuffer.Add(_snake.GetTailVirtualPos());
 
             _linePositionsCount = _posBuffer.Count;
             _linePositionsCache = _posBuffer.ToArray();

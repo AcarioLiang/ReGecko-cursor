@@ -16,6 +16,18 @@ namespace ReGecko.GridSystem
 
         }
 
+        public Vector2 ClampWorld(Vector3 world)
+        {
+            if (!IsValid())
+                return Vector2.zero;
+
+            float halfW = (Width - 1) * 0.5f * CellSize;
+            float halfH = (Height - 1) * 0.5f * CellSize;
+            float x = Mathf.Clamp(world.x, -halfW, halfW);
+            float y = Mathf.Clamp(world.y, -halfH, halfH);
+            return new Vector2(x, y);
+        }
+
         // 阻挡占位：暂时全部为无阻挡
         public bool HasBlock(int x, int y)
         {
