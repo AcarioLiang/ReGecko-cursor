@@ -987,7 +987,7 @@ namespace ReGecko.SnakeSystem
                     bool isfinish = true;
                     foreach (var tw in _subCellFollowTweeners)
                     {
-                        if (tw != null && (!tw.IsComplete() || tw.IsPlaying()))
+                        if (tw != null && tw.IsActive() && (!tw.IsComplete() || tw.IsPlaying()))
                         {
                             isfinish = false;
                             break;
@@ -1032,7 +1032,7 @@ namespace ReGecko.SnakeSystem
                     bool isplaying = false;
                     foreach(var tw in _subCellFollowTweeners)
                     {
-                        if(tw != null && tw.IsPlaying())
+                        if(tw != null && tw.IsActive() && (tw.IsPlaying() || !tw.IsComplete()))
                         {
                             isplaying = true;
                             break;
@@ -1255,20 +1255,30 @@ namespace ReGecko.SnakeSystem
 
         void OnLeadTweenComplete()
         {
-            _bodySpriteManager.OnSnakeLengthChanged();
+            //_bodySpriteManager.OnSnakeLengthChanged();
         }
 
         void OnLeadTweenUpdate()
         {
-            _bodySpriteManager.OnSnakeLengthChanged();
+            //_bodySpriteManager.OnSnakeLengthChanged();
             
         }
 
         System.Collections.IEnumerator _ConsumeRenderLoop()
         {
-            while (false)
+            while (enabled)
             {
-                if (!_consumingRender)
+                bool isplaying = false;
+                foreach (var tw in _subCellFollowTweeners)
+                {
+                    if (tw != null && tw.IsActive()  && (tw.IsPlaying() || !tw.IsComplete()))
+                    {
+                        isplaying = true;
+                        break;
+                    }
+                }
+
+                if (!_consumingRender && isplaying)
                 {
                     if (EnableBodySpriteManagement && _bodySpriteManager != null)
                     {
@@ -3229,8 +3239,21 @@ namespace ReGecko.SnakeSystem
                     }
                     else
                     {
-                        if(_subMoveState.IsValid())
+                        if(!_subMoveState.IsValid())
                         {
+                            _cellPathQueue.Clear();
+                            EnqueueBigCellPath(fromBigCell, targetBigCell, _cellPathQueue);
+                            speed = Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(fromBigCell));
+
+                            for (var n = _cellPathQueue.First; n != null; n = n.Next)
+                            {
+                                var subt = SubGridHelper.BigCellToCenterSubCell(n.Value);
+                                var fixwold = SubGridHelper.WorldClampBigCell(world, n.Value, _grid);
+                                var fixbifcell = SubGridHelper.WorldToBigCell(fixwold, _grid);
+                                Debug.Log($"_cellPathQueue: bigcell:{n.Value} world:{world} fixbigcell{fixbifcell} fixworld:{fixwold}");
+                                _pendingTargetCellStates.AddLast(new MoveState(fromHead, subt, n.Value, speed, SubGridHelper.WorldClampBigCell(world, n.Value, _grid), true));
+                            }
+
                             _subMoveState = new MoveState(fromHead, targetSubCell, targetBigCell, speed, world, false);
                         }
                     }
