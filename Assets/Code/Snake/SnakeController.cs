@@ -102,6 +102,7 @@ namespace ReGecko.SnakeSystem
         bool _lastIsSingleCellPath = false;
         Vector2 _lastSingleCellPathPos;
         Vector2[] _lineTargetPositionsCache;
+        List<LinkedList<Vector2>> _lineSubTargetPositionsCache = new List<LinkedList<Vector2>>();
 
         bool _smoothInited = false;
 
@@ -1047,188 +1048,19 @@ namespace ReGecko.SnakeSystem
 
                     GenerateBigCellPathWithMouse(activeFromHead, target);
                     ApplySmoothVisualsTargetPath(activeFromHead);
+                    //ApplySubSmoothVisualsTargetPath(activeFromHead);
 
-                    // 平滑跟随模式 - 使用DOTween
-                    //头节点
-                    int leadIndex = activeFromHead ? 0 : (_subCellFollowTweeners.Length - 1);
-                    Tweener leadFollowTweener = _subCellFollowTweeners[leadIndex];
 
                     float distance = DistanceAlongCenterLines(leadTransform.anchoredPosition, target);
                     // 计算所需时间
                     float duration = distance / _curMoveState.DragSpeed;
 
-                    if (leadFollowTweener == null || !leadFollowTweener.IsPlaying())
+
+                    for (int i = 0; i < _cachedSubRectTransforms.Count; i++)
                     {
-                        _subCellFollowTweeners[leadIndex]?.Kill();
-
-
-                        leadFollowTweener = leadTransform.DOAnchorPos(target, duration)
-                            .SetEase(easeType)
-                            .SetAutoKill(false)
-                            .OnUpdate(() =>
-                            {
-                                // 使用弱引用检查对象是否还存在
-                                if (_weakReference.TryGetTarget(out var self))
-                                {
-                                    self.OnLeadTweenUpdate();
-                                }
-                                else
-                                {
-                                    // 对象已被销毁，杀死tween
-                                    leadFollowTweener?.Kill();
-                                }
-
-
-                            })
-                            .OnComplete(()=>
-                            {
-                                // 使用弱引用检查对象是否还存在
-                                if (_weakReference.TryGetTarget(out var self))
-                                {
-                                    self.OnLeadTweenComplete();
-                                }
-                                else
-                                {
-                                    // 对象已被销毁，杀死tween
-                                    leadFollowTweener?.Kill();
-                                }
-
-                                
-                            });
-
-                        _subCellFollowTweeners[leadIndex] = leadFollowTweener;
-                    }
-                    else
-                    {
-                        // 更新Tweener的目标位置
-                        leadFollowTweener.ChangeEndValue(target, true).Restart();
-                        Debug.Log($"ChangeEndValue Restart target:{target}");
+                        MoveNextFollowTweeners(activeFromHead, i, duration);
                     }
 
-                    if (true)
-                    {
-                        RectTransform subTransform;
-                        if(activeFromHead)
-                        {
-                            for (int i = 0; i < _cachedSubRectTransforms.Count; i++)
-                            {
-                                if (i == 0)
-                                    continue;
-
-                                subTransform = _cachedSubRectTransforms[i];
-                                Vector2 subtarget = _lineTargetPositionsCache[i];
-
-                                Tweener subFollowTweener = _subCellFollowTweeners[i];
-                                if (subFollowTweener == null || !subFollowTweener.IsPlaying())
-                                {
-                                    // 杀掉旧的（如果存在）
-                                    _subCellFollowTweeners[i]?.Kill();
-
-                                    subFollowTweener = subTransform.DOAnchorPos(subtarget, duration)
-                                        .SetEase(easeType)
-                                        .SetAutoKill(false)
-                                        .OnUpdate(() =>
-                                        {
-                                            // 使用弱引用检查对象是否还存在
-                                            if (_weakReference.TryGetTarget(out var self))
-                                            {
-                                                self.OnLeadTweenUpdate();
-                                            }
-                                            else
-                                            {
-                                                // 对象已被销毁，杀死tween
-                                                subFollowTweener?.Kill();
-                                            }
-
-
-                                        })
-                                        .OnComplete(() =>
-                                        {
-                                            // 使用弱引用检查对象是否还存在
-                                            if (_weakReference.TryGetTarget(out var self))
-                                            {
-                                                self.OnLeadTweenComplete();
-                                            }
-                                            else
-                                            {
-                                                // 对象已被销毁，杀死tween
-                                                subFollowTweener?.Kill();
-                                            }
-
-
-                                        });
-                                    // 关键：存回数组
-                                    _subCellFollowTweeners[i] = subFollowTweener;
-                                }
-                                else
-                                {
-                                    // 关键：复用已有tween
-                                    subFollowTweener.ChangeEndValue(subtarget, true).Restart();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            for (int i = _cachedSubRectTransforms.Count - 1; i >= 0; i--)
-                            {
-                                if (i == _cachedSubRectTransforms.Count - 1)
-                                    continue;
-
-                                subTransform = _cachedSubRectTransforms[i];
-                                Vector2 subtarget = _lineTargetPositionsCache[_cachedSubRectTransforms.Count - 1 - i];
-
-                                Tweener subFollowTweener = _subCellFollowTweeners[i];
-                                if (subFollowTweener == null || !subFollowTweener.IsPlaying())
-                                {
-                                    // 杀掉旧的（如果存在）
-                                    _subCellFollowTweeners[i]?.Kill();
-
-                                    subFollowTweener = subTransform.DOAnchorPos(subtarget, duration)
-                                        .SetEase(easeType)
-                                        .SetAutoKill(false)
-                                        .OnUpdate(() =>
-                                        {
-                                            // 使用弱引用检查对象是否还存在
-                                            if (_weakReference.TryGetTarget(out var self))
-                                            {
-                                                self.OnLeadTweenUpdate();
-                                            }
-                                            else
-                                            {
-                                                // 对象已被销毁，杀死tween
-                                                subFollowTweener?.Kill();
-                                            }
-
-
-                                        })
-                                        .OnComplete(() =>
-                                        {
-                                            // 使用弱引用检查对象是否还存在
-                                            if (_weakReference.TryGetTarget(out var self))
-                                            {
-                                                self.OnLeadTweenComplete();
-                                            }
-                                            else
-                                            {
-                                                // 对象已被销毁，杀死tween
-                                                subFollowTweener?.Kill();
-                                            }
-
-
-                                        });
-
-                                    // 关键：存回数组
-                                    _subCellFollowTweeners[i] = subFollowTweener;
-                                }
-                                else
-                                {
-                                    // 关键：复用已有tween
-                                    subFollowTweener.ChangeEndValue(subtarget, true).Restart();
-                                }
-                            }
-                        }
-                        
-                    }
                 }
 
                 if(_useTweenFollow)
@@ -1253,8 +1085,9 @@ namespace ReGecko.SnakeSystem
 
         }
 
-        void OnLeadTweenComplete()
+        void OnLeadTweenComplete(bool activeFromHead, int tweenerindex, float duration)
         {
+            //MoveNextFollowTweeners(activeFromHead, tweenerindex, duration);
             //_bodySpriteManager.OnSnakeLengthChanged();
         }
 
@@ -1696,6 +1529,111 @@ namespace ReGecko.SnakeSystem
 
 
         }
+
+
+        void ApplySubSmoothVisualsTargetPath(bool activeFromHead)
+        {
+            int n = _subBodyCells.Count;
+            if (n == 0) return;
+            if (_lineTargetPositionsCache == null || _lineTargetPositionsCache.Length < n)
+                return;
+
+            if(_lineSubTargetPositionsCache.Count == 0)
+            {
+                for(int i = 0;i<n;i++)
+                {
+                    LinkedList<Vector2> linesubtargetposlist = new LinkedList<Vector2>();
+                    _lineSubTargetPositionsCache.Add(linesubtargetposlist);
+                }
+            }
+
+            for (int index = 0; index < n; index++)
+            {
+                var target = _lineTargetPositionsCache[index];
+                var linesubtargetposlist = _lineSubTargetPositionsCache[index];
+
+                var fromsub = SubGridHelper.WorldToSubCell(_cachedSubRectTransforms[index].anchoredPosition, _grid);
+                var tosub = SubGridHelper.WorldToSubCell(target, _grid);
+                EnqueueSubCellPath(fromsub, tosub, _cellPathQueueTMP);
+
+                linesubtargetposlist.Clear();
+                foreach(var subsell in _cellPathQueueTMP)
+                {
+                    var subpos = SubGridHelper.SubCellToWorld(subsell, _grid);
+                    linesubtargetposlist.AddLast(subpos);
+                }
+                linesubtargetposlist.AddLast(target);
+                index++;
+            }
+        }
+
+        void MoveNextFollowTweeners(bool activeFromHead, int tweenerindex, float duration)
+        {
+            // 平滑跟随模式 - 使用DOTween
+            RectTransform curTransform = _cachedSubRectTransforms[tweenerindex];
+            Tweener curFollowTweener = _subCellFollowTweeners[tweenerindex];
+
+            //LinkedList<Vector2> linesubtargetposlist;
+
+            //if(activeFromHead)
+            //{
+            //    linesubtargetposlist = _lineSubTargetPositionsCache[tweenerindex];
+            //}
+            //else
+            //{
+            //    linesubtargetposlist = _lineSubTargetPositionsCache[_cachedSubRectTransforms.Count - 1 - tweenerindex];
+            //}
+            //
+            //if (linesubtargetposlist == null || linesubtargetposlist.Count == 0)
+            //    return;
+            //
+            //var target = linesubtargetposlist.First.Value;
+            //linesubtargetposlist.RemoveFirst();
+
+            Vector2 target;
+            if (activeFromHead)
+            {
+                target = _lineTargetPositionsCache[tweenerindex];
+            }
+            else
+            {
+                target = _lineTargetPositionsCache[_cachedSubRectTransforms.Count - 1 - tweenerindex];
+            }
+
+            if (curFollowTweener == null || !curFollowTweener.IsPlaying())
+            {
+                _subCellFollowTweeners[tweenerindex]?.Kill();
+                curFollowTweener = curTransform.DOAnchorPos(target, duration)
+                    .SetEase(easeType)
+                    .SetAutoKill(false)
+                    .OnComplete(() =>
+                    {
+                        // 使用弱引用检查对象是否还存在
+                        if (_weakReference.TryGetTarget(out var self))
+                        {
+                            self.OnLeadTweenComplete(activeFromHead,tweenerindex, duration);
+                        }
+                        else
+                        {
+                            // 对象已被销毁，杀死tween
+                            curFollowTweener?.Kill();
+                        }
+
+
+                    });
+
+                _subCellFollowTweeners[tweenerindex] = curFollowTweener;
+            }
+            else
+            {
+                // 更新Tweener的目标位置
+                curFollowTweener.ChangeEndValue(target, true).Restart();
+                //Debug.Log($"ChangeEndValue Restart target:{target}");
+            }
+
+
+        }
+
         void ApplySmoothVisualsByPath(bool activeFromHead)
         {
             int n = _subBodyCells.Count;
