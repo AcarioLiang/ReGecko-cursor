@@ -18,6 +18,8 @@ namespace ReGecko.SnakeSystem
         [Header("基本属性")]
         public string SnakeId;
         public Sprite BodySprite;
+        public Sprite HeadSprite;
+        public Sprite TailSprite;
         public Color BodyColor = Color.white;
         public int Length = 4;
         public Vector2Int InitialHeadCell;         //初始化配置-头部
@@ -48,7 +50,8 @@ namespace ReGecko.SnakeSystem
         protected SnakeBodySpriteManager _bodySpriteManager;
 
         protected bool _consuming; // 洞吞噬中
-        
+        protected bool _consumingRender; // 洞吞噬中
+
         // 状态相关
         protected SnakeState _state = SnakeState.Alive;
 
@@ -109,6 +112,7 @@ namespace ReGecko.SnakeSystem
             _bodySpriteManager.BodyLineMaterial = newMaterial;
 
         }
+
 
         public abstract void UpdateMovement();
 

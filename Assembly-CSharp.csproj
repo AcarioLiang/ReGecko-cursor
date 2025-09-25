@@ -77,6 +77,8 @@
     <Compile Include="Assets\Code\Grid\Entities\GridEntityManager.cs" />
     <Compile Include="Assets\Code\Framework\UI\Panel\UIGameFaild.cs" />
     <Compile Include="Assets\Code\Game\GameStateController.cs" />
+    <Compile Include="Assets\Code\Snake\SnakeVisualsLead.cs" />
+    <Compile Include="Assets\Code\Snake\SnakeVisualsLeadSpriteManager.cs" />
     <Compile Include="Assets\Code\Game\SnakeColorType.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIManager.cs" />
     <Compile Include="Assets\Code\Framework\UI\UIGameManager.cs" />

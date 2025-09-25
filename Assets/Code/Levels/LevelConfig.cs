@@ -13,8 +13,10 @@ namespace ReGecko.Levels
 		public string Name = "Snake"; // 蛇的显示名称
 		public Color Color = Color.white;
 		public Sprite BodySprite;
-		
-		[Header("颜色配置")]
+        public Sprite HeadSprite;
+        public Sprite TailSprite;
+
+        [Header("颜色配置")]
 		[Tooltip("蛇的颜色类型，用于匹配洞的颜色")]
 		public SnakeColorType ColorType = SnakeColorType.Red; // 蛇的颜色类型
 		

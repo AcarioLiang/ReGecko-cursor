@@ -132,6 +132,8 @@ namespace ReGecko.SnakeSystem
             snake.SnakeId = snakeId;
             snake.Name = config.Name;
             snake.BodySprite = config.BodySprite;
+            snake.HeadSprite = config.HeadSprite;
+            snake.TailSprite = config.TailSprite;
             snake.BodyColor = config.Color;
             snake.ColorType = config.ColorType; // 设置颜色类型
             snake.Length = Mathf.Max(1, config.Length);

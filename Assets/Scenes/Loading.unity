@@ -213,7 +213,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 4039e7122f1dedf46811512f251a775a, type: 3}
   - {fileID: 21300000, guid: 518a12fe59833cb44881c60bcbb2638b, type: 3}
   - {fileID: 21300000, guid: 4c6fc1103db2cd7408434e94200ff089, type: 3}
-  SnakeSpriteList:
+  SnakeBodySpriteList:
   - {fileID: 21300000, guid: cfd0305ab9b7a4e43b9a0439b37bee00, type: 3}
   - {fileID: 21300000, guid: 44945e336b094514d8a2d03eff19759a, type: 3}
   - {fileID: 21300000, guid: 4b65af0c814b78d478413891bdc947ed, type: 3}
@@ -222,6 +222,24 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 11c96a63bbdcb2c4da2e7278d703e088, type: 3}
   - {fileID: 21300000, guid: 6a51c617e320d7c4db5b64f8e097fc78, type: 3}
   - {fileID: 21300000, guid: 12aa59c23eee2994babd5104f1cc3a7c, type: 3}
+  SnakeHeadSpriteList:
+  - {fileID: 21300000, guid: 91209875f343a9142bb65bc278d62099, type: 3}
+  - {fileID: 21300000, guid: 6c8f686513c38e54fbf7ccebb94dbf3b, type: 3}
+  - {fileID: 21300000, guid: b882bd938fe2b1d419d57c32eb8cf4bc, type: 3}
+  - {fileID: 21300000, guid: b9dcf8a110f90b24ebb27bc847e5c1b7, type: 3}
+  - {fileID: 21300000, guid: 0700fb455e1e984408fa8575149fdfc0, type: 3}
+  - {fileID: 21300000, guid: c3b7781d313e57745bfbfd2aa85542a1, type: 3}
+  - {fileID: 21300000, guid: 2ba48b6ca95690842951d4ad9a256382, type: 3}
+  - {fileID: 21300000, guid: 5e0363e650c42784cb646165ecff0ddc, type: 3}
+  SnakeTailSpriteList:
+  - {fileID: 21300000, guid: 3db5e34c936970147a5f3b4fbbfb90bb, type: 3}
+  - {fileID: 21300000, guid: 4616f2734a346e646b37bc0ac895ac70, type: 3}
+  - {fileID: 21300000, guid: 43a19db794627594d91c164b26ee370a, type: 3}
+  - {fileID: 21300000, guid: 542ad97c647126046b2a7ceb01a2bf0f, type: 3}
+  - {fileID: 21300000, guid: f16fa533164acfc4c8b9e016439ddd05, type: 3}
+  - {fileID: 21300000, guid: 88052ff4ad02ac9438d46ce5dd66e514, type: 3}
+  - {fileID: 21300000, guid: 9ff24a0c81058da41a3a04307358de4c, type: 3}
+  - {fileID: 21300000, guid: 1545477ac67eafc439b22d1d5a54d392, type: 3}
   SnakeBodyConfig: {fileID: 11400000, guid: d0e271393f2a1ae49926203ffdf53b6e, type: 2}
 --- !u!4 &1786732307
 Transform:

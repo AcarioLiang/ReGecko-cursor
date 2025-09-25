@@ -27,7 +27,7 @@ namespace ReGecko.SnakeSystem
         [SerializeField] float DebugPolylinePointSize = 10f;
 
         [SerializeField] bool DebugShowPolyline = false;
-        [SerializeField] bool DebugShowBigCellPath = false;
+        [SerializeField] bool DebugShowBigCellPath = true;
 
         [Header("SnakeController特有属性")]
         // 拖拽相关
@@ -126,11 +126,6 @@ namespace ReGecko.SnakeSystem
         // 新增：中线折线缓存，减少GC
         List<Vector2> _centerlinePolyline = new List<Vector2>(512);
 
-        // 新增：
-        List<Vector2> _virtualPathPoints = new List<Vector2>(512);
-        List<Vector2> _virtualPathPointsRe = new List<Vector2>(512);
-        LinkedList<Vector2Int> _virtualBodyCells = new LinkedList<Vector2Int>();
-
 
         [SerializeField] int PendingTargetsCapacity = 64;
 
@@ -197,26 +192,21 @@ namespace ReGecko.SnakeSystem
             public bool IsBigPath;
         }
 
-        public List<Vector2> GetVirtualPathPoints()
-        {
-            return _virtualPathPoints;
-        }
-
-        public List<Vector2> GetVirtualPathPointsRe()
-        {
-            return _virtualPathPointsRe;
-        }
         // 扫描缓存
         Vector2[] _tmpBodyPos;
         float[] _distTargets;
         Vector2Int[] _tmpSubSnap2;
 
+        //增加头尾视觉点
+        SnakeVisualsLead _visualsHead;
+        SnakeVisualsLead _visualsTail;
 
         public override void Initialize(GridConfig grid)
         {
             _grid = grid;
             IsDragging = false;
             DragFromHead = false;
+            _consumingRender = false;
             _curMoveState.Clear();
             _subMoveState.Clear();
 
@@ -224,6 +214,24 @@ namespace ReGecko.SnakeSystem
             ClearUnuseSubSegments();
             InitializeSubSegmentPositions(InitialBodyCells);
             InitializeBodySpriteManager();
+            InitializeVisualsLead();
+
+
+        }
+
+        void InitializeVisualsLead()
+        {
+            return;
+            var visualsHeadGo = new GameObject("VisualsHead");
+            visualsHeadGo.transform.SetParent(transform, false);
+            _visualsHead = visualsHeadGo.AddComponent<SnakeVisualsLead>();
+
+            var visualsTailGo = new GameObject("VisualsTail");
+            visualsTailGo.transform.SetParent(transform, false);
+            _visualsTail = visualsTailGo.AddComponent<SnakeVisualsLead>();
+
+            _visualsHead.Init(true, _subSegments[0], _subSegments[2], HeadSprite, _grid);
+            _visualsTail.Init(false, _subSegments[_subSegments.Count - 1], _subSegments[_subSegments.Count - 3], TailSprite, _grid);
         }
 
         /// <summary>
@@ -979,7 +987,7 @@ namespace ReGecko.SnakeSystem
                     bool isfinish = true;
                     foreach (var tw in _subCellFollowTweeners)
                     {
-                        if (tw != null && tw.IsPlaying())
+                        if (tw != null && (!tw.IsComplete() || tw.IsPlaying()))
                         {
                             isfinish = false;
                             break;
@@ -1118,8 +1126,37 @@ namespace ReGecko.SnakeSystem
 
                                     subFollowTweener = subTransform.DOAnchorPos(subtarget, duration)
                                         .SetEase(easeType)
-                                        .SetAutoKill(false);
+                                        .SetAutoKill(false)
+                                        .OnUpdate(() =>
+                                        {
+                                            // 使用弱引用检查对象是否还存在
+                                            if (_weakReference.TryGetTarget(out var self))
+                                            {
+                                                self.OnLeadTweenUpdate();
+                                            }
+                                            else
+                                            {
+                                                // 对象已被销毁，杀死tween
+                                                subFollowTweener?.Kill();
+                                            }
 
+
+                                        })
+                                        .OnComplete(() =>
+                                        {
+                                            // 使用弱引用检查对象是否还存在
+                                            if (_weakReference.TryGetTarget(out var self))
+                                            {
+                                                self.OnLeadTweenComplete();
+                                            }
+                                            else
+                                            {
+                                                // 对象已被销毁，杀死tween
+                                                subFollowTweener?.Kill();
+                                            }
+
+
+                                        });
                                     // 关键：存回数组
                                     _subCellFollowTweeners[i] = subFollowTweener;
                                 }
@@ -1148,7 +1185,37 @@ namespace ReGecko.SnakeSystem
 
                                     subFollowTweener = subTransform.DOAnchorPos(subtarget, duration)
                                         .SetEase(easeType)
-                                        .SetAutoKill(false);
+                                        .SetAutoKill(false)
+                                        .OnUpdate(() =>
+                                        {
+                                            // 使用弱引用检查对象是否还存在
+                                            if (_weakReference.TryGetTarget(out var self))
+                                            {
+                                                self.OnLeadTweenUpdate();
+                                            }
+                                            else
+                                            {
+                                                // 对象已被销毁，杀死tween
+                                                subFollowTweener?.Kill();
+                                            }
+
+
+                                        })
+                                        .OnComplete(() =>
+                                        {
+                                            // 使用弱引用检查对象是否还存在
+                                            if (_weakReference.TryGetTarget(out var self))
+                                            {
+                                                self.OnLeadTweenComplete();
+                                            }
+                                            else
+                                            {
+                                                // 对象已被销毁，杀死tween
+                                                subFollowTweener?.Kill();
+                                            }
+
+
+                                        });
 
                                     // 关键：存回数组
                                     _subCellFollowTweeners[i] = subFollowTweener;
@@ -1199,9 +1266,9 @@ namespace ReGecko.SnakeSystem
 
         System.Collections.IEnumerator _ConsumeRenderLoop()
         {
-            while (enabled)
+            while (false)
             {
-                if (_hasCurrentMoveTarget)
+                if (!_consumingRender)
                 {
                     if (EnableBodySpriteManagement && _bodySpriteManager != null)
                     {
@@ -1210,6 +1277,7 @@ namespace ReGecko.SnakeSystem
                 }
                 yield return null;
             }
+            yield break;
         }
 
 
@@ -3092,6 +3160,7 @@ namespace ReGecko.SnakeSystem
         {
             hole.OnTirggerStart();
             _consuming = true;
+            _consumingRender = false;
             IsDragging = false; // 脱离手指控制
 
             _pendingTargetCellStates.Clear();
@@ -3154,13 +3223,24 @@ namespace ReGecko.SnakeSystem
                 while (true)
                 {
                     var activeLeadPos = leadTransform.anchoredPosition;
-                    if (Vector2.Distance(world , activeLeadPos) <= EPS) break;
+                    if (Vector2.Distance(world, activeLeadPos) <= EPS)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        if(_subMoveState.IsValid())
+                        {
+                            _subMoveState = new MoveState(fromHead, targetSubCell, targetBigCell, speed, world, false);
+                        }
+                    }
 
                     yield return null; // 逐帧推进
                 }
 
             }
 
+            _consumingRender = true;
             // 5) 到达洞中心后，触发吞噬动画（逐帧推进，不阻塞）
             if (EnableBodySpriteManagement && _bodySpriteManager != null)
             {
@@ -3590,7 +3670,7 @@ namespace ReGecko.SnakeSystem
             }
             
             // 追加：绘制 _cellPathWithMouse
-            if (true && _bigBodyCells != null && _bigBodyCells.Count > 0)
+            if (false && _bigBodyCells != null && _bigBodyCells.Count > 0)
             {
                 var prev = GUI.color;
                 // 把折线的“网格局部坐标”转成屏幕坐标后绘制

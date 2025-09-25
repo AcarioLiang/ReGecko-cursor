@@ -6,6 +6,7 @@ namespace ReGecko.SnakeSystem
 {
     public class SnakeBodySpriteManager : MonoBehaviour
     {
+        const float EPS = 1e-4f;
         [Header("Line Settings")]
         public Material BodyLineMaterial;
         public float LineWidth = 1.0f;
@@ -105,10 +106,7 @@ namespace ReGecko.SnakeSystem
                 _line.material.color = Color.white;
                 _line.material.mainTexture = BodySprite.texture;
 
-                // _Borders = (左边框, 右边框, 头部高度, 尾部高度)
-                //Vector4 borders = new Vector4(5, 5, 108, 107);
-                // 设置九宫格边框参数（像素单位）
-                // 假设纹理是 64x64，边框各为 16 像素
+                //Vector4 borders = new Vector4(BodySprite.texture.width, BodySprite.texture.width, 0, 0);
                 //_line.material.SetVector("_Borders", borders);
 
                 //临时启用调试模式来验证分区
@@ -173,9 +171,18 @@ namespace ReGecko.SnakeSystem
                 return;
             }
 
-            //_posBuffer.Insert(0,_snake.GetHeadVirtualPos());
-            //_posBuffer.Add(_snake.GetTailVirtualPos());
+            /*
+            //head虚拟点
+            var headVP = GetVisualsPos(_cacheNewBodyList[0].transform.position, _cacheNewBodyList[2].transform.position);
+            //tail虚拟点
+            var tailVP = GetVisualsPos(_cacheNewBodyList[_cacheNewBodyList.Count - 1].transform.position, _cacheNewBodyList[_cacheNewBodyList.Count - 3].transform.position);
 
+            _posBuffer[0] = _posBuffer[1];
+            _posBuffer[_posBuffer.Count - 1] = _posBuffer[_posBuffer.Count - 2];
+
+            _posBuffer.Insert(0, headVP);
+            _posBuffer.Add(tailVP);
+            */
             _linePositionsCount = _posBuffer.Count;
             _linePositionsCache = _posBuffer.ToArray();
             _line.gameObject.SetActive(true);
@@ -186,17 +193,24 @@ namespace ReGecko.SnakeSystem
             {
                 float length = ComputePolylineLength(_posBuffer);
                 var scale = _line.material.mainTextureScale;
-                _line.material.mainTextureScale = new Vector2(Mathf.Max(1f, length / Mathf.Max(0.01f, 25)), scale.y);
+
+                // 获取纹理的宽度（像素）
+                float textureWidth = _line.material.mainTexture.width;
+
+                // 计算平铺次数：总长度（世界单位） * （每单位像素数）/ 纹理宽度
+                // 即：总长度（世界单位） * pixelsPerUnit / 纹理宽度
+                float tilingX = length  / textureWidth;
+
+                _line.material.mainTextureScale = new Vector2(tilingX, scale.y);
             }
         }
 
-        public void UpdateLineOffset(bool dragfromhead ,float offset)
+        Vector3 GetVisualsPos(Vector3 pLead, Vector3 pNext)
         {
-            return;
-            if (_snake == null)
-                return;
+            Vector3 d = pLead - pNext;
+            Vector3 virPos = d.sqrMagnitude < EPS ? pLead : pNext + d.normalized * _grid.CellSize;
 
-            UpdateLineFromPolyline(_snake.GetVirtualPathPoints(), _snake.Length, _snake.GetGrid().CellSize, dragfromhead, offset);
+            return virPos;
         }
 
         // 新增：高效直连更新（输入为网格局部坐标折线）
