@@ -130,10 +130,10 @@ namespace ReGecko.SnakeSystem
             EnsureLineCreated();
 
             _posBuffer.Clear();
-            foreach(var p in _snake.LinePositions)
-            {
-                _posBuffer.Add(p);
-            }
+            //foreach(var p in _snake.LinePositions)
+            //{
+            //    _posBuffer.Add(p);
+            //}
 
             if (_posBuffer.Count < 2)
             {

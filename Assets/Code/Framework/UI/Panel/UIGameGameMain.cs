@@ -286,6 +286,7 @@ public class UIGameGameMain : MonoBehaviour
     {
         if (_gameManager != null)
         {
+            SnakeManager.Instance.ClearAllSnakes();
             GameContext.NextLoadIsPlayer = false;
             ReGecko.Framework.Scene.SceneManager.Instance.LoadLoadingScene();
             var _gameStateController = _gameManager.GetGameStateController();

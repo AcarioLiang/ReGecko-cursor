@@ -80,8 +80,14 @@ namespace ReGecko.SnakeSystem
         {
             EnsureLineCreated();
             UpdateAllLinePositions();
+            _snake.UpdateVisualsHead();
         }
-
+        public void OnSnakeLengthCoConsume(int index)
+        {
+            EnsureLineCreated();
+            UpdateAllLinePositions(index);
+            _snake.UpdateVisualsHead();
+        }
 
         void EnsureLineCreated()
         {
@@ -137,7 +143,7 @@ namespace ReGecko.SnakeSystem
 
 
 
-        void UpdateAllLinePositions()
+        void UpdateAllLinePositions(int coConsumeCnt = -1)
         {
             if (_snake == null || _grid.Width == 0) return;
 
@@ -157,12 +163,22 @@ namespace ReGecko.SnakeSystem
 
             ////头部一个点，身体，尾部一个点
             //EqualizeHeadAndTail(_cacheNewBodyList);
-
+            float unit = SubGridHelper.SUB_CELL_SIZE * _grid.CellSize;
+            int index = 0;
             foreach (var node in _cacheNewBodyList)
             {
                 var p = node.transform.position;
-                p.z = 0f;
+                if(coConsumeCnt >= 0)
+                {
+                    p.z = node.transform.position.z;
+                }
+                else
+                {
+                    p.z = 0;
+                }
+                    
                 _posBuffer.Add(p);
+                index++;
             }
 
             if (_posBuffer.Count < 2)

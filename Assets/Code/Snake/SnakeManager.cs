@@ -188,6 +188,7 @@ namespace ReGecko.SnakeSystem
             {
                 if (snake != null)
                 {
+                    snake.Destroy();
                     OnSnakeDestroyed?.Invoke(snake);
                     Destroy(snake.gameObject);
                 }

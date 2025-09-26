@@ -154,6 +154,8 @@ namespace ReGecko.SnakeSystem
         }
 
 
+        public abstract void Destroy();
+
         protected virtual void OnDestroy()
         {
 
