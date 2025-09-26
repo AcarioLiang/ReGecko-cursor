@@ -761,7 +761,7 @@ namespace ReGecko.SnakeSystem
                 // 寻路（大格）
                 _cellPathQueue ??= new LinkedList<Vector2Int>();
                 _cellPathQueue.Clear();
-                EnqueueSubCellPath(fromSubCell, targetSubCell, _cellPathQueue);
+                EnqueueSubCellPath(fromHead, fromSubCell, targetSubCell, _cellPathQueue);
                 var speed = Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(SubGridHelper.SubCellToWorld(fromSubCell, _grid)));
 
                 for (var n = _cellPathQueue.First; n != null; n = n.Next)
@@ -803,7 +803,7 @@ namespace ReGecko.SnakeSystem
                             continue;
                         }
                         // 检查目标点合法性
-                        if (!CheckNextBigCell(bigcell))
+                        if (!CheckNextBigCell(_curMoveState.DragFromHead, bigcell))
                         {
                             //_pendingTargetBigCells.RemoveFirst();
                             if (_pendingTargetCellStates.Count > 0)
@@ -832,7 +832,7 @@ namespace ReGecko.SnakeSystem
 
 
                         Vector2Int targetBigCell = SubGridHelper.WorldToBigCell(_subMoveState.TargetPos, _grid);
-                        if (!CheckNextBigCell(targetBigCell))
+                        if (!CheckNextBigCell(_subMoveState.DragFromHead, targetBigCell))
                         {
                             _subMoveState.Clear();
                             yield return null;
@@ -1510,13 +1510,13 @@ namespace ReGecko.SnakeSystem
             return d;
         }
 
-        bool CheckNextBigCell(Vector2Int nextCell)
+        bool CheckNextBigCell(bool activeFromHead, Vector2Int nextCell)
         {
             if (_cachedSubRectTransforms.Count == 0 || _subBodyCells.Count == 0)
                 return false;
 
             Vector2Int curCheckCell = GetHeadCell();
-            if (!DragFromHead)
+            if (!activeFromHead)
             {
                 curCheckCell = GetTailCell();
             }
@@ -1535,7 +1535,7 @@ namespace ReGecko.SnakeSystem
             return true;
         }
 
-        bool EnqueueSubCellPath(Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = -1)
+        bool EnqueueSubCellPath(bool activeFromHead, Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = -1)
         {
             pathList.Clear();
             if (!_grid.IsValid()) return false;
@@ -1549,7 +1549,7 @@ namespace ReGecko.SnakeSystem
             Vector2Int preferredDir = Vector2Int.zero;
             if (_subBodyCells != null && _subBodyCells.Count >= 2)
             {
-                if (DragFromHead)
+                if (activeFromHead)
                 {
                     var head = _currentHeadSubCell;
                     var neck = GetSubBodyCellAtIndex(1);
@@ -1766,7 +1766,7 @@ namespace ReGecko.SnakeSystem
             return false;
         }
 
-        bool EnqueueBigCellPath(Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = -1)
+        bool EnqueueBigCellPath(bool activeFromHead, Vector2Int from, Vector2Int to, LinkedList<Vector2Int> pathList, int maxPathCount = -1)
         {
             pathList.Clear();
             if (from == to) return false;
@@ -1780,7 +1780,7 @@ namespace ReGecko.SnakeSystem
             Vector2Int preferredDir = Vector2Int.zero;
             if (_subBodyCells != null && _subBodyCells.Count >= 2)
             {
-                if (DragFromHead)
+                if (activeFromHead)
                 {
                     // next(后面一格) -> head(拖动段)
                     var head = _currentHeadCell;
@@ -2182,12 +2182,12 @@ namespace ReGecko.SnakeSystem
                 // 寻路（大格）
                 _cellPathQueue ??= new LinkedList<Vector2Int>();
                 _cellPathQueue.Clear();
-                EnqueueSubCellPath(fromSubCell, targetSubCell, _cellPathQueue);
+                EnqueueSubCellPath(fromHead, fromSubCell, targetSubCell, _cellPathQueue);
                 var speed = Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(SubGridHelper.SubCellToWorld(fromSubCell, _grid)));
 
                 for (var n = _cellPathQueue.First; n != null; n = n.Next)
                 {
-                    var subt = SubGridHelper.BigCellToCenterSubCell(n.Value);
+                    var subt = n.Value;
                     var bigt = SubGridHelper.SubCellToBigCell(subt);
                     var fixwold = SubGridHelper.SubCellToWorld(subt, _grid);
                     _pendingTargetCellStates.AddLast(new MoveState(fromHead, subt, bigt, speed, fixwold, true));
@@ -2208,13 +2208,25 @@ namespace ReGecko.SnakeSystem
                     {
                         if(!_subMoveState.IsValid())
                         {
+                            if (_pendingTargetCellStates.Count > 0)
+                            {
+                                fromBigCell = _pendingTargetCellStates.Last.Value.TargetBigCell;
+                                fromSubCell = _pendingTargetCellStates.Last.Value.TargetSubCell;
+                                fromHead = _pendingTargetCellStates.Last.Value.DragFromHead;
+                            }
+                            else
+                            {
+                                fromBigCell = fromHead ? GetHeadCell() : GetTailCell();
+                                fromSubCell = fromHead ? GetHeadSubCell() : GetTailSubCell();
+                            }
+
                             _cellPathQueue.Clear();
-                            EnqueueSubCellPath(fromSubCell, targetSubCell, _cellPathQueue);
+                            EnqueueSubCellPath(fromHead, fromSubCell, targetSubCell, _cellPathQueue);
                             speed = Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(SubGridHelper.SubCellToWorld(fromSubCell, _grid)));
 
                             for (var n = _cellPathQueue.First; n != null; n = n.Next)
                             {
-                                var subt = SubGridHelper.BigCellToCenterSubCell(n.Value);
+                                var subt = n.Value;
                                 var bigt = SubGridHelper.SubCellToBigCell(subt);
                                 var fixwold = SubGridHelper.SubCellToWorld(subt, _grid);
                                 _pendingTargetCellStates.AddLast(new MoveState(fromHead, subt, bigt, speed, fixwold, true));
