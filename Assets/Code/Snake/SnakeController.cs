@@ -815,16 +815,17 @@ namespace ReGecko.SnakeSystem
                 // 寻路（大格）
                 _cellPathQueue ??= new LinkedList<Vector2Int>();
                 _cellPathQueue.Clear();
-                EnqueueBigCellPath(fromBigCell, targetBigCell, _cellPathQueue);
-                var speed = Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(fromBigCell));
+                EnqueueSubCellPath(fromSubCell, targetSubCell, _cellPathQueue);
+                var speed = Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(SubGridHelper.SubCellToWorld(fromSubCell, _grid)));
 
                 for (var n = _cellPathQueue.First; n != null; n = n.Next)
                 {
-                    var subt = SubGridHelper.BigCellToCenterSubCell(n.Value);
-                    var fixwold = SubGridHelper.WorldClampBigCell(world, n.Value, _grid);
-                    var fixbifcell = SubGridHelper.WorldToBigCell(fixwold, _grid);
-                    Debug.Log($"_cellPathQueue: bigcell:{n.Value} world:{world} fixbigcell{fixbifcell} fixworld:{fixwold}");
-                    _pendingTargetCellStates.AddLast(new MoveState(fromHead, subt, n.Value, speed, SubGridHelper.WorldClampBigCell(world, n.Value, _grid), true));
+                    var subt = n.Value;
+                    var bigt = SubGridHelper.SubCellToBigCell(subt);
+                    var fixwold = SubGridHelper.SubCellToWorld(subt, _grid);
+                    //var fixbifcell = SubGridHelper.WorldToBigCell(fixwold, _grid);
+                    //Debug.Log($"_cellPathQueue: bigcell:{n.Value} world:{world} fixbigcell{fixbifcell} fixworld:{fixwold}");
+                    _pendingTargetCellStates.AddLast(new MoveState(fromHead, subt, bigt, speed, fixwold, true));
                 }
 
                 _subMoveState = new MoveState(fromHead, targetSubCell, targetBigCell, speed, world, false);
@@ -848,6 +849,7 @@ namespace ReGecko.SnakeSystem
                         var bigcell = _curMoveState.TargetBigCell;
                         if(bigcell == (_curMoveState.DragFromHead ? GetHeadCell() : GetTailCell()))
                         {
+                            //todo
                             if (_pendingTargetCellStates.Count > 0)
                             {
                                 _pendingTargetCellStates.RemoveFirst();
@@ -1146,7 +1148,7 @@ namespace ReGecko.SnakeSystem
 
             for (var n = pathList.First; n != null; n = n.Next)
             {
-                var w3 = _grid.CellToWorld(n.Value);
+                var w3 = SubGridHelper.SubCellToWorld(n.Value, _grid);
                 Vector2 p = new Vector2(w3.x, w3.y);
                 totalLen += Vector2.Distance(prev, p);
                 prev = p;
@@ -1154,7 +1156,7 @@ namespace ReGecko.SnakeSystem
 
             // 固定五帧走完全部路径：每帧应前进 totalLen/5
             // 速度(世界单位/秒) = (每帧步长) / Time.deltaTime
-            const int framesToFinish = 5;
+            const int framesToFinish = 1;
             float dt = Time.deltaTime;
             if (totalLen <= 1e-5f || dt <= 1e-6f) return 0f;
 
