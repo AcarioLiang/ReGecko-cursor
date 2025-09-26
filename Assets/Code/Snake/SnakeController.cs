@@ -761,15 +761,12 @@ namespace ReGecko.SnakeSystem
                 _cellPathQueue ??= new LinkedList<Vector2Int>();
                 _cellPathQueue.Clear();
                 EnqueueSubCellPath(fromHead, fromSubCell, targetSubCell, _cellPathQueue);
-                var speed = Time.deltaTime * 1.2f;// Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(SubGridHelper.SubCellToWorld(fromSubCell, _grid)));
+                var speed = Time.deltaTime * 1.5f;// Mathf.Max(_leadSpeedWorld, UpdateConsumeMouseSpeedFromBigPath(SubGridHelper.SubCellToWorld(fromSubCell, _grid)));
 
                 for (var n = _cellPathQueue.First; n != null; n = n.Next)
                 {
                     var subt = n.Value;
                     var bigt = SubGridHelper.SubCellToBigCell(subt);
-                    var fixwold = SubGridHelper.SubCellToWorld(subt, _grid);
-                    //var fixbifcell = SubGridHelper.WorldToBigCell(fixwold, _grid);
-                    //Debug.Log($"_cellPathQueue: bigcell:{n.Value} world:{world} fixbigcell{fixbifcell} fixworld:{fixwold}");
                     _pendingTargetCellStates.AddLast(new MoveState(fromHead, subt, bigt, speed, world, true));
                 }
 
@@ -1021,7 +1018,6 @@ namespace ReGecko.SnakeSystem
                     // 计算所需时间
                     float duration = Mathf.Min(0.1f, _curMoveState.DragSpeed);
 
-                    Debug.Log($"duration:{duration}  distance:{distance} _curMoveState.DragSpeed:{_curMoveState.DragSpeed} ");
                     for (int i = 0; i < _cachedSubRectTransforms.Count; i++)
                     {
                         MoveNextFollowTweeners(activeFromHead, i, duration);
@@ -1403,7 +1399,6 @@ namespace ReGecko.SnakeSystem
             {
                 // 更新Tweener的目标位置
                 curFollowTweener.ChangeEndValue(target, true).Restart();
-                //Debug.Log($"ChangeEndValue Restart target:{target}");
             }
 
 

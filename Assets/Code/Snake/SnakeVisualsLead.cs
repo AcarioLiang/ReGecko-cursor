@@ -17,7 +17,7 @@ namespace ReGecko.SnakeSystem
 
         public Color BodyColor = Color.white;
         public Sprite BodySprite;
-        public SpriteRenderer _image;
+        public SpriteRenderer spriteRenderer;
 
         private GridConfig _grid;
         Tweener curFollowTweener; 
@@ -39,22 +39,23 @@ namespace ReGecko.SnakeSystem
             BodySprite = sp;
             _grid = g;
 
-            if(_image == null)
+            if(spriteRenderer == null)
             {
-                _image = gameObject.AddComponent<SpriteRenderer>();
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             }
 
-            if(_image != null)
+            if(spriteRenderer != null)
             {
-                _image.sprite = BodySprite;
-                _image.color = BodyColor;
+                spriteRenderer.sprite = BodySprite;
+                spriteRenderer.color = BodyColor;
 
-                float size = _grid.CellSize * 0.8f;
-                this.transform.localScale = new Vector3(size, size, size);
+     
 
+                spriteRenderer.sortingLayerName = "Default"; // 或你的 UI Sorting Layer
+                spriteRenderer.sortingOrder = 105;
 
-                _image.sortingLayerName = "Default"; // 或你的 UI Sorting Layer
-                _image.sortingOrder = 105;
+                float size = _grid.CellSize * 1f;
+                SetPixelSize(size, size);
             }
 
             if(BindObjectLead != null)
@@ -127,5 +128,28 @@ namespace ReGecko.SnakeSystem
             }
         }
 
+        void SetPixelSize(float width, float height)
+        {
+            if (spriteRenderer == null || spriteRenderer.sprite == null)
+            {
+                Debug.LogError("SpriteRenderer or Sprite is missing!");
+                return;
+            }
+
+            Sprite sprite = spriteRenderer.sprite;
+
+            float ppu = spriteRenderer.sprite.pixelsPerUnit;
+
+            // 获取Sprite的实际像素尺寸（考虑裁剪）
+            float originalWidth = sprite.rect.width;
+            float originalHeight = sprite.rect.height;
+
+            // 计算Scale
+            Vector3 newScale = transform.localScale;
+            newScale.x = width / originalWidth * ppu;
+            newScale.y = height / originalHeight * ppu;
+
+            transform.localScale = newScale;
+        }
     }
 }

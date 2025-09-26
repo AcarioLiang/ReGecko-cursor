@@ -34,8 +34,7 @@ namespace ReGecko.SnakeSystem
         GridConfig _grid;
         LineRenderer _line;
         readonly List<Vector3> _posBuffer = new List<Vector3>(256);
-        readonly List<GameObject> _cacheNewBodyList = new List<GameObject>();
-
+        private readonly List<RectTransform> _cachedSubRectTransforms = new List<RectTransform>();
 
         // 新增：折线缓存，避免每帧ToArray分配
         Vector3[] _linePositionsCache;
@@ -61,6 +60,14 @@ namespace ReGecko.SnakeSystem
             BodyColor = _snake.BodyColor;
             BodySprite = _snake.BodySprite;
             LineWidth = _grid.CellSize * 0.9f;
+
+            _cachedSubRectTransforms.Clear();
+            RectTransform rt = null;
+            foreach (var subSegment in _snake.GetSegments())
+            {
+                rt = subSegment.GetComponent<RectTransform>();
+                _cachedSubRectTransforms.Add(rt);
+            }
 
             EnsureLineCreated();
             UpdateAllLinePositions();
@@ -138,7 +145,7 @@ namespace ReGecko.SnakeSystem
         {
             if (_snake == null || _grid.Width == 0) return;
 
-            var body = _snake.GetSegments();
+            var body = _cachedSubRectTransforms;
             if (body == null || body.Count == 0)
             {
                 if (_line != null) _line.gameObject.SetActive(false);
@@ -148,20 +155,17 @@ namespace ReGecko.SnakeSystem
             EnsureLineCreated();
 
             _posBuffer.Clear();
-            _cacheNewBodyList.Clear();
-
-            _cacheNewBodyList.AddRange(body);
 
             ////头部一个点，身体，尾部一个点
             //EqualizeHeadAndTail(_cacheNewBodyList);
             float unit = SubGridHelper.SUB_CELL_SIZE * _grid.CellSize;
             int index = 0;
-            foreach (var node in _cacheNewBodyList)
+            foreach (var node in _cachedSubRectTransforms)
             {
                 var p = node.transform.position;
                 if(coConsumeCnt >= 0)
                 {
-                    p.z = node.transform.position.z;
+                    p.z = node.anchoredPosition3D.z;
                 }
                 else
                 {
