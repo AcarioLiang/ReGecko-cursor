@@ -544,7 +544,6 @@ namespace ReGecko.SnakeSystem
         public HashSet<Vector2Int> GetSnakeOccupiedCells(BaseSnake Snake)
         {
             var occupiedCells = new HashSet<Vector2Int>();
-
             _snakeOccupiedCells.TryGetValue(Snake, out occupiedCells);
             return occupiedCells;
         }
