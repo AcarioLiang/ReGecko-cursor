@@ -1,5 +1,62 @@
-Library/
-Temp/
-Logs/
-obj/
+# Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emory[Cc]aptures/
+
+# VS/MD solution and project files
+ExportedObj/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.VC.db
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
 .vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+Assets/WebGLTemplates/
+Assets/WX-WASM-SDK-V2/
+Assets/WebGLTemplates.meta
+Assets/WX-WASM-SDK-V2.meta
+TextToolDatas/slim/backup.txt
+.utmp
+AndroidMapping.txt
