@@ -34,7 +34,7 @@ namespace ReGecko.SnakeSystem
         GridConfig _grid;
         LineRenderer _line;
         readonly List<Vector3> _posBuffer = new List<Vector3>(256);
-        private readonly List<RectTransform> _cachedSubRectTransforms = new List<RectTransform>();
+        private readonly List<RectTransform> _cachedRectTransforms = new List<RectTransform>();
 
         // 新增：折线缓存，避免每帧ToArray分配
         Vector3[] _linePositionsCache;
@@ -61,12 +61,12 @@ namespace ReGecko.SnakeSystem
             BodySprite = _snake.BodySprite;
             LineWidth = _grid.CellSize * 0.9f;
 
-            _cachedSubRectTransforms.Clear();
+            _cachedRectTransforms.Clear();
             RectTransform rt = null;
-            foreach (var subSegment in _snake.GetSegments())
+            foreach (var segment in _snake.GetSegments())
             {
-                rt = subSegment.GetComponent<RectTransform>();
-                _cachedSubRectTransforms.Add(rt);
+                rt = segment.GetComponent<RectTransform>();
+                _cachedRectTransforms.Add(rt);
             }
 
             EnsureLineCreated();
@@ -78,13 +78,11 @@ namespace ReGecko.SnakeSystem
         {
             EnsureLineCreated();
             UpdateAllLinePositions();
-            _snake.UpdateVisualsHead();
         }
         public void OnSnakeLengthCoConsume(int index)
         {
             EnsureLineCreated();
             UpdateAllLinePositions(index);
-            _snake.UpdateVisualsHead();
         }
 
         void EnsureLineCreated()
@@ -145,7 +143,7 @@ namespace ReGecko.SnakeSystem
         {
             if (_snake == null || _grid.Width == 0) return;
 
-            var body = _cachedSubRectTransforms;
+            var body = _cachedRectTransforms;
             if (body == null || body.Count == 0)
             {
                 if (_line != null) _line.gameObject.SetActive(false);
@@ -158,9 +156,8 @@ namespace ReGecko.SnakeSystem
 
             ////头部一个点，身体，尾部一个点
             //EqualizeHeadAndTail(_cacheNewBodyList);
-            float unit = SubGridHelper.SUB_CELL_SIZE * _grid.CellSize;
             int index = 0;
-            foreach (var node in _cachedSubRectTransforms)
+            foreach (var node in _cachedRectTransforms)
             {
                 var p = node.transform.position;
                 if(coConsumeCnt >= 0)

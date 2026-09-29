@@ -368,7 +368,7 @@ namespace ReGecko.SnakeSystem
                 return false;
 
             var world = ScreenToWorld(Input.mousePosition);
-            var curMouseSubCell = SubGridHelper.WorldToSubCell(world, _grid);
+            var curMouseCell = ClampInside(_grid.WorldToCell(world));
 
             BaseSnake bestSnake = null;
             bool bestFromHead = true;
@@ -381,11 +381,11 @@ namespace ReGecko.SnakeSystem
                     continue;
 
                 var ctl = (SnakeController)snake;
-                var headCell = ctl.GetHeadSubCell();
-                var tailCell = ctl.GetTailSubCell();
+                var headCell = ctl.GetHeadCell();
+                var tailCell = ctl.GetTailCell();
 
-                int dHead = Mathf.Abs(curMouseSubCell.x - headCell.x) + Mathf.Abs(curMouseSubCell.y - headCell.y);
-                int dTail = Mathf.Abs(curMouseSubCell.x - tailCell.x) + Mathf.Abs(curMouseSubCell.y - tailCell.y);
+                int dHead = Mathf.Abs(curMouseCell.x - headCell.x) + Mathf.Abs(curMouseCell.y - headCell.y);
+                int dTail = Mathf.Abs(curMouseCell.x - tailCell.x) + Mathf.Abs(curMouseCell.y - tailCell.y);
 
                 // 仅考虑“同格或相邻格”（≤1）
                 void TryUpdateCandidate(int dist, bool fromHead, Vector2Int refCell)
@@ -393,7 +393,7 @@ namespace ReGecko.SnakeSystem
                     //if (dist > 1) return;
 
                     // 主排序：更小的格距，其次：更小的世界距离
-                    var refWorld = SubGridHelper.SubCellToWorld(refCell, _grid);
+                    var refWorld = _grid.CellToWorld(refCell);
                     float wdist = Vector2.SqrMagnitude(new Vector2(world.x - refWorld.x, world.y - refWorld.y));
 
                     if (dist < bestDist || (dist == bestDist && wdist < bestWorldDist))
@@ -423,6 +423,14 @@ namespace ReGecko.SnakeSystem
         public bool IsAdjacent(Vector2Int other, Vector2Int Cell)
         {
             return Mathf.Abs(other.x - Cell.x) + Mathf.Abs(other.y - Cell.y) <= 1;
+        }
+
+        Vector2Int ClampInside(Vector2Int cell)
+        {
+            if (!_grid.IsValid()) return cell;
+            cell.x = Mathf.Clamp(cell.x, 0, _grid.Width - 1);
+            cell.y = Mathf.Clamp(cell.y, 0, _grid.Height - 1);
+            return cell;
         }
 
         Vector3 ScreenToWorld(Vector3 screen)
@@ -566,12 +574,11 @@ namespace ReGecko.SnakeSystem
                 {
                     var snakeCells = new HashSet<Vector2Int>();
                     var bodyCells = snake.GetBodyCells().ToList();
-                    for (int i = 0; i < bodyCells.Count;)
+                    for (int i = 0; i < bodyCells.Count; i++)
                     {
-                        var bigcell = SubGridHelper.SubCellToBigCell(bodyCells[i]);
-                        snakeCells.Add(bigcell);
-                        _cachedOccupiedCells.Add(bigcell);
-                        i += SubGridHelper.SUB_DIV;
+                        var cell = bodyCells[i];
+                        snakeCells.Add(cell);
+                        _cachedOccupiedCells.Add(cell);
                     }
                     _snakeOccupiedCells[snake] = snakeCells;
                 }
