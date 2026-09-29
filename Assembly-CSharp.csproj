@@ -63,6 +63,7 @@
   <ItemGroup>
     <Compile Include="Assets\Code\GameCore\Flow\GameContext.cs" />
     <Compile Include="Assets\Code\Framework\UI\GameRenderer.cs" />
+    <Compile Include="Assets\Code\Snake\SnakeRibbonGraphic.cs" />
     <Compile Include="Assets\Code\Game\GameState.cs" />
     <Compile Include="Assets\Code\Bootstrap\LoadingBootstrap.cs" />
     <Compile Include="Assets\Code\Snake\SnakeBodySpriteConfig.cs" />

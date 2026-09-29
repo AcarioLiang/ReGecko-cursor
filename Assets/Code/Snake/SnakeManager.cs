@@ -52,9 +52,9 @@ namespace ReGecko.SnakeSystem
         public int AliveSnakeCount => _snakes.Count(s => s != null && s.IsAlive());
 
 
-        //优化缓存
-        Vector3 _lastMousePos;
-        bool _hasPackSnake = false;
+        SnakeController _activeSnake;
+        int _activeFingerId = -1;
+        bool _touchDrag;
 
         /// <summary>
         /// 初始化蛇管理器
@@ -105,6 +105,12 @@ namespace ReGecko.SnakeSystem
             {
                 snakeGo.AddComponent<RectTransform>();
             }
+            var snakeRect = snakeGo.GetComponent<RectTransform>();
+            snakeRect.anchorMin = snakeRect.anchorMax = new Vector2(0.5f, 0.5f);
+            snakeRect.pivot = new Vector2(0.5f, 0.5f);
+            snakeRect.anchoredPosition = Vector2.zero;
+            snakeRect.sizeDelta = new Vector2(_grid.Width * _grid.CellSize,
+                                              _grid.Height * _grid.CellSize);
 
             // 根据配置选择蛇的类型，目前只有SnakeController
             BaseSnake snake = snakeGo.AddComponent<SnakeController>();
@@ -165,8 +171,10 @@ namespace ReGecko.SnakeSystem
         {
             if (_snakeDict.TryGetValue(snakeId, out BaseSnake snake))
             {
+                if (snake == _activeSnake) ReleaseDrag();
                 _snakes.Remove(snake);
                 _snakeDict.Remove(snakeId);
+                InvalidateOccupiedCellsCache();
                 
                 if (snake != null)
                 {
@@ -184,6 +192,9 @@ namespace ReGecko.SnakeSystem
         /// </summary>
         public void ClearAllSnakes()
         {
+            _activeSnake = null;
+            _activeFingerId = -1;
+            _touchDrag = false;
             foreach (var snake in _snakes.ToList())
             {
                 if (snake != null)
@@ -196,6 +207,7 @@ namespace ReGecko.SnakeSystem
             
             _snakes.Clear();
             _snakeDict.Clear();
+            InvalidateOccupiedCellsCache();
         }
 
         /// <summary>
@@ -279,19 +291,13 @@ namespace ReGecko.SnakeSystem
             if(UIManager.Instance.GameManager != null)
             {
                 if (UIManager.Instance.GameManager.GetGameStateController().IsGameActive == false)
+                {
+                    ReleaseDrag();
                     return;
+                }
             }
 
             HandleInput();
-
-            // 更新所有活着的蛇
-            foreach (var snake in _snakes)
-            {
-                if (snake != null && snake.IsAlive() && snake.IsDragging)
-                {
-                    snake.UpdateMovement();
-                }
-            }
 
             // 检查是否所有蛇都死了
             _aliveSnakeCount = AliveSnakeCount;
@@ -305,48 +311,60 @@ namespace ReGecko.SnakeSystem
 
         void HandleInput()
         {
-            if (Input.GetMouseButtonDown(0))
+            if (Input.touchCount > 0 || _touchDrag)
             {
-                if (IsMouseInCanvas())
+                bool foundActiveFinger = false;
+                for (int i = 0; i < Input.touchCount; i++)
                 {
-                    if (_lastMousePos != Input.mousePosition)
+                    Touch touch = Input.GetTouch(i);
+                    if (_activeSnake == null && touch.phase == TouchPhase.Began &&
+                        IsPointerInGrid(touch.position))
                     {
-                        _lastMousePos = Input.mousePosition;
-
-                        TryPickHeadOrTail();
+                        TryPickHeadOrTail(touch.position);
+                        if (_activeSnake != null)
+                        {
+                            _activeFingerId = touch.fingerId;
+                            _touchDrag = true;
+                        }
                     }
+                    if (!_touchDrag || touch.fingerId != _activeFingerId) continue;
+                    foundActiveFinger = true;
+                    if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                        ReleaseDrag();
+                    else if (_activeSnake != null)
+                        _activeSnake.DragTo(ScreenToWorld(touch.position));
                 }
+                if (_touchDrag && !foundActiveFinger) ReleaseDrag();
+                return;
             }
 
+            if (Input.GetMouseButtonDown(0) && IsPointerInGrid(Input.mousePosition))
+                TryPickHeadOrTail(Input.mousePosition);
+            if (Input.GetMouseButton(0) && _activeSnake != null)
+                _activeSnake.DragTo(ScreenToWorld(Input.mousePosition));
             if (Input.GetMouseButtonUp(0))
-            {
-                foreach (var snake in _snakes)
-                {
-                    if (snake != null && snake.IsAlive() && snake.IsControllable && snake.IsDragging)
-                    {
-                        snake.IsDragging = false;
-                        snake.NeedSnapCellsToGrid = true;
-                    }
-                }
-
-                _hasPackSnake = false;
-                _lastMousePos = Vector3.zero;
-            }
+                ReleaseDrag();
         }
-        bool IsMouseInCanvas()
+
+        void ReleaseDrag()
         {
-            if (SnakeCanvas == null) return false;
+            if (_activeSnake != null)
+            {
+                _activeSnake.EndDrag();
+                _activeSnake = null;
+            }
+            _activeFingerId = -1;
+            _touchDrag = false;
+        }
 
-            RectTransform rectTransform = SnakeCanvas.GetComponent<RectTransform>();
-            if (rectTransform == null) return false;
-
-            Vector2 localPoint;
-            Camera camera = SnakeCanvas.worldCamera;
-
-            bool success = RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                rectTransform, Input.mousePosition, camera, out localPoint);
-
-            return success && rectTransform.rect.Contains(localPoint);
+        bool IsPointerInGrid(Vector2 screen)
+        {
+            var rect = SnakeContainer as RectTransform;
+            if (rect == null) return false;
+            Camera camera = SnakeCanvas != null && SnakeCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? SnakeCanvas.worldCamera : null;
+            return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                       rect, screen, camera, out Vector2 local) && rect.rect.Contains(local);
         }
 
 
@@ -362,62 +380,41 @@ namespace ReGecko.SnakeSystem
             }
         }
 
-        bool TryPickHeadOrTail()
+        bool TryPickHeadOrTail(Vector2 screen)
         {
-            if (_hasPackSnake)
-                return false;
+            if (_activeSnake != null) return false;
 
-            var world = ScreenToWorld(Input.mousePosition);
-            var curMouseCell = ClampInside(_grid.WorldToCell(world));
-
-            BaseSnake bestSnake = null;
+            Vector2 world = ScreenToWorld(screen);
+            SnakeController bestSnake = null;
             bool bestFromHead = true;
-            int bestDist = int.MaxValue;
-            float bestWorldDist = float.MaxValue;
+            float bestDistance = float.MaxValue;
+            float radiusSquared = _grid.CellSize * _grid.CellSize * 0.58f * 0.58f;
 
             foreach (var snake in _snakes)
             {
-                if (snake == null || !snake.IsAlive() || !snake.IsControllable || snake.IsConsuming())
-                    continue;
+                var controller = snake as SnakeController;
+                if (controller == null || !controller.IsAlive() || !controller.IsControllable ||
+                    controller.IsConsuming()) continue;
 
-                var ctl = (SnakeController)snake;
-                var headCell = ctl.GetHeadCell();
-                var tailCell = ctl.GetTailCell();
-
-                int dHead = Mathf.Abs(curMouseCell.x - headCell.x) + Mathf.Abs(curMouseCell.y - headCell.y);
-                int dTail = Mathf.Abs(curMouseCell.x - tailCell.x) + Mathf.Abs(curMouseCell.y - tailCell.y);
-
-                // 仅考虑“同格或相邻格”（≤1）
-                void TryUpdateCandidate(int dist, bool fromHead, Vector2Int refCell)
+                float headDistance = (world - controller.GetEndpointPosition(true)).sqrMagnitude;
+                if (headDistance <= radiusSquared && headDistance < bestDistance)
                 {
-                    //if (dist > 1) return;
-
-                    // 主排序：更小的格距，其次：更小的世界距离
-                    var refWorld = _grid.CellToWorld(refCell);
-                    float wdist = Vector2.SqrMagnitude(new Vector2(world.x - refWorld.x, world.y - refWorld.y));
-
-                    if (dist < bestDist || (dist == bestDist && wdist < bestWorldDist))
-                    {
-                        bestDist = dist;
-                        bestWorldDist = wdist;
-                        bestSnake = snake;
-                        bestFromHead = fromHead;
-                    }
+                    bestDistance = headDistance;
+                    bestSnake = controller;
+                    bestFromHead = true;
                 }
-
-                TryUpdateCandidate(dHead, true, headCell);
-                TryUpdateCandidate(dTail, false, tailCell);
+                float tailDistance = (world - controller.GetEndpointPosition(false)).sqrMagnitude;
+                if (tailDistance <= radiusSquared && tailDistance < bestDistance)
+                {
+                    bestDistance = tailDistance;
+                    bestSnake = controller;
+                    bestFromHead = false;
+                }
             }
 
-            if (bestSnake != null)
-            {
-                bestSnake.IsDragging = true;
-                bestSnake.DragFromHead = bestFromHead;
-                _hasPackSnake = true;
-                return true;
-            }
-
-            return false;
+            if (bestSnake == null || !bestSnake.BeginDrag(bestFromHead, world)) return false;
+            _activeSnake = bestSnake;
+            return true;
         }
 
         public bool IsAdjacent(Vector2Int other, Vector2Int Cell)
@@ -435,6 +432,13 @@ namespace ReGecko.SnakeSystem
 
         Vector3 ScreenToWorld(Vector3 screen)
         {
+            var gridRect = SnakeContainer as RectTransform;
+            Camera inputCamera = SnakeCanvas != null && SnakeCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? SnakeCanvas.worldCamera : null;
+            if (gridRect != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    gridRect, screen, inputCamera, out Vector2 gridLocal))
+                return new Vector3(gridLocal.x, gridLocal.y, 0f);
+
             // UI渲染模式：使用UI坐标转换
             if (SnakeCanvas != null)
             {
